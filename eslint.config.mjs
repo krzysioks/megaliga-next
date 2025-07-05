@@ -1,9 +1,9 @@
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { FlatCompat } from '@eslint/eslintrc';
-import js from '@eslint/js';
 import react from 'eslint-plugin-react';
 import jest from 'eslint-plugin-jest';
+import perfectionist from 'eslint-plugin-perfectionist';
 import tseslint from '@typescript-eslint/eslint-plugin';
 import tsParser from '@typescript-eslint/parser';
 
@@ -44,6 +44,7 @@ const config = {
     plugins: {
         react,
         jest,
+        perfectionist,
         '@typescript-eslint': tseslint
     },
     settings: {
@@ -64,7 +65,37 @@ const config = {
             'warn',
             { argsIgnorePattern: '^_' }
         ],
-        '@typescript-eslint/no-explicit-any': 'warn'
+        '@typescript-eslint/no-explicit-any': 'warn',
+        'perfectionist/sort-imports': [
+            'error',
+            {
+                type: 'natural',
+                order: 'asc',
+                sortSideEffects: true,
+                groups: [
+                    'server',
+                    [
+                        'type',
+                        'internal-type',
+                        'parent-type',
+                        'sibling-type',
+                        'index-type'
+                    ],
+                    'builtin',
+                    'external',
+                    'internal',
+                    ['parent', 'sibling', 'index', 'side-effect'],
+                    ['style', 'side-effect-style'],
+                    ['object', 'unknown']
+                ],
+                customGroups: {
+                    value: {
+                        server: ['server-only']
+                    }
+                },
+                newlinesBetween: 'always'
+            }
+        ]
     }
 };
 
