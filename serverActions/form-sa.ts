@@ -1,24 +1,14 @@
 'use server';
-import mongoose from 'mongoose';
+import { DBClient } from '@/db/db-client';
 
 interface FormValues {
     username: string;
     password: string;
 }
 
-export const formSubmit = async (data: FormValues) => {
-    console.log('SERVER ACTION:', data);
-
-    // try {
-    //     // Connect to MongoDB
-    //     await mongoose.connect(
-    //         'mongodb+srv://<user>:<password>@kp-cluster.9wm4hdz.mongodb.net/db-megaliga-next-dev?retryWrites=true&w=majority&appName=KP-cluster'
-    //     );
-    //     console.log('Connected to MongoDB');
-    // } catch (error) {
-    //     console.error('MongoDB connection error:', error);
-    //     mongoose.connection.close();
-    // }
+export const formSubmit = async (_data: FormValues) => {
+    const dbClient = new DBClient();
+    await dbClient.connect();
 
     return new Promise(resolve => {
         setTimeout(() => {

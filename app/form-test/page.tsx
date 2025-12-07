@@ -45,7 +45,7 @@ export default function FormTest(): JSX.Element {
         control,
         formState: { isSubmitting }
     } = form;
-    console.log('isSubmitting: ', isSubmitting);
+
     const onSubmit: SubmitHandler<FormValues> = async data => {
         console.log('Form submitted:', data);
         const response = await formSubmit(data);
