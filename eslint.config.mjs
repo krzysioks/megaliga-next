@@ -66,6 +66,18 @@ const config = {
             { argsIgnorePattern: '^_' }
         ],
         '@typescript-eslint/no-explicit-any': 'warn',
+        '@typescript-eslint/no-restricted-imports': [
+            'error',
+            {
+                patterns: [
+                    {
+                        group: ['./*', '../*'],
+                        message:
+                            'Use an absolute aliased import instead of relative paths'
+                    }
+                ]
+            }
+        ],
         'perfectionist/sort-imports': [
             'error',
             {
@@ -101,6 +113,9 @@ const config = {
 
 const eslintConfig = [
     ...compat.extends('next/core-web-vitals', 'next/typescript'),
+    {
+        ignores: ['.next/**', 'next-env.d.ts']
+    },
     {
         files: ['**/*.{js,jsx,ts,tsx}'],
         ...config
