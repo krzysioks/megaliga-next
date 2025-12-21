@@ -1,0 +1,77 @@
+import { z } from 'zod';
+
+// Shared Zod schemas for reusable types across models
+const heatSchema = z.number().min(0).max(100).optional();
+
+// Player schema for individual player stats in a game
+export const playerSchema = z.object({
+    playerId: z.string().regex(/^[0-9a-f]{24}$/i), // Reference to player's document in Players collection
+    // TODOKP Idea is to keep players in Players collection even if they are no more active in megaliga. We will add new field status to indicate if should be shown in draft for current season or not. Keeping players in Players collection will help to collect and keep statistics
+    heatOne: heatSchema,
+    heatTwo: heatSchema,
+    heatThree: heatSchema,
+    heatFour: heatSchema,
+    heatFive: heatSchema,
+    heatSix: heatSchema,
+    heatSeven: heatSchema,
+    setPlay: heatSchema,
+    comment: z.string().max(255).optional()
+});
+
+// Trainer schema for trainer stats in a game
+export const trainerSchema = playerSchema.pick({
+    heatOne: true,
+    heatTwo: true,
+    heatThree: true,
+    heatFour: true,
+    heatFive: true,
+    heatSix: true,
+    heatSeven: true,
+    setPlay: true,
+    comment: true
+});
+
+// Team schema for team details in a game (used for both teamOne and teamTwo)
+export const teamSchema = z.object({
+    teamId: z.string().regex(/^[0-9a-f]{24}$/i), // Reference to team in History.teams
+    score: z.number(),
+    setPlays: z.array(z.string().max(255)).optional(),
+    players: z.array(playerSchema).optional(),
+    trainer: trainerSchema.optional()
+});
+
+// Shared schemas for common patterns
+export const objectIdSchema = z
+    .string()
+    .regex(/^[0-9a-f]{24}$/i, 'Invalid ObjectId format');
+
+export const nameSchema = z.string().min(2).max(60);
+
+export const teamNameSchema = z.string().min(2).max(50);
+
+export const logoUrlSchema = z.string().url().min(2).max(2048);
+
+export const teamReferenceSchema = z.object({
+    name: teamNameSchema,
+    logoUrl: logoUrlSchema
+});
+
+export const standingSchema = z.object({
+    place: z.number().min(1).max(20),
+    teamId: objectIdSchema,
+    played: z.number().min(1).max(20),
+    wins: z.number().min(0).max(20),
+    draw: z.number().min(0).max(20),
+    defeat: z.number().min(0).max(20),
+    balance: z.number(),
+    points: z.number().min(0).max(70),
+    ligueGroup: z.string()
+});
+
+export const booleanDefaultFalseSchema = z.boolean().default(false);
+
+export const numberDefaultZeroSchema = z.number().min(0).default(0);
+
+export const optionalStringSchema = z.string().optional();
+
+export const stageEnum = z.enum(['regularSeason', 'playoff', 'playIn']);

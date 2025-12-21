@@ -1,11 +1,13 @@
 import 'server-only';
 
+import type { ConnectType } from '@/db/db.types';
+
 import mongoose from 'mongoose';
 
 export class DBClient {
     constructor() {}
 
-    public async connect() {
+    public async connect(): ConnectType {
         // Return existing connection if available
         if (globalThis.MONGOOSE_CLIENT) {
             console.debug('[DB-client] Connection already exists');

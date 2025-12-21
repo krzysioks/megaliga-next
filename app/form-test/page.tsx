@@ -15,7 +15,7 @@ import {
     FormMessage
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { formSubmit } from '@/serverActions/form-sa';
+import { formSubmit } from '@/server/actions/form-sa';
 
 const formSchema = z.object({
     username: z.string().min(2, {
