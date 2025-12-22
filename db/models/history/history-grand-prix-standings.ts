@@ -7,7 +7,6 @@ import {
 } from '@/db/models/schema.types';
 
 //HistoryGrandPrixStandings collection in each document represents standings of Grand Prix for given season in megaliga history
-// miejsce	trener	rozegrane GP	pkt
 export const historyGrandPrixStandingsZodSchema = z.object({
     season: objectIdSchema.optional(), // Reference to SeasonOps collection
     standings: z.array(standingsGrandPrixSchema)
