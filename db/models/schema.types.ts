@@ -56,8 +56,10 @@ export const teamReferenceSchema = z.object({
     logoUrl: logoUrlSchema
 });
 
+export const placeSchema = z.number().min(1).max(20);
+
 export const standingSchema = z.object({
-    place: z.number().min(1).max(20),
+    place: placeSchema,
     teamId: objectIdSchema,
     played: z.number().min(1).max(20),
     wins: z.number().min(0).max(20),
@@ -66,6 +68,20 @@ export const standingSchema = z.object({
     balance: z.number(),
     points: z.number().min(0).max(70),
     ligueGroup: z.string()
+});
+
+export const standingPlayinSchema = standingSchema.omit({ ligueGroup: true });
+
+export const standingPlayoffSchema = z.object({
+    place: placeSchema,
+    teamId: objectIdSchema
+});
+
+export const standingsGrandPrixSchema = z.object({
+    place: placeSchema,
+    coachName: nameSchema,
+    played: z.number().min(1).max(20),
+    points: z.number().min(0).max(200)
 });
 
 export const booleanDefaultFalseSchema = z.boolean().default(false);

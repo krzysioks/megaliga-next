@@ -30,11 +30,14 @@ const historySchema = new Schema<HistoryType>({
     },
     regularSeason: {
         type: Schema.Types.ObjectId,
-        ref: 'HistoryRegularSeason'
+        ref: 'HistoryRegularSeasonStandings'
     },
-    playoff: { type: Schema.Types.ObjectId, ref: 'PlayoffStandings' },
-    playIn: { type: Schema.Types.ObjectId, ref: 'PlayInStandings' },
-    grandPrix: { type: Schema.Types.ObjectId, ref: 'GrandPrixStandings' },
+    playoff: { type: Schema.Types.ObjectId, ref: 'HistoryPlayoffStandings' },
+    playIn: { type: Schema.Types.ObjectId, ref: 'HistoryPlayInStandings' },
+    grandPrix: {
+        type: Schema.Types.ObjectId,
+        ref: 'HistoryGrandPrixStandings'
+    },
     teams: [
         {
             name: { type: String, required: true },
