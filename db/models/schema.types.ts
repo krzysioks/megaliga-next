@@ -43,7 +43,8 @@ export const teamSchema = z.object({
 // Shared schemas for common patterns
 export const objectIdSchema = z
     .string()
-    .regex(/^[0-9a-f]{24}$/i, 'Invalid ObjectId format');
+    .regex(/^[0-9a-f]{24}$/i, 'Invalid ObjectId format')
+    .optional();
 
 export const nameSchema = z.string().min(2).max(60);
 
@@ -53,6 +54,7 @@ export const logoUrlSchema = z.string().url().min(2).max(2048);
 
 export const teamReferenceSchema = z.object({
     name: teamNameSchema,
+    coachName: nameSchema,
     logoUrl: logoUrlSchema
 });
 
@@ -79,7 +81,7 @@ export const standingPlayoffSchema = z.object({
 
 export const standingsGrandPrixSchema = z.object({
     place: placeSchema,
-    coachName: nameSchema,
+    teamId: objectIdSchema,
     played: z.number().min(1).max(20),
     points: z.number().min(0).max(200)
 });

@@ -27,7 +27,7 @@ export const userZodSchema = z.object({
     logoUrl: logoUrlSchema,
     reachedPlayoff: booleanDefaultFalseSchema,
     isFirstRoundDraftOrderDraw: booleanDefaultFalseSchema, //old is_draw_round1_draft_order
-    groupName: objectIdSchema.optional()
+    groupName: objectIdSchema
 });
 
 export type UserType = z.infer<typeof userZodSchema>;

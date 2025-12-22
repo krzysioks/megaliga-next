@@ -12,7 +12,7 @@ export const draftFirstRoundOrderLotteryOutcomeZodSchema = z.object({
     four: optionalStringSchema,
     five: optionalStringSchema,
     six: optionalStringSchema,
-    ligueGroupsId: objectIdSchema.optional()
+    ligueGroupsId: objectIdSchema
 });
 
 export type DraftFirstRoundOrderLotteryOutcomeType = z.infer<

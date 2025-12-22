@@ -7,7 +7,7 @@ import { objectIdSchema, stageEnum } from '@/db/models/schema.types';
 // We will identify all games for given team in given season by finding all documents by season, teamId and stage in historyGames collection
 
 export const historyGamesZodSchema = z.object({
-    season: objectIdSchema.optional(), // Reference to SeasonOps collection
+    season: objectIdSchema, // Reference to SeasonOps collection
     games: z.array(
         z.object({
             teamOne: z.object({
@@ -30,7 +30,8 @@ export type HistoryGamesType = z.infer<typeof historyGamesZodSchema>;
 const historyGamesSchema = new Schema<HistoryGamesType>({
     season: {
         type: Schema.Types.ObjectId,
-        ref: 'SeasonOps'
+        ref: 'SeasonOps',
+        required: true
     },
     games: [
         {

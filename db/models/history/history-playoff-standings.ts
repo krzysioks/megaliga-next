@@ -8,7 +8,7 @@ import {
 
 //HistoryPlayoffStandings collection in each document represents standings of playoffs for given season in megaliga history
 export const historyPlayoffStandingsZodSchema = z.object({
-    season: objectIdSchema.optional(), // Reference to SeasonOps collection
+    season: objectIdSchema, // Reference to SeasonOps collection
     standings: z.array(standingPlayoffSchema)
 });
 
@@ -19,7 +19,8 @@ export type HistoryPlayoffStandingsType = z.infer<
 const historyPlayoffStandingsSchema = new Schema<HistoryPlayoffStandingsType>({
     season: {
         type: Schema.Types.ObjectId,
-        ref: 'SeasonOps'
+        ref: 'SeasonOps',
+        required: true
     },
     standings: [
         {

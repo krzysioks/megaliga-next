@@ -5,7 +5,7 @@ import { objectIdSchema, standingPlayinSchema } from '@/db/models/schema.types';
 
 //HistoryPlayinStandings collection represent in each document standings of playin season for given season in megaliga history
 export const historyPlayinStandingsZodSchema = z.object({
-    season: objectIdSchema.optional(), // Reference to SeasonOps collection
+    season: objectIdSchema, // Reference to SeasonOps collection
     standings: z.array(standingPlayinSchema)
 });
 
@@ -16,7 +16,8 @@ export type HistoryPlayinStandingsType = z.infer<
 const historyPlayinStandingsSchema = new Schema<HistoryPlayinStandingsType>({
     season: {
         type: Schema.Types.ObjectId,
-        ref: 'SeasonOps'
+        ref: 'SeasonOps',
+        required: true
     },
     standings: [
         {

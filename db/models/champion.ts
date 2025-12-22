@@ -6,7 +6,7 @@ import { objectIdSchema } from '@/db/models/schema.types';
 //Champion is representation of megaliga_champion of old megaliga database
 
 export const championZodSchema = z.object({
-    userId: objectIdSchema.optional()
+    userId: objectIdSchema
 });
 
 export type ChampionType = z.infer<typeof championZodSchema>;
