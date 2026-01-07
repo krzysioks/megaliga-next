@@ -1,7 +1,11 @@
 import { model, Schema } from 'mongoose';
 import { z } from 'zod';
 
-import { objectIdSchema, stageEnum } from '@/db/models/schema.types';
+import {
+    roundNumberSchema,
+    objectIdSchema,
+    stageEnum
+} from '@/db/models/schema.types';
 
 //HistoryGames collection represent in each document game played in megaliga
 // We will identify all games for given team in given season by finding all documents by season, teamId and stage in historyGames collection
@@ -18,7 +22,7 @@ export const historyGamesZodSchema = z.object({
                 teamId: objectIdSchema, // Reference to team in History.teams
                 score: z.number()
             }),
-            roundNumber: z.number().min(1).max(20),
+            roundNumber: roundNumberSchema,
             stage: stageEnum,
             scoreDetails: objectIdSchema // Reference to HistoryGamesScoreDetails document
         })

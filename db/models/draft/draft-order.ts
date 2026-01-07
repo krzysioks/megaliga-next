@@ -6,10 +6,10 @@ import {
     booleanDefaultFalseSchema
 } from '@/db/models/schema.types';
 
-//DraftOrder is representation of megaliga_draft_order of old megaliga database
+//DraftOrder is representation of megaliga_draft_order of old megaliga database. Will be used to render draft order in Trybuna view
 
 export const draftOrderZodSchema = z.object({
-    ligueGropusId: objectIdSchema, //field will be used to know to which document save selected position by user. Either to dolce or gabbana
+    ligueGroupsId: objectIdSchema, //field will be used to know to which document save selected position by user. Either to dolce or gabbana
     spot: z.object({
         positionNo: z.number().min(1).max(6),
         isSelected: booleanDefaultFalseSchema
@@ -19,13 +19,13 @@ export const draftOrderZodSchema = z.object({
 export type DraftOrderType = z.infer<typeof draftOrderZodSchema>;
 
 const draftOrderSchema = new Schema<DraftOrderType>({
-    ligueGropusId: { type: String, required: true },
+    ligueGroupsId: { type: String, required: true },
     spot: {
         positionNo: { type: Number, required: true },
         isSelected: { type: Boolean, default: false }
     }
 });
 
-const DraftOrderModel = model<DraftOrderType>('Champion', draftOrderSchema);
+const DraftOrderModel = model<DraftOrderType>('DraftOrder', draftOrderSchema);
 
 export default DraftOrderModel;

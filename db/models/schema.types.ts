@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 // Shared Zod schemas for reusable types across models
 const heatSchema = z.number().min(0).max(100).optional();
+export const standardStringSchema = z.string().max(255);
+export const draftNumberSchema = z.number().max(20).optional();
 
 // Player schema for individual player stats in a game
 export const playerSchema = z.object({
@@ -15,7 +17,7 @@ export const playerSchema = z.object({
     heatSix: heatSchema,
     heatSeven: heatSchema,
     setPlay: heatSchema,
-    comment: z.string().max(255).optional()
+    comment: standardStringSchema.optional()
 });
 
 // Trainer schema for trainer stats in a game
@@ -35,7 +37,7 @@ export const trainerSchema = playerSchema.pick({
 export const teamSchema = z.object({
     teamId: z.string().regex(/^[0-9a-f]{24}$/i), // Reference to team in History.teams
     score: z.number(),
-    setPlays: z.array(z.string().max(255)).optional(),
+    setPlays: z.array(standardStringSchema).optional(),
     players: z.array(playerSchema).optional(),
     trainer: trainerSchema.optional()
 });
@@ -87,9 +89,7 @@ export const standingsGrandPrixSchema = z.object({
 });
 
 export const booleanDefaultFalseSchema = z.boolean().default(false);
-
 export const numberDefaultZeroSchema = z.number().min(0).default(0);
-
 export const optionalStringSchema = z.string().optional();
-
 export const stageEnum = z.enum(['regularSeason', 'playoff', 'playIn']);
+export const roundNumberSchema = z.number().min(1).max(20);

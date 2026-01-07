@@ -30,6 +30,6 @@ const draftOpsSchema = new Schema<DraftOpsType>({
     groupLotteryOpen: { type: Boolean, default: false }
 });
 
-const DraftOpsModel = model<DraftOpsType>('DraftOpsModel', draftOpsSchema);
+const DraftOpsModel = model<DraftOpsType>('DraftOps', draftOpsSchema);
 
 export default DraftOpsModel;
