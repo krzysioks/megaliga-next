@@ -1,29 +1,23 @@
 import { model, Schema } from 'mongoose';
 import { z } from 'zod';
 
-import { historyTeamSchema } from '@/db/models/schema.types';
+import { objectIdSchema, teamSchema } from '@/db/models/schema.types';
 
-//HistoryGames collection represent in each document game played in megaliga
-// We will identify all games for given team in given season by finding all documents by teamName and season in historyGames collection
+//ScoreDetails is representation of megaliga_scores of old megaliga database. Will be used for displaying detailed scores of given match.
 
-export const historyGamesScoreDetailsZodSchema = z.object({
-    teamOne: historyTeamSchema,
-    teamTwo: historyTeamSchema
+export const scoreDetailsZodSchema = z.object({
+    scheduleId: objectIdSchema, //Reference to Schedule model, from which we will populate main scores and round number
+    teamOne: teamSchema,
+    teamTwo: teamSchema
 });
 
-export type HistoryGamesScoreDetailsType = z.infer<
-    typeof historyGamesScoreDetailsZodSchema
->;
+export type ScoreDetailsType = z.infer<typeof scoreDetailsZodSchema>;
 
-const historyGamesScoreDetails = new Schema<HistoryGamesScoreDetailsType>({
+const scoreDetailsSchema = new Schema<ScoreDetailsType>({
+    scheduleId: { type: Schema.Types.ObjectId, ref: 'Schedule' },
     teamOne: {
-        teamId: {
-            type: Schema.Types.ObjectId,
-            ref: 'History',
-            required: true
-        },
+        userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
         score: { type: Number },
-        setPlays: [{ type: String }],
         players: [
             {
                 playerId: {
@@ -52,16 +46,12 @@ const historyGamesScoreDetails = new Schema<HistoryGamesScoreDetailsType>({
             heatSeven: { type: Number },
             setPlay: { type: Number },
             comment: { type: String }
-        }
+        },
+        startingLineupId: { type: Schema.Types.ObjectId, ref: 'StartingLineup' }
     },
     teamTwo: {
-        teamId: {
-            type: Schema.Types.ObjectId,
-            ref: 'History',
-            required: true
-        },
+        userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
         score: { type: Number },
-        setPlays: [{ type: String }],
         players: [
             {
                 playerId: {
@@ -90,13 +80,14 @@ const historyGamesScoreDetails = new Schema<HistoryGamesScoreDetailsType>({
             heatSeven: { type: Number },
             setPlay: { type: Number },
             comment: { type: String }
-        }
+        },
+        startingLineupId: { type: Schema.Types.ObjectId, ref: 'StartingLineup' }
     }
 });
 
-const HistoryGamesScoreDetailsModel = model<HistoryGamesScoreDetailsType>(
-    'HistoryGamesScoreDetails',
-    historyGamesScoreDetails
+const ScoreDetailsModel = model<ScoreDetailsType>(
+    'ScoreDetails',
+    scoreDetailsSchema
 );
 
-export default HistoryGamesScoreDetailsModel;
+export default ScoreDetailsModel;

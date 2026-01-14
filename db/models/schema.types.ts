@@ -4,10 +4,14 @@ import { z } from 'zod';
 const heatSchema = z.number().min(0).max(100).optional();
 export const standardStringSchema = z.string().max(255);
 export const draftNumberSchema = z.number().max(20).optional();
+export const objectIdSchema = z
+    .string()
+    .regex(/^[0-9a-f]{24}$/i, 'Invalid ObjectId format')
+    .optional();
 
 // Player schema for individual player stats in a game
 export const playerSchema = z.object({
-    playerId: z.string().regex(/^[0-9a-f]{24}$/i), // Reference to player's document in Players collection
+    playerId: objectIdSchema, // Reference to player's document in Players collection
     // TODOKP Idea is to keep players in Players collection even if they are no more active in megaliga. We will add new field status to indicate if should be shown in draft for current season or not. Keeping players in Players collection will help to collect and keep statistics
     heatOne: heatSchema,
     heatTwo: heatSchema,
@@ -34,26 +38,26 @@ export const trainerSchema = playerSchema.pick({
 });
 
 // Team schema for team details in a game (used for both teamOne and teamTwo)
-export const teamSchema = z.object({
-    teamId: z.string().regex(/^[0-9a-f]{24}$/i), // Reference to team in History.teams
+export const historyTeamSchema = z.object({
+    teamId: objectIdSchema, // Reference to team in History.teams
     score: z.number(),
     setPlays: z.array(standardStringSchema).optional(),
     players: z.array(playerSchema).optional(),
     trainer: trainerSchema.optional()
 });
 
+export const teamSchema = z.object({
+    userId: objectIdSchema, // Reference to  User model, from where we will populate team name
+    score: z.number(),
+    players: z.array(playerSchema).optional(),
+    trainer: trainerSchema.optional(),
+    startingLineupId: objectIdSchema.optional() // Reference to StartingLineup model, from which we will populate setplays
+});
+
 // Shared schemas for common patterns
-export const objectIdSchema = z
-    .string()
-    .regex(/^[0-9a-f]{24}$/i, 'Invalid ObjectId format')
-    .optional();
-
 export const nameSchema = z.string().min(2).max(60);
-
 export const teamNameSchema = z.string().min(2).max(50);
-
 export const logoUrlSchema = z.string().url().min(2).max(2048);
-
 export const teamReferenceSchema = z.object({
     name: teamNameSchema,
     coachName: nameSchema,

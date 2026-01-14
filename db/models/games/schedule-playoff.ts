@@ -1,4 +1,4 @@
-import { model, Schema } from 'mongoose';
+import { model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
 import { objectIdSchema, roundNumberSchema } from '@/db/models/schema.types';
@@ -21,8 +21,8 @@ export const schedulePlayoffZodSchema = z.object({
 export type SchedulePlayoffType = z.infer<typeof schedulePlayoffZodSchema>;
 
 const schedulePlayoffSchema = new Schema<SchedulePlayoffType>({
-    userOneId: { type: String, required: true },
-    userTwoId: { type: String, required: true },
+    userOneId: { type: Types.ObjectId, ref: 'User' },
+    userTwoId: { type: Types.ObjectId, ref: 'User' },
     roundNumber: { type: Number, required: true },
     userOneScore: { type: Number },
     userTwoScore: { type: Number },
