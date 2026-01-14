@@ -4,11 +4,13 @@ import { z } from 'zod';
 import {
     roundNumberSchema,
     objectIdSchema,
-    stageEnum
+    stageEnumSchema
 } from '@/db/models/schema.types';
 
 //HistoryGames collection represent in each document game played in megaliga
 // We will identify all games for given team in given season by finding all documents by season, teamId and stage in historyGames collection
+
+const STAGE_ENUM = stageEnumSchema._def.values;
 
 export const historyGamesZodSchema = z.object({
     season: objectIdSchema, // Reference to SeasonOps collection
@@ -23,7 +25,7 @@ export const historyGamesZodSchema = z.object({
                 score: z.number()
             }),
             roundNumber: roundNumberSchema,
-            stage: stageEnum,
+            stage: stageEnumSchema,
             scoreDetails: objectIdSchema // Reference to HistoryGamesScoreDetails document
         })
     )
@@ -58,7 +60,7 @@ const historyGamesSchema = new Schema<HistoryGamesType>({
             roundNumber: { type: Number, required: true },
             stage: {
                 type: String,
-                enum: ['regularSeason', 'playoff', 'playIn'],
+                enum: STAGE_ENUM,
                 required: true
             },
             scoreDetails: {

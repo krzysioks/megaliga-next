@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { objectIdSchema } from '@/db/models/schema.types';
 
-//DraftOrder is representation of megaliga_playoff_draft_order of old megaliga database. Will be used to render playoff draft order in Trybuna view
+//DraftOrderPlayoff is representation of megaliga_playoff_draft_order of old megaliga database. Will be used to render playoff draft order in Trybuna view
 
 export const draftOrderPlayoffZodSchema = z.object({
     userId: objectIdSchema, // based on userId we will populate user.teamName (old team_names_id)

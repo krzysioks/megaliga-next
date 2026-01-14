@@ -6,8 +6,7 @@ import {
     booleanDefaultFalseSchema
 } from '@/db/models/schema.types';
 
-//DraftOrder is representation of megaliga_draft_order of old megaliga database. Will be used to render draft order in Trybuna view
-
+//DraftOrder is representation of megaliga_draft_order of old megaliga database. Will be used for lottery of drafting positions
 export const draftOrderZodSchema = z.object({
     ligueGroupsId: objectIdSchema, //field will be used to know to which document save selected position by user. Either to dolce or gabbana
     spot: z.object({
