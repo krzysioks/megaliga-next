@@ -68,6 +68,18 @@ export const placeSchema = z.number().min(1).max(20);
 
 export const standingSchema = z.object({
     place: placeSchema,
+    userId: objectIdSchema, // Reference to  User model, from where we will populate team name
+    played: z.number().min(1).max(20),
+    wins: z.number().min(0).max(20),
+    draw: z.number().min(0).max(20),
+    defeat: z.number().min(0).max(20),
+    balance: z.number(),
+    points: z.number().min(0).max(70),
+    ligueGroup: z.string()
+});
+
+export const historyStandingSchema = z.object({
+    place: placeSchema,
     teamId: objectIdSchema,
     played: z.number().min(1).max(20),
     wins: z.number().min(0).max(20),
@@ -78,7 +90,9 @@ export const standingSchema = z.object({
     ligueGroup: z.string()
 });
 
-export const standingPlayinSchema = standingSchema.omit({ ligueGroup: true });
+export const standingPlayinSchema = historyStandingSchema.omit({
+    ligueGroup: true
+});
 
 export const standingPlayoffSchema = z.object({
     place: placeSchema,

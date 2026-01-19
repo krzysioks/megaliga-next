@@ -1,12 +1,15 @@
 import { model, Schema } from 'mongoose';
 import { z } from 'zod';
 
-import { objectIdSchema, standingSchema } from '@/db/models/schema.types';
+import {
+    objectIdSchema,
+    historyStandingSchema
+} from '@/db/models/schema.types';
 
 //HistoryRegularSeasonStandings collection represent in each document standings of regular season for given season in megaliga history
 export const historyRegularSeasonStandingsZodSchema = z.object({
     season: objectIdSchema, // Reference to SeasonOps collection
-    standings: z.array(standingSchema)
+    standings: z.array(historyStandingSchema)
 });
 
 export type HistoryRegularSeasonStandingsType = z.infer<
