@@ -110,4 +110,18 @@ export const booleanDefaultFalseSchema = z.boolean().default(false);
 export const numberDefaultZeroSchema = z.number().min(0).default(0);
 export const optionalStringSchema = z.string().optional();
 export const stageEnumSchema = z.enum(['regularSeason', 'playoff', 'playIn']);
+export const statusEnumSchema = z.enum(['active', 'inactive']);
+export const actionCentreNotificationTypeSchema = z.enum([
+    'ligueGroupLottery',
+    'draftOrderLottery',
+    'startingLineupSelection',
+    'startingLineupSelectionPlayoff',
+    'draftPick',
+    'draftPickPlayoff'
+]);
+export const actionCentreNotificationStatusSchema = z.enum([
+    'new',
+    'completed'
+]);
 export const roundNumberSchema = z.number().min(1).max(20);
+export const thropyTypeSchema = z.enum(['megaliga', 'grandprix']);

@@ -4,12 +4,13 @@ import { z } from 'zod';
 import {
     draftNumberSchema,
     objectIdSchema,
-    standardStringSchema
+    standardStringSchema,
+    statusEnumSchema
 } from '@/db/models/schema.types';
 
 //Players is representation of megaliga_players of old megaliga database.
 
-const PLAYER_STATUS_ENUM = ['active', 'inactive'] as const;
+const PLAYER_STATUS_ENUM = statusEnumSchema._def.values;
 
 export const playersZodSchema = z.object({
     extraligaPlayerName: standardStringSchema,
@@ -19,7 +20,8 @@ export const playersZodSchema = z.object({
     draftedWithNumberDolce: draftNumberSchema,
     draftedWithNumberGabbana: draftNumberSchema,
     draftedWithNumberPlayoff: draftNumberSchema,
-    playerStatus: z.enum(PLAYER_STATUS_ENUM).default('active')
+    playerStatus: statusEnumSchema.default('active'),
+    statistics: objectIdSchema
 });
 
 export type PlayersType = z.infer<typeof playersZodSchema>;
@@ -36,7 +38,8 @@ const playersSchema = new Schema<PlayersType>({
         type: String,
         enum: PLAYER_STATUS_ENUM,
         default: 'active'
-    }
+    },
+    statistics: { type: Types.ObjectId, ref: 'Statistics' }
 });
 
 const PlayersModel = model<PlayersType>('Players', playersSchema);

@@ -6,7 +6,9 @@ import {
     teamNameSchema,
     logoUrlSchema,
     objectIdSchema,
-    booleanDefaultFalseSchema
+    booleanDefaultFalseSchema,
+    standardStringSchema,
+    thropyTypeSchema
 } from '@/db/models/schema.types';
 
 // User model is representation of megaliga_uder_data of old megaliga database
@@ -27,7 +29,15 @@ export const userZodSchema = z.object({
     logoUrl: logoUrlSchema,
     reachedPlayoff: booleanDefaultFalseSchema,
     isFirstRoundDraftOrderDraw: booleanDefaultFalseSchema, //old is_draw_round1_draft_order
-    groupName: objectIdSchema
+    groupName: objectIdSchema,
+    bio: standardStringSchema,
+    // based on cabinetTrophy field Dashboard -> Gablota will be rendered
+    cabinetTrophy: z.array(
+        z.object({
+            season: z.string(), //year of the season
+            type: thropyTypeSchema //for what turnament this trophy was won, megaliga or grandprix
+        })
+    )
 });
 
 export type UserType = z.infer<typeof userZodSchema>;
@@ -41,7 +51,11 @@ const userSchema = new Schema<UserType>({
     logoUrl: { type: String, required: true },
     reachedPlayoff: { type: Boolean, default: false },
     isFirstRoundDraftOrderDraw: { type: Boolean, default: false },
-    groupName: { type: Types.ObjectId, ref: 'LigueGroups' }
+    groupName: { type: Types.ObjectId, ref: 'LigueGroups' },
+    bio: { type: String },
+    cabinetTrophy: {
+        type: [{ season: String, type: thropyTypeSchema._def.values }]
+    }
 });
 
 // TODOKP: Later on when implementing views we will add needed methods and static functions to User model
