@@ -47,6 +47,6 @@ const historySchema = new Schema<HistoryType>({
     ]
 });
 
-const HistorysModel = model<HistoryType>('History', historySchema);
+const HistoryModel = model<HistoryType>('History', historySchema);
 
-export default HistorysModel;
+export default HistoryModel;

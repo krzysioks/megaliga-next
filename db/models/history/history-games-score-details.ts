@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { historyTeamSchema } from '@/db/models/schema.types';
 
 //HistoryGames collection represent in each document game played in megaliga
-// We will identify all games for given team in given season by finding all documents by teamName and season in historyGames collection
+// We will identify all games for given team in given season by finding all documents by teamId and season in historyGames collection
 
 export const historyGamesScoreDetailsZodSchema = z.object({
     teamOne: historyTeamSchema,

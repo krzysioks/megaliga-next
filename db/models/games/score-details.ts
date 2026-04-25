@@ -17,7 +17,7 @@ const scoreDetailsSchema = new Schema<ScoreDetailsType>({
     scheduleId: { type: Schema.Types.ObjectId, ref: 'Schedule' },
     teamOne: {
         userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-        score: { type: Number },
+        score: { type: Number }, //TODOKP this field might be redundant
         players: [
             {
                 playerId: {
@@ -51,7 +51,7 @@ const scoreDetailsSchema = new Schema<ScoreDetailsType>({
     },
     teamTwo: {
         userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-        score: { type: Number },
+        score: { type: Number }, //TODOKP this field might be redundant
         players: [
             {
                 playerId: {
