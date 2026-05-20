@@ -26,6 +26,8 @@ export const historyGamesZodSchema = z.object({
             }),
             roundNumber: roundNumberSchema,
             stage: stageEnumSchema,
+            teamOneScore: z.number().min(0),
+            teamTwoScore: z.number().min(0),
             scoreDetails: objectIdSchema // Reference to HistoryGamesScoreDetails document
         })
     )
@@ -63,6 +65,8 @@ const historyGamesSchema = new Schema<HistoryGamesType>({
                 enum: STAGE_ENUM,
                 required: true
             },
+            teamOneScore: { type: Number, required: true },
+            teamTwoScore: { type: Number, required: true },
             scoreDetails: {
                 type: Schema.Types.ObjectId,
                 ref: 'HistoryGamesScoreDetails',

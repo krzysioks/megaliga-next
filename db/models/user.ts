@@ -37,7 +37,8 @@ export const userZodSchema = z.object({
             season: z.string(), //year of the season
             type: thropyTypeSchema //for what turnament this trophy was won, megaliga or grandprix
         })
-    )
+    ),
+    isAdmin: z.boolean().default(false) //field added for admin panel, to distinguish between regular users and admins
 });
 
 export type UserType = z.infer<typeof userZodSchema>;

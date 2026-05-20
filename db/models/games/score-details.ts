@@ -1,12 +1,17 @@
 import { model, Schema } from 'mongoose';
 import { z } from 'zod';
 
-import { objectIdSchema, teamSchema } from '@/db/models/schema.types';
+import {
+    objectIdSchema,
+    roundNumberSchema,
+    teamSchema
+} from '@/db/models/schema.types';
 
 //ScoreDetails is representation of megaliga_scores of old megaliga database. Will be used for displaying detailed scores of given match.
 
 export const scoreDetailsZodSchema = z.object({
-    scheduleId: objectIdSchema, //Reference to Schedule model, from which we will populate main scores and round number
+    scheduleId: objectIdSchema, //Reference to Schedule model, from which we will populate main scores
+    roundNumber: roundNumberSchema, //needed to properly identify document for different use cases
     teamOne: teamSchema,
     teamTwo: teamSchema
 });
@@ -15,9 +20,9 @@ export type ScoreDetailsType = z.infer<typeof scoreDetailsZodSchema>;
 
 const scoreDetailsSchema = new Schema<ScoreDetailsType>({
     scheduleId: { type: Schema.Types.ObjectId, ref: 'Schedule' },
+    roundNumber: { type: Number, required: true },
     teamOne: {
         userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-        score: { type: Number }, //TODOKP this field might be redundant
         players: [
             {
                 playerId: {
@@ -51,7 +56,6 @@ const scoreDetailsSchema = new Schema<ScoreDetailsType>({
     },
     teamTwo: {
         userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-        score: { type: Number }, //TODOKP this field might be redundant
         players: [
             {
                 playerId: {

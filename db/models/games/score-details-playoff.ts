@@ -1,12 +1,17 @@
 import { model, Schema } from 'mongoose';
 import { z } from 'zod';
 
-import { objectIdSchema, teamSchema } from '@/db/models/schema.types';
+import {
+    objectIdSchema,
+    roundNumberSchema,
+    teamSchema
+} from '@/db/models/schema.types';
 
 //ScoreDetailsPLayoff is representation of megaliga_scores_playoff of old megaliga database. Will be used for displaying detailed scores of given match in plaoffs.
 
 export const scoreDetailsPLayoffZodSchema = z.object({
     scheduleId: objectIdSchema, //Reference to SchedulePlayoff model, from which we will populate main scores and round number
+    roundNumber: roundNumberSchema, //needed to properly identify document for different use cases
     teamOne: teamSchema,
     teamTwo: teamSchema
 });
@@ -19,7 +24,7 @@ const scoreDetailsPlayoffSchema = new Schema<ScoreDetailsPlayoffType>({
     scheduleId: { type: Schema.Types.ObjectId, ref: 'SchedulePlayoff' },
     teamOne: {
         userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-        score: { type: Number },
+        roundNumber: { type: Number, required: true },
         players: [
             {
                 playerId: {
@@ -56,7 +61,6 @@ const scoreDetailsPlayoffSchema = new Schema<ScoreDetailsPlayoffType>({
     },
     teamTwo: {
         userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-        score: { type: Number },
         players: [
             {
                 playerId: {

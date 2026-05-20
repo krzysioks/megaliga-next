@@ -48,7 +48,6 @@ export const historyTeamSchema = z.object({
 
 export const teamSchema = z.object({
     userId: objectIdSchema, // Reference to  User model, from where we will populate team name
-    score: z.number(),
     players: z.array(playerSchema).optional(),
     trainer: trainerSchema.optional(),
     startingLineupId: objectIdSchema.optional() // Reference to StartingLineup model, from which we will populate setplays
@@ -125,3 +124,14 @@ export const actionCentreNotificationStatusSchema = z.enum([
 ]);
 export const roundNumberSchema = z.number().min(1).max(20);
 export const thropyTypeSchema = z.enum(['megaliga', 'grandprix']);
+const editorJsBlockSchema = z.object({
+    id: z.string().optional(),
+    type: z.string().min(1),
+    data: z.record(z.string(), z.unknown())
+});
+
+export const editorJsContentSchema = z.object({
+    time: z.number().optional(),
+    version: z.string().optional(),
+    blocks: z.array(editorJsBlockSchema).min(1)
+});
