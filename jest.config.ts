@@ -1,7 +1,11 @@
 import type { Config } from '@jest/types';
 
 const config: Config.InitialOptions = {
-    setupFilesAfterEnv: ['./setupTestFramework.js'],
+    setupFilesAfterEnv: ['./setupTestFramework.ts'],
+    moduleNameMapper: {
+        '^server-only$': '<rootDir>/test-config/mocks/server-only.ts',
+        '^@/(.*)$': '<rootDir>/$1'
+    },
     transform: {
         '^.+\\.{ts|tsx}?$': [
             'ts-jest',

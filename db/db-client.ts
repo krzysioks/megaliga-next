@@ -17,9 +17,7 @@ export class DBClient {
         try {
             // Connect to MongoDB
             globalThis.MONGOOSE_CLIENT = await mongoose.connect(
-                `mongodb+srv://${process.env.USER_DB}:${encodeURIComponent(
-                    process.env.PASSWORD_DB || ''
-                )}@kp-cluster.9wm4hdz.mongodb.net/?appName=KP-cluster`
+                this.getMongoUri()
             );
 
             console.debug('[DB-client] Connected to MongoDB');
@@ -27,5 +25,24 @@ export class DBClient {
             console.error('MongoDB connection error:', error);
             mongoose.connection.close();
         }
+    }
+
+    private getMongoUri(): string {
+        const isTestEnv = process.env.NODE_ENV === 'test';
+        const username = isTestEnv
+            ? process.env.USER_DB_TEST
+            : process.env.USER_DB;
+        const password = isTestEnv
+            ? process.env.PASSWORD_DB_TEST
+            : process.env.PASSWORD_DB;
+        const dbName = isTestEnv
+            ? process.env.DB_NAME_TEST
+            : process.env.DB_NAME;
+
+        if (!username || !password || !dbName) {
+            throw new Error('Missing MongoDB configuration.');
+        }
+
+        return `mongodb+srv://${username}:${encodeURIComponent(password)}@kp-cluster.9wm4hdz.mongodb.net/${dbName}?appName=KP-cluster`;
     }
 }
