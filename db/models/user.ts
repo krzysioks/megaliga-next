@@ -12,7 +12,6 @@ import {
 } from '@/db/models/schema.types';
 
 // User model is representation of megaliga_uder_data of old megaliga database
-// TODOKP: Other user data needed for admin panel section will implemented later
 export const userZodSchema = z.object({
     username: nameSchema,
     coachName: nameSchema,

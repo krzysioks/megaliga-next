@@ -6,8 +6,7 @@ export const standardStringSchema = z.string().max(255);
 export const draftNumberSchema = z.number().max(20).optional();
 export const objectIdSchema = z
     .string()
-    .regex(/^[0-9a-f]{24}$/i, 'Invalid ObjectId format')
-    .optional();
+    .regex(/^[0-9a-f]{24}$/i, 'Invalid ObjectId format');
 
 // Player schema for individual player stats in a game
 export const playerSchema = z.object({
