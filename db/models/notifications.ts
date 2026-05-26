@@ -96,7 +96,7 @@ notificationsSchema.method(
     }
 );
 
-// TODOKP: 1. save notfication document - will be triggered directly on NotificationsModel in place of invocation. const contification = new NotificationsModel({ message: 'New notification', status: 'active', isDissmissible: true }); await notification.save();
+// TODOKP: save notfication document - will be triggered directly on NotificationsModel in place of invocation. const contification = new NotificationsModel({ message: 'New notification', status: 'active', isDissmissible: true }); await notification.save();
 
 const NotificationsModel = model<NotificationsType, NotificationsModelType>(
     'Notifications',
