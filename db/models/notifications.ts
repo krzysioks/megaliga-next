@@ -81,6 +81,10 @@ notificationsSchema.static(
 notificationsSchema.method(
     'setIsDismissed',
     async function setIsDismissed(userId: string): Promise<void> {
+        if (!this.isDissmissible) {
+            throw new Error('Notification is not dismissible');
+        }
+
         const uniqueUserIds = new Set(this.dismissedUserIds);
 
         if (!uniqueUserIds.has(userId)) {
