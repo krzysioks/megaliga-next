@@ -22,20 +22,6 @@ export const formSubmit = async (data: FormValues) => {
             logoUrl: 'http://example.com/logo.png'
         });
         await user.save();
-
-        // const notification = new NotificationsModel({
-        //     message: 'New notification',
-        //     status: 'active',
-        //     isDissmissible: true
-        // });
-        // await notification.save();
-
-        // await notification.setIsDismissed(user._id.toString());
-        // const notifications =
-        //     await NotificationsModel.getAllActiveNotifications(
-        //         user._id.toString()
-        //     );
-        // console.log('Active notifications for user:', notifications);
     } catch (error) {
         console.error('Error saving user:', error);
     }
