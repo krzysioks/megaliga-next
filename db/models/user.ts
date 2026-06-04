@@ -1,4 +1,4 @@
-import { model, Schema, Types } from 'mongoose';
+import { HydratedDocument, model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
 import {
@@ -42,6 +42,8 @@ export const userZodSchema = z.object({
 
 export type UserType = z.infer<typeof userZodSchema>;
 
+export type FindByIdType = HydratedDocument<UserType> | null;
+
 const userSchema = new Schema<UserType>({
     username: { type: String, required: true, unique: true },
     coachName: { type: String, required: true },
@@ -55,10 +57,11 @@ const userSchema = new Schema<UserType>({
     bio: { type: String },
     cabinetTrophy: {
         type: [{ season: String, type: thropyTypeSchema._def.values }]
-    }
+    },
+    isAdmin: { type: Boolean, default: false }
 });
 
-// TODOKP: Later on when implementing views we will add needed methods and static functions to User model
+// save user document - will be triggered directly on UserModel in place of invocation. Example of usage in db/models/__test__/user.test.ts
 
 const UserModel = model<UserType>('User', userSchema);
 

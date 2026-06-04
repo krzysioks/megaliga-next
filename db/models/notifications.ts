@@ -40,9 +40,10 @@ interface NotificationsModelType extends Model<
     getAllActiveNotifications: (userId: string) => NotificationsDocumentType;
 }
 
-export type FindByIdType =
-    | HydratedDocument<NotificationsType, NotificationsMethodsType>
-    | null;
+export type FindByIdType = HydratedDocument<
+    NotificationsType,
+    NotificationsMethodsType
+> | null;
 
 const notificationsSchema = new Schema<
     NotificationsType,
