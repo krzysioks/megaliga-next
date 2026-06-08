@@ -1,4 +1,4 @@
-import { model, Schema } from 'mongoose';
+import { model, Model, Schema } from 'mongoose';
 import { z } from 'zod';
 
 import {
@@ -20,7 +20,11 @@ export const draftOpsZodSchema = z.object({
 
 export type DraftOpsType = z.infer<typeof draftOpsZodSchema>;
 
-const draftOpsSchema = new Schema<DraftOpsType>({
+interface DraftOpsModelType extends Model<DraftOpsType> {
+    getDraftConfig: () => Promise<DraftOpsType | null>;
+}
+
+const draftOpsSchema = new Schema<DraftOpsType, DraftOpsModelType>({
     draftWindowOpen: { type: Boolean, default: false },
     draftCurrentRoundDolce: { type: Number, default: 0 },
     draftCurrentRoundGabbana: { type: Number, default: 0 },
@@ -30,6 +34,21 @@ const draftOpsSchema = new Schema<DraftOpsType>({
     groupLotteryOpen: { type: Boolean, default: false }
 });
 
-const DraftOpsModel = model<DraftOpsType>('DraftOps', draftOpsSchema);
+draftOpsSchema.static(
+    'getDraftConfig',
+    async function getDraftConfig(): Promise<DraftOpsType | null> {
+        try {
+            return await this.findOne().exec();
+        } catch (error) {
+            console.error('Error fetching draft config:', error);
+            throw error;
+        }
+    }
+);
+
+const DraftOpsModel = model<DraftOpsType, DraftOpsModelType>(
+    'DraftOps',
+    draftOpsSchema
+);
 
 export default DraftOpsModel;

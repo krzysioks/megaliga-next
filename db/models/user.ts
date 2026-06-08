@@ -42,13 +42,20 @@ export const userZodSchema = z.object({
 
 export type UserType = z.infer<typeof userZodSchema>;
 
-interface UserModelType extends Model<UserType> {
+type UserUpdateDataType = Partial<Omit<UserType, 'email' | 'password'>>;
+type UserUpdatableKey = keyof Omit<UserType, 'email' | 'password'>;
+
+interface UserMethodsType {
+    updateUser: (updateData: UserUpdateDataType) => Promise<void>;
+}
+
+interface UserModelType extends Model<UserType, '', UserMethodsType> {
     getNumberOfUsersAssignedToGroup: (ligueGroupId: string) => Promise<number>;
 }
 
-export type FindByIdType = HydratedDocument<UserType> | null;
+export type FindByIdType = HydratedDocument<UserType, UserMethodsType> | null;
 
-const userSchema = new Schema<UserType>({
+const userSchema = new Schema<UserType, UserModelType, UserMethodsType>({
     username: { type: String, required: true, unique: true },
     coachName: { type: String, required: true },
     email: { type: String, required: true, unique: true },
@@ -65,6 +72,11 @@ const userSchema = new Schema<UserType>({
     isAdmin: { type: Boolean, default: false }
 });
 
+const NON_UPDATABLE_FIELDS = new Set(['email', 'password']);
+const USER_UPDATABLE_FIELDS = Object.keys(userSchema.paths).filter(
+    field => !NON_UPDATABLE_FIELDS.has(field)
+) as UserUpdatableKey[];
+
 userSchema.static(
     'getNumberOfUsersAssignedToGroup',
     async function getNumberOfUsersAssignedToGroup(ligueGroupId: string) {
@@ -74,7 +86,32 @@ userSchema.static(
             }).exec();
             return count;
         } catch (error) {
-            console.error('Error fetching ligue group ids:', error);
+            console.error(
+                'Error fetching number of users assugned to ligue group:',
+                error
+            );
+            throw error;
+        }
+    }
+);
+
+userSchema.method(
+    'updateUser',
+    async function updateUser(updateData: UserUpdateDataType) {
+        try {
+            const safeUpdateData = Object.fromEntries(
+                Object.entries(updateData).filter(
+                    ([key, value]) =>
+                        USER_UPDATABLE_FIELDS.includes(
+                            key as UserUpdatableKey
+                        ) && value !== undefined
+                )
+            ) as UserUpdateDataType;
+
+            this.set(safeUpdateData);
+            await this.save();
+        } catch (error) {
+            console.error('Error updating user:', error);
             throw error;
         }
     }

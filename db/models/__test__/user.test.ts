@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 
 import { DBClient } from '@/db/db-client';
 import { LigueGroupsModel } from '@/db/models/ligue-groups';
-import UserModel, { FindByIdType } from '@/db/models/user';
+import UserModel, { FindByIdType, UserType } from '@/db/models/user';
 
 // connect to test db before running tests
 beforeAll(async () => {
@@ -24,21 +24,24 @@ afterAll(async () => {
 });
 
 describe('Test UserModel methods and static functions', () => {
+    const createUserData = (overrides: Partial<UserType> = {}) => ({
+        username: 'user-one',
+        coachName: 'Coach One',
+        email: 'user-one@example.com',
+        password: 'Password1!',
+        teamName: 'Team One',
+        logoUrl: 'https://example.com/team-one.png',
+        reachedPlayoff: false,
+        isFirstRoundDraftOrderDraw: false,
+        groupName: new mongoose.Types.ObjectId().toString(),
+        bio: 'User one bio',
+        cabinetTrophy: [],
+        isAdmin: false,
+        ...overrides
+    });
+
     test('Should get user data by userId', async () => {
-        const user = await new UserModel({
-            username: 'user-one',
-            coachName: 'Coach One',
-            email: 'user-one@example.com',
-            password: 'Password1!',
-            teamName: 'Team One',
-            logoUrl: 'https://example.com/team-one.png',
-            reachedPlayoff: false,
-            isFirstRoundDraftOrderDraw: false,
-            groupName: new mongoose.Types.ObjectId().toString(),
-            bio: 'User one bio',
-            cabinetTrophy: [],
-            isAdmin: false
-        }).save();
+        const user = await new UserModel(createUserData()).save();
         const userId = user._id.toString();
         const fetchedUser: FindByIdType =
             await UserModel.findById(userId).exec();
@@ -194,5 +197,84 @@ describe('Test UserModel methods and static functions', () => {
 
         expect(countDolce).toBe(0);
         expect(countGabbana).toBe(0);
+    });
+
+    test('Should update allowed fields in updateUser method', async () => {
+        const user = await new UserModel(
+            createUserData({
+                email: 'update-allowed@example.com',
+                username: 'update-allowed-user'
+            })
+        ).save();
+
+        await user.updateUser({
+            coachName: 'Updated Coach',
+            teamName: 'Updated Team',
+            reachedPlayoff: true,
+            bio: 'Updated bio'
+        });
+
+        const updatedUser: FindByIdType = await UserModel.findById(
+            user._id
+        ).exec();
+
+        expect(updatedUser).not.toBeNull();
+        expect(updatedUser?.coachName).toBe('Updated Coach');
+        expect(updatedUser?.teamName).toBe('Updated Team');
+        expect(updatedUser?.reachedPlayoff).toBe(true);
+        expect(updatedUser?.bio).toBe('Updated bio');
+    });
+
+    test('Should not update non-editable fields in updateUser method', async () => {
+        const user = await new UserModel(
+            createUserData({
+                email: 'non-editable@example.com',
+                username: 'non-editable-user',
+                password: 'Password1!'
+            })
+        ).save();
+
+        await user.updateUser({
+            coachName: 'Updated Coach'
+        });
+
+        // Runtime guard should ignore non-editable fields, even if payload is casted.
+        await user.updateUser({
+            email: 'changed@example.com',
+            password: 'NewPassword1!'
+        } as unknown as Parameters<typeof user.updateUser>[0]);
+
+        const updatedUser: FindByIdType = await UserModel.findById(
+            user._id
+        ).exec();
+
+        expect(updatedUser).not.toBeNull();
+        expect(updatedUser?.coachName).toBe('Updated Coach');
+        expect(updatedUser?.email).toBe('non-editable@example.com');
+        expect(updatedUser?.password).toBe('Password1!');
+    });
+
+    test('Should ignore fields with undefined value in updateUser method', async () => {
+        const user = await new UserModel(
+            createUserData({
+                email: 'undefined-update@example.com',
+                username: 'undefined-update-user',
+                coachName: 'Coach Before',
+                teamName: 'Team Before'
+            })
+        ).save();
+
+        await user.updateUser({
+            coachName: undefined,
+            teamName: 'Team After'
+        });
+
+        const updatedUser: FindByIdType = await UserModel.findById(
+            user._id
+        ).exec();
+
+        expect(updatedUser).not.toBeNull();
+        expect(updatedUser?.coachName).toBe('Coach Before');
+        expect(updatedUser?.teamName).toBe('Team After');
     });
 });
