@@ -1,4 +1,4 @@
-import { HydratedDocument, model, Schema, Types } from 'mongoose';
+import { HydratedDocument, model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
 import {
@@ -42,6 +42,10 @@ export const userZodSchema = z.object({
 
 export type UserType = z.infer<typeof userZodSchema>;
 
+interface UserModelType extends Model<UserType> {
+    getNumberOfUsersAssignedToGroup: (ligueGroupId: string) => Promise<number>;
+}
+
 export type FindByIdType = HydratedDocument<UserType> | null;
 
 const userSchema = new Schema<UserType>({
@@ -61,8 +65,25 @@ const userSchema = new Schema<UserType>({
     isAdmin: { type: Boolean, default: false }
 });
 
+userSchema.static(
+    'getNumberOfUsersAssignedToGroup',
+    async function getNumberOfUsersAssignedToGroup(ligueGroupId: string) {
+        try {
+            const count = await this.countDocuments({
+                groupName: ligueGroupId
+            }).exec();
+            return count;
+        } catch (error) {
+            console.error('Error fetching ligue group ids:', error);
+            throw error;
+        }
+    }
+);
+
 // save user document - will be triggered directly on UserModel in place of invocation. Example of usage in db/models/__test__/user.test.ts
 
-const UserModel = model<UserType>('User', userSchema);
+// TODOKP: 1. later we need to implement static function to fetch all users with populated groupName field and method to fetch desired user by userId with populated groupName field.
+
+const UserModel = model<UserType, UserModelType>('User', userSchema);
 
 export default UserModel;

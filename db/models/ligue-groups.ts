@@ -1,8 +1,7 @@
-import { model, Schema } from 'mongoose';
+import { Model, model, Schema } from 'mongoose';
 import { z } from 'zod';
 
-// LigueGroups model represents megaliga_ligue_groups table
-
+// LigueGroups model represents megaliga_ligue_groups table. It should contain only documents, representing groups that are used in given season.
 export const ligueGroupsZodSchema = z.object({
     groupName: z
         .string()
@@ -12,11 +11,30 @@ export const ligueGroupsZodSchema = z.object({
 
 export type LigueGroupsType = z.infer<typeof ligueGroupsZodSchema>;
 
-const LigueGroupsSchema = new Schema<LigueGroupsType>({
+interface LigueGroupsModelType extends Model<LigueGroupsType> {
+    getLigueGrouspId: () => Promise<string[]>;
+}
+
+const LigueGroupsSchema = new Schema<LigueGroupsType, LigueGroupsModelType>({
     groupName: { type: String, required: true }
 });
 
-export const LigueGroupsModel = model<LigueGroupsType>(
+LigueGroupsSchema.static('getLigueGrouspId', async function getLigueGrouspId() {
+    try {
+        const groups = await this.find(
+            {
+                groupName: { $in: ['dolce', 'gabbana'] }
+            },
+            { _id: 1 }
+        ).exec();
+        return groups.map(group => group._id.toString());
+    } catch (error) {
+        console.error('Error fetching ligue group ids:', error);
+        throw error;
+    }
+});
+
+export const LigueGroupsModel = model<LigueGroupsType, LigueGroupsModelType>(
     'LigueGroups',
     LigueGroupsSchema
 );

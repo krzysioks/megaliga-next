@@ -27,10 +27,6 @@ interface ActionCentreNotificationsMethodsType {
     setStatus: (userId: string) => Promise<void>;
 }
 
-type ActionCentreNotificationsDocumentType = Promise<
-    HydratedDocument<ActionCentreNotificationsType>
->;
-
 interface ActionCentreNotificationsModelType extends Model<
     ActionCentreNotificationsType,
     '',
