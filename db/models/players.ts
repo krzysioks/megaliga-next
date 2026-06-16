@@ -7,10 +7,12 @@ import {
     standardStringSchema,
     statusEnumSchema
 } from '@/db/models/schema.types';
+import UserModel from '@/db/models/user';
 
 //Players is representation of megaliga_players of old megaliga database.
 
-type PlayerAssignmentType = 'dolce' | 'gabbana' | 'playoff';
+const PLAYER_ASSIGNMENT_TYPES = ['dolce', 'gabbana', 'playoff'] as const;
+type PlayerAssignmentType = (typeof PLAYER_ASSIGNMENT_TYPES)[number];
 
 const PLAYER_STATUS_ENUM = statusEnumSchema._def.values;
 
@@ -28,14 +30,25 @@ export const playersZodSchema = z.object({
 
 export type PlayersType = z.infer<typeof playersZodSchema>;
 
-interface PlayersModelType extends Model<PlayersType> {
+interface PlayersMethodsType {
+    draftPlayer: (userId: string, type: PlayerAssignmentType) => Promise<void>;
+}
+
+interface PlayersModelType extends Model<PlayersType, '', PlayersMethodsType> {
     getPlayersByUserId: (
         userId: string,
         type: PlayerAssignmentType
     ) => Promise<HydratedDocument<PlayersType>[]>;
+    getAvailablePlayersByAssignmentType: (
+        type: PlayerAssignmentType
+    ) => Promise<HydratedDocument<PlayersType>[]>;
 }
 
-const playersSchema = new Schema<PlayersType, PlayersModelType>({
+const playersSchema = new Schema<
+    PlayersType,
+    PlayersModelType,
+    PlayersMethodsType
+>({
     extraligaPlayerName: { type: String, required: true },
     dolceUserId: { type: Types.ObjectId, ref: 'User' },
     gabbanaUserId: { type: Types.ObjectId, ref: 'User' },
@@ -79,6 +92,75 @@ playersSchema.static(
         } catch (error) {
             console.error('Error fetching players:', error);
             // TODOKP: this error is thrown to be catched in higher level so that, front end can render error message to user.
+            throw error;
+        }
+    }
+);
+
+playersSchema.static(
+    'getAvailablePlayersByAssignmentType',
+    async function getAvailablePlayersByAssignmentType(
+        type: PlayerAssignmentType
+    ) {
+        let idFieldName = '';
+        switch (type) {
+            case 'dolce':
+                idFieldName = 'dolceUserId';
+                break;
+            case 'gabbana':
+                idFieldName = 'gabbanaUserId';
+                break;
+            case 'playoff':
+                idFieldName = 'playoffUserId';
+                break;
+            default:
+                throw new Error('Invalid player assignment type');
+        }
+
+        try {
+            return await this.find({
+                [idFieldName]: { $type: 'null' }
+            });
+        } catch (error) {
+            console.error('Error fetching players:', error);
+            // TODOKP: this error is thrown to be catched in higher level so that, front end can render error message to user.
+            throw error;
+        }
+    }
+);
+
+playersSchema.method(
+    'draftPlayer',
+    async function draftPlayer(userId: string, type: PlayerAssignmentType) {
+        try {
+            if (!PLAYER_ASSIGNMENT_TYPES.includes(type)) {
+                throw new Error('Invalid player assignment type');
+            }
+
+            const isValidUserId = await UserModel.exists({ _id: userId });
+            if (!isValidUserId) {
+                throw new Error(`Invalid userId: ${userId}`);
+            }
+
+            let idFieldName = '';
+            switch (type) {
+                case 'dolce':
+                    idFieldName = 'dolceUserId';
+                    break;
+                case 'gabbana':
+                    idFieldName = 'gabbanaUserId';
+                    break;
+                case 'playoff':
+                    idFieldName = 'playoffUserId';
+                    break;
+                default:
+                    throw new Error('Invalid player assignment type');
+            }
+
+            this.set(idFieldName, userId);
+            await this.save();
+        } catch (error) {
+            console.error('Error updating player:', error);
             throw error;
         }
     }

@@ -2,6 +2,25 @@ import mongoose from 'mongoose';
 
 import { DBClient } from '@/db/db-client';
 import PlayersModel, { PlayersType } from '@/db/models/players';
+import UserModel, { UserType } from '@/db/models/user';
+
+type PlayerAssignmentType = 'dolce' | 'gabbana' | 'playoff';
+
+const createUserData = (overrides: Partial<UserType> = {}) => ({
+    username: 'user-one',
+    coachName: 'Coach One',
+    email: 'user-one@example.com',
+    password: 'Password1!',
+    teamName: 'Team One',
+    logoUrl: 'https://example.com/team-one.png',
+    reachedPlayoff: false,
+    isFirstRoundDraftOrderDraw: false,
+    groupName: new mongoose.Types.ObjectId().toString(),
+    bio: 'User one bio',
+    cabinetTrophy: [],
+    isAdmin: false,
+    ...overrides
+});
 
 const createPlayerData = (overrides: Partial<PlayersType> = {}) => ({
     extraligaPlayerName: 'Player One',
@@ -18,6 +37,7 @@ const createPlayerData = (overrides: Partial<PlayersType> = {}) => ({
 
 // connect to test db before running tests
 beforeAll(async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => {});
     const dbClient = new DBClient();
     await dbClient.connect();
 });
@@ -25,11 +45,13 @@ beforeAll(async () => {
 // before any test clear collection
 beforeEach(async () => {
     await PlayersModel.deleteMany();
+    await UserModel.deleteMany();
 });
 
 // close connection to server so that test suite will close
 afterAll(async () => {
     await PlayersModel.deleteMany();
+    await UserModel.deleteMany();
     await mongoose.disconnect();
 });
 
@@ -120,5 +142,155 @@ describe('Test PlayersModel methods and static functions', () => {
         expect(gabbanaUserTwoPlayers).toHaveLength(5);
         expect(playoffUserOnePlayers).toHaveLength(8);
         expect(playoffUserTwoPlayers).toHaveLength(7);
+    });
+
+    it('getAvailablePlayersByAssignmentType: Should return only players with null assignment field for each assignment type', async () => {
+        await PlayersModel.create([
+            createPlayerData({
+                extraligaPlayerName: 'dolce-available-1',
+                dolceUserId: null as unknown as string
+            }),
+            createPlayerData({
+                extraligaPlayerName: 'dolce-available-2',
+                dolceUserId: null as unknown as string
+            }),
+            createPlayerData({
+                extraligaPlayerName: 'dolce-assigned',
+                dolceUserId: new mongoose.Types.ObjectId().toString()
+            }),
+            createPlayerData({
+                extraligaPlayerName: 'gabbana-available-1',
+                gabbanaUserId: null as unknown as string
+            }),
+            createPlayerData({
+                extraligaPlayerName: 'gabbana-available-2',
+                gabbanaUserId: null as unknown as string
+            }),
+            createPlayerData({
+                extraligaPlayerName: 'gabbana-assigned',
+                gabbanaUserId: new mongoose.Types.ObjectId().toString()
+            }),
+            createPlayerData({
+                extraligaPlayerName: 'playoff-available-1',
+                playoffUserId: null as unknown as string
+            }),
+            createPlayerData({
+                extraligaPlayerName: 'playoff-available-2',
+                playoffUserId: null as unknown as string
+            }),
+            createPlayerData({
+                extraligaPlayerName: 'playoff-assigned',
+                playoffUserId: new mongoose.Types.ObjectId().toString()
+            })
+        ]);
+
+        const dolceAvailable =
+            await PlayersModel.getAvailablePlayersByAssignmentType('dolce');
+        const gabbanaAvailable =
+            await PlayersModel.getAvailablePlayersByAssignmentType('gabbana');
+        const playoffAvailable =
+            await PlayersModel.getAvailablePlayersByAssignmentType('playoff');
+
+        expect(
+            dolceAvailable.map(player => player.extraligaPlayerName).sort()
+        ).toEqual(['dolce-available-1', 'dolce-available-2']);
+        expect(
+            gabbanaAvailable.map(player => player.extraligaPlayerName).sort()
+        ).toEqual(['gabbana-available-1', 'gabbana-available-2']);
+        expect(
+            playoffAvailable.map(player => player.extraligaPlayerName).sort()
+        ).toEqual(['playoff-available-1', 'playoff-available-2']);
+
+        expect(
+            dolceAvailable.every(player => player.dolceUserId === null)
+        ).toBe(true);
+        expect(
+            gabbanaAvailable.every(player => player.gabbanaUserId === null)
+        ).toBe(true);
+        expect(
+            playoffAvailable.every(player => player.playoffUserId === null)
+        ).toBe(true);
+    });
+
+    it('draftPlayer: Should catch invalid data (invalid assignment type and non existing userId)', async () => {
+        const player = await new PlayersModel(createPlayerData()).save();
+
+        await expect(
+            player.draftPlayer(
+                new mongoose.Types.ObjectId().toString(),
+                'invalid' as unknown as PlayerAssignmentType
+            )
+        ).rejects.toThrow('Invalid player assignment type');
+
+        await expect(
+            player.draftPlayer(
+                new mongoose.Types.ObjectId().toString(),
+                'dolce'
+            )
+        ).rejects.toThrow('Invalid userId');
+    });
+
+    it('draftPlayer: Should set userId to given assignment type', async () => {
+        const dolceUser = await new UserModel(
+            createUserData({
+                username: 'dolce-user',
+                email: 'dolce-user@example.com'
+            })
+        ).save();
+        const gabbanaUser = await new UserModel(
+            createUserData({
+                username: 'gabbana-user',
+                email: 'gabbana-user@example.com'
+            })
+        ).save();
+        const playoffUser = await new UserModel(
+            createUserData({
+                username: 'playoff-user',
+                email: 'playoff-user@example.com'
+            })
+        ).save();
+
+        const dolcePlayer = await new PlayersModel(
+            createPlayerData({
+                extraligaPlayerName: 'draft-dolce-player',
+                dolceUserId: null as unknown as string
+            })
+        ).save();
+        const gabbanaPlayer = await new PlayersModel(
+            createPlayerData({
+                extraligaPlayerName: 'draft-gabbana-player',
+                gabbanaUserId: null as unknown as string
+            })
+        ).save();
+        const playoffPlayer = await new PlayersModel(
+            createPlayerData({
+                extraligaPlayerName: 'draft-playoff-player',
+                playoffUserId: null as unknown as string
+            })
+        ).save();
+
+        await dolcePlayer.draftPlayer(dolceUser._id.toString(), 'dolce');
+        await gabbanaPlayer.draftPlayer(gabbanaUser._id.toString(), 'gabbana');
+        await playoffPlayer.draftPlayer(playoffUser._id.toString(), 'playoff');
+
+        const updatedDolcePlayer = await PlayersModel.findById(
+            dolcePlayer._id
+        ).exec();
+        const updatedGabbanaPlayer = await PlayersModel.findById(
+            gabbanaPlayer._id
+        ).exec();
+        const updatedPlayoffPlayer = await PlayersModel.findById(
+            playoffPlayer._id
+        ).exec();
+
+        expect(updatedDolcePlayer?.dolceUserId?.toString()).toBe(
+            dolceUser._id.toString()
+        );
+        expect(updatedGabbanaPlayer?.gabbanaUserId?.toString()).toBe(
+            gabbanaUser._id.toString()
+        );
+        expect(updatedPlayoffPlayer?.playoffUserId?.toString()).toBe(
+            playoffUser._id.toString()
+        );
     });
 });

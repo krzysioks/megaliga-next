@@ -19,12 +19,29 @@ export const draftOpsZodSchema = z.object({
 });
 
 export type DraftOpsType = z.infer<typeof draftOpsZodSchema>;
+type DraftOpsKey = keyof DraftOpsType;
 
-interface DraftOpsModelType extends Model<DraftOpsType> {
+const DRAFT_OPS_FIELDS = Object.keys(
+    draftOpsZodSchema.shape
+) as (keyof DraftOpsType)[];
+
+interface DraftOpsMethodsType {
+    updateDraftOps: (updateData: DraftOpsType) => Promise<void>;
+}
+
+interface DraftOpsModelType extends Model<
+    DraftOpsType,
+    '',
+    DraftOpsMethodsType
+> {
     getDraftConfig: () => Promise<DraftOpsType | null>;
 }
 
-const draftOpsSchema = new Schema<DraftOpsType, DraftOpsModelType>({
+const draftOpsSchema = new Schema<
+    DraftOpsType,
+    DraftOpsModelType,
+    DraftOpsMethodsType
+>({
     draftWindowOpen: { type: Boolean, default: false },
     draftCurrentRoundDolce: { type: Number, default: 0 },
     draftCurrentRoundGabbana: { type: Number, default: 0 },
@@ -41,6 +58,27 @@ draftOpsSchema.static(
             return await this.findOne().exec();
         } catch (error) {
             console.error('Error fetching draft config:', error);
+            throw error;
+        }
+    }
+);
+
+draftOpsSchema.method(
+    'updateDraftOps',
+    async function updateDraftOps(updateData: DraftOpsType) {
+        try {
+            const safeUpdateData = Object.fromEntries(
+                Object.entries(updateData).filter(
+                    ([key, value]) =>
+                        DRAFT_OPS_FIELDS.includes(key as DraftOpsKey) &&
+                        value !== undefined
+                )
+            ) as DraftOpsType;
+
+            this.set(safeUpdateData);
+            await this.save();
+        } catch (error) {
+            console.error('Error updating draftOps:', error);
             throw error;
         }
     }

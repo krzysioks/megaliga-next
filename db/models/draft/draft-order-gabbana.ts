@@ -1,4 +1,4 @@
-import { model, Schema, Types } from 'mongoose';
+import { model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
 import { objectIdSchema } from '@/db/models/schema.types';
@@ -12,14 +12,43 @@ export const draftOrderGabbanaZodSchema = z.object({
 
 export type DraftOrderGabbanaType = z.infer<typeof draftOrderGabbanaZodSchema>;
 
-const draftOrderGabbanaSchema = new Schema<DraftOrderGabbanaType>({
-    userId: { type: Types.ObjectId, ref: 'User' },
+interface DraftOrderGabbanaModelType extends Model<DraftOrderGabbanaType> {
+    getCurrentDraftOrderUserIdByRound: (
+        roundNumber: number
+    ) => Promise<Types.ObjectId>;
+}
+
+const draftOrderGabbanaSchema = new Schema<
+    DraftOrderGabbanaType,
+    DraftOrderGabbanaModelType
+>({
+    userId: { type: Types.ObjectId, ref: 'User', required: true },
     draftOrder: { type: Number, required: true }
 });
 
-const DraftOrderGabbanaModel = model<DraftOrderGabbanaType>(
-    'DraftOrderGabbana',
-    draftOrderGabbanaSchema
+draftOrderGabbanaSchema.static(
+    'getCurrentDraftOrderUserIdByRound',
+    async function getCurrentDraftOrderUserIdByRound(roundNumber: number) {
+        try {
+            const draftOrderDocument = await this.findOne({
+                draftOrder: roundNumber
+            });
+
+            return draftOrderDocument?.userId ?? '';
+        } catch (error) {
+            console.error(
+                'Error fetching draft order for gabbana group:',
+                error
+            );
+            // TODOKP: this error is thrown to be catched in higher level so that, front end can render error message to user.
+            throw error;
+        }
+    }
 );
+
+const DraftOrderGabbanaModel = model<
+    DraftOrderGabbanaType,
+    DraftOrderGabbanaModelType
+>('DraftOrderGabbana', draftOrderGabbanaSchema);
 
 export default DraftOrderGabbanaModel;

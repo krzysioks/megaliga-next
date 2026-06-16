@@ -1,4 +1,4 @@
-import { model, Schema, Types } from 'mongoose';
+import { model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
 import { objectIdSchema } from '@/db/models/schema.types';
@@ -12,14 +12,40 @@ export const draftOrderDolceZodSchema = z.object({
 
 export type DraftOrderDolceType = z.infer<typeof draftOrderDolceZodSchema>;
 
-const draftOrderDolceSchema = new Schema<DraftOrderDolceType>({
-    userId: { type: Types.ObjectId, ref: 'User' },
+interface DraftOrderDolceModelType extends Model<DraftOrderDolceType> {
+    getCurrentDraftOrderUserIdByRound: (
+        roundNumber: number
+    ) => Promise<Types.ObjectId>;
+}
+
+const draftOrderDolceSchema = new Schema<
+    DraftOrderDolceType,
+    DraftOrderDolceModelType
+>({
+    userId: { type: Types.ObjectId, ref: 'User', required: true },
     draftOrder: { type: Number, required: true }
 });
 
-const DraftOrderDolceModel = model<DraftOrderDolceType>(
-    'DraftOrderDolce',
-    draftOrderDolceSchema
+draftOrderDolceSchema.static(
+    'getCurrentDraftOrderUserIdByRound',
+    async function getCurrentDraftOrderUserIdByRound(roundNumber: number) {
+        try {
+            const draftOrderDocument = await this.findOne({
+                draftOrder: roundNumber
+            });
+
+            return draftOrderDocument?.userId ?? '';
+        } catch (error) {
+            console.error('Error fetching draft order for dolce group:', error);
+            // TODOKP: this error is thrown to be catched in higher level so that, front end can render error message to user.
+            throw error;
+        }
+    }
 );
+
+const DraftOrderDolceModel = model<
+    DraftOrderDolceType,
+    DraftOrderDolceModelType
+>('DraftOrderDolce', draftOrderDolceSchema);
 
 export default DraftOrderDolceModel;
