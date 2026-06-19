@@ -58,6 +58,36 @@ describe('Test UserModel methods and static functions', () => {
         expect(fetchedUser?.cabinetTrophy).toEqual([]);
         expect(fetchedUser?.isAdmin).toBe(false);
     });
+    test('Should get user by id with populated groupName and cabinetTrophy', async () => {
+        const group = await new LigueGroupsModel({
+            groupName: 'dolce'
+        }).save();
+        const user = await new UserModel(
+            createUserData({
+                username: 'populated-group-user',
+                email: 'populated-group-user@example.com',
+                groupName: group._id.toString(),
+                cabinetTrophy: [
+                    { season: '2024', type: 'megaliga' },
+                    { season: '2025', type: 'grandprix' }
+                ]
+            })
+        ).save();
+
+        const fetchedUser = await UserModel.getUserById(user._id.toString());
+
+        expect(fetchedUser).not.toBeNull();
+        expect(fetchedUser?.groupName).toBeDefined();
+        expect(fetchedUser?.groupName?._id.toString()).toBe(
+            group._id.toString()
+        );
+        expect(fetchedUser?.groupName?.groupName).toBe('dolce');
+        expect(fetchedUser?.cabinetTrophy).toHaveLength(2);
+        expect(fetchedUser?.cabinetTrophy?.[0]?.season).toBe('2024');
+        expect(fetchedUser?.cabinetTrophy?.[0]?.type).toBe('megaliga');
+        expect(fetchedUser?.cabinetTrophy?.[1]?.season).toBe('2025');
+        expect(fetchedUser?.cabinetTrophy?.[1]?.type).toBe('grandprix');
+    });
     test('Should call getNumberOfUsersAssignedToGroup and return proper number of users assigned to given ligue group', async () => {
         const dolceGroup = await new LigueGroupsModel({
             groupName: 'dolce'

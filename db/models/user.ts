@@ -1,6 +1,7 @@
 import { HydratedDocument, model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
+import { LigueGroupsType } from '@/db/models/ligue-groups';
 import {
     nameSchema,
     teamNameSchema,
@@ -51,9 +52,21 @@ interface UserMethodsType {
 
 interface UserModelType extends Model<UserType, '', UserMethodsType> {
     getNumberOfUsersAssignedToGroup: (ligueGroupId: string) => Promise<number>;
+    getUserById: (userId: string) => Promise<PopulatedFindByIdType>;
 }
 
+type PopulatedGroupNameType = LigueGroupsType & { _id: Types.ObjectId };
+
+type UserWithPopulatedGroupNameType = Omit<UserType, 'groupName'> & {
+    groupName?: PopulatedGroupNameType;
+};
+
 export type FindByIdType = HydratedDocument<UserType, UserMethodsType> | null;
+
+export type PopulatedFindByIdType = HydratedDocument<
+    UserWithPopulatedGroupNameType,
+    UserMethodsType
+> | null;
 
 const userSchema = new Schema<UserType, UserModelType, UserMethodsType>({
     username: { type: String, required: true, unique: true },
@@ -66,9 +79,12 @@ const userSchema = new Schema<UserType, UserModelType, UserMethodsType>({
     isFirstRoundDraftOrderDraw: { type: Boolean, default: false },
     groupName: { type: Types.ObjectId, ref: 'LigueGroups' },
     bio: { type: String },
-    cabinetTrophy: {
-        type: [{ season: String, type: thropyTypeSchema._def.values }]
-    },
+    cabinetTrophy: [
+        {
+            season: { type: String },
+            type: { type: String, enum: ['megaliga', 'grandprix'] }
+        }
+    ],
     isAdmin: { type: Boolean, default: false }
 });
 
@@ -94,6 +110,15 @@ userSchema.static(
         }
     }
 );
+
+userSchema.static('getUserById', async function getUserById(userId: string) {
+    try {
+        return await this.findById(userId).populate('groupName').exec();
+    } catch (error) {
+        console.error('Error fetching user by id:', error);
+        throw error;
+    }
+});
 
 userSchema.method(
     'updateUser',
