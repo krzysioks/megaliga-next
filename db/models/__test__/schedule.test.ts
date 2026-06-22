@@ -174,11 +174,6 @@ beforeAll(async () => {
     await ScheduleModel.create(scheduleData);
 });
 
-// before any test tear down clear database
-// beforeEach(async () => {
-//     await ScheduleModel.deleteMany();
-// });
-
 //close connection to server so, that test suite will close
 afterAll(async () => {
     await ScheduleModel.deleteMany();
