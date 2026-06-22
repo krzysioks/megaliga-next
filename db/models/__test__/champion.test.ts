@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 
 import { DBClient } from '@/db/db-client';
 import ChampionModel, { PopulatedFindType } from '@/db/models/champion';
-import { LigueGroupsModel } from '@/db/models/ligue-groups';
+import LigueGroupsModel from '@/db/models/ligue-groups';
 import UserModel, { UserType } from '@/db/models/user';
 
 // connect to test db before running tests

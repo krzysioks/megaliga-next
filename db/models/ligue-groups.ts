@@ -34,7 +34,8 @@ LigueGroupsSchema.static('getLigueGrouspId', async function getLigueGrouspId() {
     }
 });
 
-export const LigueGroupsModel = model<LigueGroupsType, LigueGroupsModelType>(
+const LigueGroupsModel = model<LigueGroupsType, LigueGroupsModelType>(
     'LigueGroups',
     LigueGroupsSchema
 );
+export default LigueGroupsModel;

@@ -4,7 +4,7 @@ import { DBClient } from '@/db/db-client';
 import ChampionGrandPrixModel, {
     PopulatedFindType
 } from '@/db/models/champion-grand-prix';
-import { LigueGroupsModel } from '@/db/models/ligue-groups';
+import LigueGroupsModel from '@/db/models/ligue-groups';
 import UserModel, { UserType } from '@/db/models/user';
 
 // connect to test db before running tests

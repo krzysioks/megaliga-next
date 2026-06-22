@@ -5,7 +5,7 @@ import {
     DraftFirstRoundOrderLotteryOutcomeModel,
     Position
 } from '@/db/models/draft/draft-first-round-order-lottery-outcome';
-import { LigueGroupsModel } from '@/db/models/ligue-groups';
+import LigueGroupsModel from '@/db/models/ligue-groups';
 import UserModel, { UserType } from '@/db/models/user';
 
 const createUserData = (overrides: Partial<UserType> = {}) => ({

@@ -1,7 +1,9 @@
-import { model, Schema, Types } from 'mongoose';
+import { HydratedDocument, model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
+import LigueGroupsModel from '@/db/models/ligue-groups';
 import { objectIdSchema, roundNumberSchema } from '@/db/models/schema.types';
+import { UserType } from '@/db/models/user';
 
 //Schedule is representation of megaliga_schedule of old megaliga database. Will be used for displaying results of latest round in Trybuna and Wyniki view. id_rematch_schedule fields are not migrated, as there is no more rule to add extra point for winning rematch.
 
@@ -16,7 +18,22 @@ export const scheduleZodSchema = z.object({
 
 export type ScheduleType = z.infer<typeof scheduleZodSchema>;
 
-const scheduleSchema = new Schema<ScheduleType>({
+export type ScheduleWithUserPopulatedType = Omit<
+    ScheduleType,
+    'userIdOne' | 'userIdTwo'
+> & {
+    userOneId: UserType & { _id: Types.ObjectId };
+    userTwoId: UserType & { _id: Types.ObjectId };
+};
+
+interface ScheduleModelType extends Model<ScheduleType> {
+    getScheduleByRound: (
+        roundNumber: number,
+        ligueGroupsId: string
+    ) => Promise<HydratedDocument<ScheduleWithUserPopulatedType>[]>;
+}
+
+const scheduleSchema = new Schema<ScheduleType, ScheduleModelType>({
     userOneId: { type: Types.ObjectId, ref: 'User' },
     userTwoId: { type: Types.ObjectId, ref: 'User' },
     roundNumber: { type: Number, required: true },
@@ -25,6 +42,49 @@ const scheduleSchema = new Schema<ScheduleType>({
     userTwoScore: { type: Number }
 });
 
-const ScheduleModel = model<ScheduleType>('Schedule', scheduleSchema);
+scheduleSchema.static(
+    'getScheduleByRound',
+    async function getScheduleByRound(
+        roundNumber: number,
+        ligueGroupsId: string
+    ) {
+        try {
+            const isValidLigueGroupsId = await LigueGroupsModel.exists({
+                _id: ligueGroupsId
+            });
+            if (!isValidLigueGroupsId) {
+                throw new Error(`Invalid ligueGroupsId: ${ligueGroupsId}`);
+            }
+
+            const documents = await this.find({
+                ligueGroupsId,
+                roundNumber
+            })
+                .populate('userOneId')
+                .populate('userTwoId')
+                .exec();
+
+            if (!documents.length) {
+                throw new Error(
+                    `Schedules for given ligueGroupsId: ${ligueGroupsId} and roundNumber: ${roundNumber} don't exist: `
+                );
+            }
+
+            return documents;
+        } catch (error) {
+            // TODOKP: this error is thrown to be catched in higher level so that, front end can render error message to user.
+            console.error(
+                'Error fetching number of available positions by ligueGroupsIs:',
+                error
+            );
+            throw error;
+        }
+    }
+);
+
+const ScheduleModel = model<ScheduleType, ScheduleModelType>(
+    'Schedule',
+    scheduleSchema
+);
 
 export default ScheduleModel;

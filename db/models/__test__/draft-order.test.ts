@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 
 import { DBClient } from '@/db/db-client';
 import { DraftOrderModel } from '@/db/models/draft/draft-order';
-import { LigueGroupsModel } from '@/db/models/ligue-groups';
+import LigueGroupsModel from '@/db/models/ligue-groups';
 
 // connect to test db before running tests
 beforeAll(async () => {
