@@ -27,7 +27,7 @@ const historyPlayoffStandingsSchema = new Schema<HistoryPlayoffStandingsType>({
             place: { type: Number, required: true },
             teamId: {
                 type: Schema.Types.ObjectId,
-                ref: 'History',
+                ref: 'HistoryTeam',
                 required: true
             }
         }

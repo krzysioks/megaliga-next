@@ -17,11 +17,11 @@ export const historyGamesZodSchema = z.object({
     games: z.array(
         z.object({
             teamOne: z.object({
-                teamId: objectIdSchema, // Reference to team in History.teams
+                teamId: objectIdSchema, // Reference to team in HistoryTeam collection
                 score: z.number()
             }),
             teamTwo: z.object({
-                teamId: objectIdSchema, // Reference to team in History.teams
+                teamId: objectIdSchema, // Reference to team in HistoryTeam collection
                 score: z.number()
             }),
             roundNumber: roundNumberSchema,
@@ -46,7 +46,7 @@ const historyGamesSchema = new Schema<HistoryGamesType>({
             teamOne: {
                 teamId: {
                     type: Schema.Types.ObjectId,
-                    ref: 'History',
+                    ref: 'HistoryTeam',
                     required: true
                 },
                 score: { type: Number, required: true }
@@ -54,7 +54,7 @@ const historyGamesSchema = new Schema<HistoryGamesType>({
             teamTwo: {
                 teamId: {
                     type: Schema.Types.ObjectId,
-                    ref: 'History',
+                    ref: 'HistoryTeam',
                     required: true
                 },
                 score: { type: Number, required: true }

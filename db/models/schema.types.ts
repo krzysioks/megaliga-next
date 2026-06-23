@@ -39,7 +39,7 @@ export const trainerSchema = playerSchema.pick({
 
 // Team schema for team details in a game (used for both teamOne and teamTwo)
 export const historyTeamSchema = z.object({
-    teamId: objectIdSchema, // Reference to team in History.teams
+    teamId: objectIdSchema, // Reference to team in HistoryTeam collection
     score: z.number(),
     setPlays: z.array(standardStringSchema).optional(),
     players: z.array(playerSchema).optional(),
@@ -59,7 +59,7 @@ export const teamNameSchema = z.string().min(2).max(50);
 export const logoUrlSchema = z.string().url().min(2).max(2048);
 export const teamReferenceSchema = z.object({
     name: teamNameSchema,
-    coachName: nameSchema,
+    coachName: nameSchema.optional(),
     logoUrl: logoUrlSchema
 });
 

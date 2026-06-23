@@ -19,7 +19,7 @@ const historyGamesScoreDetails = new Schema<HistoryGamesScoreDetailsType>({
     teamOne: {
         teamId: {
             type: Schema.Types.ObjectId,
-            ref: 'History',
+            ref: 'HistoryTeam',
             required: true
         },
         score: { type: Number },
@@ -57,7 +57,7 @@ const historyGamesScoreDetails = new Schema<HistoryGamesScoreDetailsType>({
     teamTwo: {
         teamId: {
             type: Schema.Types.ObjectId,
-            ref: 'History',
+            ref: 'HistoryTeam',
             required: true
         },
         score: { type: Number },

@@ -7,7 +7,7 @@
 import { model, Schema } from 'mongoose';
 import { z } from 'zod';
 
-import { objectIdSchema, teamReferenceSchema } from '@/db/models/schema.types';
+import { objectIdSchema } from '@/db/models/schema.types';
 
 //History reference to megaliga_history of old megaliga database, but it is completely new collection, which will support new functionalities as well as be compatible with previous seasons
 
@@ -17,8 +17,7 @@ export const historyZodSchema = z.object({
     regularSeason: objectIdSchema, // Reference to regular season standings
     playoff: objectIdSchema, // Reference to playoff standings
     playIn: objectIdSchema, // Reference to play-in standings
-    grandPrix: objectIdSchema, // Reference to grand prix standings
-    teams: z.array(teamReferenceSchema) // List of teams participating in given season. Will be referenced in HistoryGames or HistoryGamesScoreDetails collections to identify games of given team in given season
+    grandPrix: objectIdSchema // Reference to grand prix standings
 });
 
 export type HistoryType = z.infer<typeof historyZodSchema>;
@@ -38,13 +37,7 @@ const historySchema = new Schema<HistoryType>({
     grandPrix: {
         type: Schema.Types.ObjectId,
         ref: 'HistoryGrandPrixStandings'
-    },
-    teams: [
-        {
-            name: { type: String, required: true },
-            logoUrl: { type: String, required: true }
-        }
-    ]
+    }
 });
 
 const HistoryModel = model<HistoryType>('History', historySchema);

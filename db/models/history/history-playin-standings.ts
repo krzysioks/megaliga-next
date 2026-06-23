@@ -24,7 +24,7 @@ const historyPlayinStandingsSchema = new Schema<HistoryPlayinStandingsType>({
             place: { type: Number, required: true },
             teamId: {
                 type: Schema.Types.ObjectId,
-                ref: 'History',
+                ref: 'HistoryTeam',
                 required: true
             },
             played: { type: Number, required: true },

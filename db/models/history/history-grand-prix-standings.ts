@@ -28,7 +28,7 @@ const historyGrandPrixStandingsSchema =
                 place: { type: Number, required: true },
                 teamId: {
                     type: Schema.Types.ObjectId,
-                    ref: 'History',
+                    ref: 'HistoryTeam',
                     required: true
                 },
                 played: { type: Number, required: true },
@@ -37,7 +37,7 @@ const historyGrandPrixStandingsSchema =
         ]
     });
 
-// TODOKP: Need to implement static method to populate data from History.teams: coachName.
+// TODOKP: Need to implement static method to populate data from HistoryTeam: coachName.
 
 const HistoryGrandPrixStandingsModel = model<HistoryGrandPrixStandingsType>(
     'HistoryGrandPrixStandings',
