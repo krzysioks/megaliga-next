@@ -1,7 +1,9 @@
 import mongoose from 'mongoose';
 
 import { DBClient } from '@/db/db-client';
-import DraftOrderDolceModel from '@/db/models/draft/draft-order-dolce';
+import DraftOrderDolceModel, {
+    DraftOrderDtoType
+} from '@/db/models/draft/draft-order-dolce';
 import UserModel, { UserType } from '@/db/models/user';
 
 const createUserData = (overrides: Partial<UserType> = {}) => ({
@@ -66,5 +68,71 @@ describe('Test DraftOrderDolceModel methods and static functions', () => {
 
         expect(roundOneUserId?.toString()).toBe(userOne._id.toString());
         expect(roundTwoUserId?.toString()).toBe(userTwo._id.toString());
+    });
+    it('Should get whole draft order for 6 users in expected order', async () => {
+        const users = await UserModel.create([
+            createUserData({
+                username: 'dolce-user-1',
+                email: 'dolce-user-1@example.com',
+                teamName: 'Team 1'
+            }),
+            createUserData({
+                username: 'dolce-user-2',
+                email: 'dolce-user-2@example.com',
+                teamName: 'Team 2'
+            }),
+            createUserData({
+                username: 'dolce-user-3',
+                email: 'dolce-user-3@example.com',
+                teamName: 'Team 3'
+            }),
+            createUserData({
+                username: 'dolce-user-4',
+                email: 'dolce-user-4@example.com',
+                teamName: 'Team 4'
+            }),
+            createUserData({
+                username: 'dolce-user-5',
+                email: 'dolce-user-5@example.com',
+                teamName: 'Team 5'
+            }),
+            createUserData({
+                username: 'dolce-user-6',
+                email: 'dolce-user-6@example.com',
+                teamName: 'Team 6'
+            })
+        ]);
+
+        const randomizedDraftEntries = [
+            { userId: users[0]._id.toString(), draftOrder: 4 },
+            { userId: users[1]._id.toString(), draftOrder: 1 },
+            { userId: users[2]._id.toString(), draftOrder: 6 },
+            { userId: users[3]._id.toString(), draftOrder: 2 },
+            { userId: users[4]._id.toString(), draftOrder: 5 },
+            { userId: users[5]._id.toString(), draftOrder: 3 }
+        ];
+
+        await DraftOrderDolceModel.create(randomizedDraftEntries);
+
+        const draftOrder: DraftOrderDtoType[] =
+            await DraftOrderDolceModel.getDraftOrder();
+
+        expect(draftOrder).toHaveLength(6);
+        expect(draftOrder.map(item => item.draftOrder)).toEqual([
+            1, 2, 3, 4, 5, 6
+        ]);
+
+        const expectedTeamByOrder: Record<number, string> = {
+            1: users[1].teamName,
+            2: users[3].teamName,
+            3: users[5].teamName,
+            4: users[0].teamName,
+            5: users[4].teamName,
+            6: users[2].teamName
+        };
+
+        draftOrder.forEach(item => {
+            expect(item.teamName).toBe(expectedTeamByOrder[item.draftOrder]);
+        });
     });
 });

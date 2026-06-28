@@ -2,6 +2,7 @@ import { model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
 import { objectIdSchema } from '@/db/models/schema.types';
+import { UserType } from '@/db/models/user';
 
 //DraftOrderPlayoff is representation of megaliga_playoff_draft_order of old megaliga database. Will be used to render playoff draft order in Trybuna view
 
@@ -12,10 +13,16 @@ export const draftOrderPlayoffZodSchema = z.object({
 
 export type DraftOrderPlayoffType = z.infer<typeof draftOrderPlayoffZodSchema>;
 
+export type DraftOrderDtoType = {
+    teamName: string;
+    draftOrder: number;
+};
+
 interface DraftOrderPlayoffModelType extends Model<DraftOrderPlayoffType> {
     getCurrentDraftOrderUserIdByRound: (
         roundNumber: number
     ) => Promise<Types.ObjectId>;
+    getDraftOrder: () => Promise<DraftOrderDtoType[]>;
 }
 
 const draftOrderPlayoffSchema = new Schema<
@@ -42,6 +49,27 @@ draftOrderPlayoffSchema.static(
         }
     }
 );
+
+draftOrderPlayoffSchema.static('getDraftOrder', async function getDraftOrder() {
+    try {
+        const draftOrderDocuments = await this.find()
+            .sort({ draftOrder: 1 })
+            .populate({
+                path: 'userId',
+                select: 'teamName'
+            })
+            .exec();
+
+        return draftOrderDocuments.map(item => ({
+            teamName: (item.userId as unknown as Pick<UserType, 'teamName'>)
+                .teamName,
+            draftOrder: item.draftOrder
+        }));
+    } catch (error) {
+        console.error('Error fetching draft order for playoff:', error);
+        throw error;
+    }
+});
 
 const DraftOrderPlayoffModel = model<
     DraftOrderPlayoffType,
