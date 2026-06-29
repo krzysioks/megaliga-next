@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import { DBClient } from '@/db/db-client';
 import HistoryModel from '@/db/models/history/history';
 import HistoryChampionModel, {
-    PopulatedFindType
+    ChampionsHistoryDtoType
 } from '@/db/models/history/history-champion';
 import HistoryTeamModel, {
     HistoryTeamType
@@ -150,20 +150,20 @@ describe('Test HistoryChampionModel methods and static functions', () => {
             }))
         );
 
-        const result: PopulatedFindType[] =
+        const result: ChampionsHistoryDtoType[] =
             await HistoryChampionModel.getChampionsHistory();
 
         expect(result).toHaveLength(3);
 
         championsToCreate.forEach(expected => {
             const champion = result.find(
-                item => item.season?.name === expected.expectedSeasonName
+                item => item.seasonName === expected.expectedSeasonName
             );
 
             expect(champion).toBeDefined();
-            expect(champion?.season?.name).toBe(expected.expectedSeasonName);
-            expect(champion?.teamId?.name).toBe(expected.expectedTeamName);
-            expect(champion?.teamId?.logoUrl).toBe(expected.expectedLogoUrl);
+            expect(champion?.seasonName).toBe(expected.expectedSeasonName);
+            expect(champion?.teamName).toBe(expected.expectedTeamName);
+            expect(champion?.logoUrl).toBe(expected.expectedLogoUrl);
         });
     });
 });

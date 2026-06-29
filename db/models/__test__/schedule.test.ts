@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 
 import { DBClient } from '@/db/db-client';
 import ScheduleModel, {
-    ScheduleWithUserPopulatedType,
+    ScheduleByRoundDtoType,
     ScheduleType
 } from '@/db/models/games/schedule';
 import LigueGroupsModel from '@/db/models/ligue-groups';
@@ -38,7 +38,6 @@ beforeAll(async () => {
     const baseUserData = {
         password: 'Password1!',
         coachName: 'Coach One',
-        logoUrl: 'https://example.com/team-one.png',
         reachedPlayoff: false,
         isFirstRoundDraftOrderDraw: false,
         bio: 'User one bio',
@@ -50,48 +49,56 @@ beforeAll(async () => {
         {
             username: 'user-one',
             teamName: 'Team One',
+            logoUrl: 'https://example.com/team-one.png',
             email: 'user-one@example.com',
             groupName: dolceId
         },
         {
             username: 'user-two',
             teamName: 'Team Two',
+            logoUrl: 'https://example.com/team-two.png',
             email: 'user-two@example.com',
             groupName: dolceId
         },
         {
             username: 'user-three',
             teamName: 'Team Three',
+            logoUrl: 'https://example.com/team-three.png',
             email: 'user-three@example.com',
             groupName: dolceId
         },
         {
             username: 'user-four',
             teamName: 'Team Four',
+            logoUrl: 'https://example.com/team-four.png',
             email: 'user-four@example.com',
             groupName: dolceId
         },
         {
             username: 'user-five',
             teamName: 'Team Five',
+            logoUrl: 'https://example.com/team-five.png',
             email: 'user-five@example.com',
             groupName: gabbanaId
         },
         {
             username: 'user-six',
             teamName: 'Team Six',
+            logoUrl: 'https://example.com/team-six.png',
             email: 'user-six@example.com',
             groupName: gabbanaId
         },
         {
             username: 'user-seven',
             teamName: 'Team Seven',
+            logoUrl: 'https://example.com/team-seven.png',
             email: 'user-seven@example.com',
             groupName: gabbanaId
         },
         {
             username: 'user-eight',
             teamName: 'Team Eight',
+            logoUrl: 'https://example.com/team-eight.png',
             email: 'user-eight@example.com',
             groupName: gabbanaId
         }
@@ -103,6 +110,11 @@ beforeAll(async () => {
             ...user
         }))
     );
+
+    usersToCreate = usersToCreate.map((user, index) => ({
+        ...user,
+        _id: createdUsers[index]._id.toString()
+    }));
 
     scheduleData = [
         {
@@ -190,16 +202,65 @@ describe('Test ScheduleModel methods and static functions', () => {
         });
 
     const findFetchedSchedule = (
-        fetchedSchedules: ScheduleWithUserPopulatedType[],
+        fetchedSchedules: ScheduleByRoundDtoType[],
         expectedSchedule: ScheduleType
     ) =>
         fetchedSchedules.find(schedule => {
+            const expectedUserOne = findSeededUser(
+                expectedSchedule.userOneId ?? ''
+            );
+            const expectedUserTwo = findSeededUser(
+                expectedSchedule.userTwoId ?? ''
+            );
+
             return (
-                schedule.userOneId._id.toString() ===
-                    expectedSchedule.userOneId &&
-                schedule.userTwoId._id.toString() === expectedSchedule.userTwoId
+                schedule.userOne.teamName === expectedUserOne?.teamName &&
+                schedule.userOne.logoUrl === expectedUserOne?.logoUrl &&
+                schedule.userTwo.teamName === expectedUserTwo?.teamName &&
+                schedule.userTwo.logoUrl === expectedUserTwo?.logoUrl
             );
         });
+
+    const findSeededUser = (userId: string) =>
+        usersToCreate.find(user => user._id?.toString() === userId);
+
+    const assertFetchedSchedule = (
+        fetchedSchedule: ScheduleByRoundDtoType | undefined,
+        expectedSchedule: ScheduleType
+    ) => {
+        expect(fetchedSchedule).toBeDefined();
+
+        const expectedUserOne = findSeededUser(
+            expectedSchedule.userOneId ?? ''
+        );
+        const expectedUserTwo = findSeededUser(
+            expectedSchedule.userTwoId ?? ''
+        );
+
+        expect(expectedUserOne).toBeDefined();
+        expect(expectedUserTwo).toBeDefined();
+
+        expect(fetchedSchedule?.roundNumber).toBe(expectedSchedule.roundNumber);
+        expect(fetchedSchedule?.ligueGroupsId).toBe(
+            expectedSchedule.ligueGroupsId
+        );
+        expect(fetchedSchedule?.userOneScore).toBe(
+            expectedSchedule.userOneScore
+        );
+        expect(fetchedSchedule?.userTwoScore).toBe(
+            expectedSchedule.userTwoScore
+        );
+
+        expect(fetchedSchedule?.userOne.teamName).toBe(
+            expectedUserOne?.teamName
+        );
+        expect(fetchedSchedule?.userOne.logoUrl).toBe(expectedUserOne?.logoUrl);
+
+        expect(fetchedSchedule?.userTwo.teamName).toBe(
+            expectedUserTwo?.teamName
+        );
+        expect(fetchedSchedule?.userTwo.logoUrl).toBe(expectedUserTwo?.logoUrl);
+    };
 
     test('Should get schedule for round 1 and dolce group', async () => {
         const round1DolceSchedules = await ScheduleModel.getScheduleByRound(
@@ -215,65 +276,13 @@ describe('Test ScheduleModel methods and static functions', () => {
             round1DolceSchedules,
             expectedRound1DolceSchedules[0]
         );
-        expect(schedule).toBeDefined();
-
-        expect(schedule?.roundNumber).toBe(
-            expectedRound1DolceSchedules[0].roundNumber
-        );
-        expect(schedule?.ligueGroupsId?.toString()).toBe(
-            expectedRound1DolceSchedules[0].ligueGroupsId
-        );
-        expect(schedule?.userOneScore).toBe(
-            expectedRound1DolceSchedules[0].userOneScore
-        );
-        expect(schedule?.userTwoScore).toBe(
-            expectedRound1DolceSchedules[0].userTwoScore
-        );
-
-        // assert populated userOneId and userTwoId
-        expect(schedule?.userOneId).toBeDefined();
-        expect(schedule?.userOneId?.username).toBe(usersToCreate[0].username);
-        expect(schedule?.userOneId?.teamName).toBe(usersToCreate[0].teamName);
-        expect(schedule?.userOneId?.email).toBe(usersToCreate[0].email);
-        expect(schedule?.userOneId?.groupName?.toString()).toBe(dolceId);
-
-        expect(schedule?.userTwoId).toBeDefined();
-        expect(schedule?.userTwoId?.username).toBe(usersToCreate[1].username);
-        expect(schedule?.userTwoId?.teamName).toBe(usersToCreate[1].teamName);
-        expect(schedule?.userTwoId?.email).toBe(usersToCreate[1].email);
-        expect(schedule?.userTwoId?.groupName?.toString()).toBe(dolceId);
+        assertFetchedSchedule(schedule, expectedRound1DolceSchedules[0]);
 
         const schedule2 = findFetchedSchedule(
             round1DolceSchedules,
             expectedRound1DolceSchedules[1]
         );
-        expect(schedule2).toBeDefined();
-
-        expect(schedule2?.roundNumber).toBe(
-            expectedRound1DolceSchedules[1].roundNumber
-        );
-        expect(schedule2?.ligueGroupsId?.toString()).toBe(
-            expectedRound1DolceSchedules[1].ligueGroupsId
-        );
-        expect(schedule2?.userOneScore).toBe(
-            expectedRound1DolceSchedules[1].userOneScore
-        );
-        expect(schedule2?.userTwoScore).toBe(
-            expectedRound1DolceSchedules[1].userTwoScore
-        );
-
-        // assert populated userOneId and userTwoId
-        expect(schedule2?.userOneId).toBeDefined();
-        expect(schedule2?.userOneId?.username).toBe(usersToCreate[2].username);
-        expect(schedule2?.userOneId?.teamName).toBe(usersToCreate[2].teamName);
-        expect(schedule2?.userOneId?.email).toBe(usersToCreate[2].email);
-        expect(schedule2?.userOneId?.groupName?.toString()).toBe(dolceId);
-
-        expect(schedule2?.userTwoId).toBeDefined();
-        expect(schedule2?.userTwoId?.username).toBe(usersToCreate[3].username);
-        expect(schedule2?.userTwoId?.teamName).toBe(usersToCreate[3].teamName);
-        expect(schedule2?.userTwoId?.email).toBe(usersToCreate[3].email);
-        expect(schedule2?.userTwoId?.groupName?.toString()).toBe(dolceId);
+        assertFetchedSchedule(schedule2, expectedRound1DolceSchedules[1]);
     });
 
     test('Should get schedule for round 2 and dolce group', async () => {
@@ -290,64 +299,13 @@ describe('Test ScheduleModel methods and static functions', () => {
             round2DolceSchedules,
             expectedRound2DolceSchedules[0]
         );
-        expect(schedule).toBeDefined();
-
-        expect(schedule?.roundNumber).toBe(
-            expectedRound2DolceSchedules[0].roundNumber
-        );
-        expect(schedule?.ligueGroupsId?.toString()).toBe(
-            expectedRound2DolceSchedules[0].ligueGroupsId
-        );
-        expect(schedule?.userOneScore).toBe(
-            expectedRound2DolceSchedules[0].userOneScore
-        );
-        expect(schedule?.userTwoScore).toBe(
-            expectedRound2DolceSchedules[0].userTwoScore
-        );
-
-        // assert populated userOneId and userTwoId
-        expect(schedule?.userOneId).toBeDefined();
-        expect(schedule?.userOneId?.username).toBe(usersToCreate[0].username);
-        expect(schedule?.userOneId?.teamName).toBe(usersToCreate[0].teamName);
-        expect(schedule?.userOneId?.email).toBe(usersToCreate[0].email);
-        expect(schedule?.userOneId?.groupName?.toString()).toBe(dolceId);
-
-        expect(schedule?.userTwoId).toBeDefined();
-        expect(schedule?.userTwoId?.username).toBe(usersToCreate[2].username);
-        expect(schedule?.userTwoId?.teamName).toBe(usersToCreate[2].teamName);
-        expect(schedule?.userTwoId?.email).toBe(usersToCreate[2].email);
-        expect(schedule?.userTwoId?.groupName?.toString()).toBe(dolceId);
+        assertFetchedSchedule(schedule, expectedRound2DolceSchedules[0]);
 
         const schedule2 = findFetchedSchedule(
             round2DolceSchedules,
             expectedRound2DolceSchedules[1]
         );
-        expect(schedule2).toBeDefined();
-
-        expect(schedule2?.roundNumber).toBe(
-            expectedRound2DolceSchedules[1].roundNumber
-        );
-        expect(schedule2?.ligueGroupsId?.toString()).toBe(
-            expectedRound2DolceSchedules[1].ligueGroupsId
-        );
-        expect(schedule2?.userOneScore).toBe(
-            expectedRound2DolceSchedules[1].userOneScore
-        );
-        expect(schedule2?.userTwoScore).toBe(
-            expectedRound2DolceSchedules[1].userTwoScore
-        );
-
-        expect(schedule2?.userOneId).toBeDefined();
-        expect(schedule2?.userOneId?.username).toBe(usersToCreate[3].username);
-        expect(schedule2?.userOneId?.teamName).toBe(usersToCreate[3].teamName);
-        expect(schedule2?.userOneId?.email).toBe(usersToCreate[3].email);
-        expect(schedule2?.userOneId?.groupName?.toString()).toBe(dolceId);
-
-        expect(schedule2?.userTwoId).toBeDefined();
-        expect(schedule2?.userTwoId?.username).toBe(usersToCreate[1].username);
-        expect(schedule2?.userTwoId?.teamName).toBe(usersToCreate[1].teamName);
-        expect(schedule2?.userTwoId?.email).toBe(usersToCreate[1].email);
-        expect(schedule2?.userTwoId?.groupName?.toString()).toBe(dolceId);
+        assertFetchedSchedule(schedule2, expectedRound2DolceSchedules[1]);
     });
 
     test('Should get schedule for round 1 and dolce', async () => {
@@ -392,65 +350,13 @@ describe('Test ScheduleModel methods and static functions', () => {
             round1GabbanaSchedules,
             expectedRound1GabbanaSchedules[0]
         );
-        expect(schedule).toBeDefined();
-
-        expect(schedule?.roundNumber).toBe(
-            expectedRound1GabbanaSchedules[0].roundNumber
-        );
-        expect(schedule?.ligueGroupsId?.toString()).toBe(
-            expectedRound1GabbanaSchedules[0].ligueGroupsId
-        );
-        expect(schedule?.userOneScore).toBe(
-            expectedRound1GabbanaSchedules[0].userOneScore
-        );
-        expect(schedule?.userTwoScore).toBe(
-            expectedRound1GabbanaSchedules[0].userTwoScore
-        );
-
-        // assert populated userOneId and userTwoId
-        expect(schedule?.userOneId).toBeDefined();
-        expect(schedule?.userOneId?.username).toBe(usersToCreate[4].username);
-        expect(schedule?.userOneId?.teamName).toBe(usersToCreate[4].teamName);
-        expect(schedule?.userOneId?.email).toBe(usersToCreate[4].email);
-        expect(schedule?.userOneId?.groupName?.toString()).toBe(gabbanaId);
-
-        expect(schedule?.userTwoId).toBeDefined();
-        expect(schedule?.userTwoId?.username).toBe(usersToCreate[5].username);
-        expect(schedule?.userTwoId?.teamName).toBe(usersToCreate[5].teamName);
-        expect(schedule?.userTwoId?.email).toBe(usersToCreate[5].email);
-        expect(schedule?.userTwoId?.groupName?.toString()).toBe(gabbanaId);
+        assertFetchedSchedule(schedule, expectedRound1GabbanaSchedules[0]);
 
         const schedule2 = findFetchedSchedule(
             round1GabbanaSchedules,
             expectedRound1GabbanaSchedules[1]
         );
-        expect(schedule2).toBeDefined();
-
-        expect(schedule2?.roundNumber).toBe(
-            expectedRound1GabbanaSchedules[1].roundNumber
-        );
-        expect(schedule2?.ligueGroupsId?.toString()).toBe(
-            expectedRound1GabbanaSchedules[1].ligueGroupsId
-        );
-        expect(schedule2?.userOneScore).toBe(
-            expectedRound1GabbanaSchedules[1].userOneScore
-        );
-        expect(schedule2?.userTwoScore).toBe(
-            expectedRound1GabbanaSchedules[1].userTwoScore
-        );
-
-        // assert populated userOneId and userTwoId
-        expect(schedule2?.userOneId).toBeDefined();
-        expect(schedule2?.userOneId?.username).toBe(usersToCreate[6].username);
-        expect(schedule2?.userOneId?.teamName).toBe(usersToCreate[6].teamName);
-        expect(schedule2?.userOneId?.email).toBe(usersToCreate[6].email);
-        expect(schedule2?.userOneId?.groupName?.toString()).toBe(gabbanaId);
-
-        expect(schedule2?.userTwoId).toBeDefined();
-        expect(schedule2?.userTwoId?.username).toBe(usersToCreate[7].username);
-        expect(schedule2?.userTwoId?.teamName).toBe(usersToCreate[7].teamName);
-        expect(schedule2?.userTwoId?.email).toBe(usersToCreate[7].email);
-        expect(schedule2?.userTwoId?.groupName?.toString()).toBe(gabbanaId);
+        assertFetchedSchedule(schedule2, expectedRound1GabbanaSchedules[1]);
     });
 
     test('Should get schedule for round 2 and gabbana group', async () => {
@@ -470,64 +376,13 @@ describe('Test ScheduleModel methods and static functions', () => {
             round2GabbanaSchedules,
             expectedRound2GabbanaSchedules[0]
         );
-        expect(schedule).toBeDefined();
-
-        expect(schedule?.roundNumber).toBe(
-            expectedRound2GabbanaSchedules[0].roundNumber
-        );
-        expect(schedule?.ligueGroupsId?.toString()).toBe(
-            expectedRound2GabbanaSchedules[0].ligueGroupsId
-        );
-        expect(schedule?.userOneScore).toBe(
-            expectedRound2GabbanaSchedules[0].userOneScore
-        );
-        expect(schedule?.userTwoScore).toBe(
-            expectedRound2GabbanaSchedules[0].userTwoScore
-        );
-
-        // assert populated userOneId and userTwoId
-        expect(schedule?.userOneId).toBeDefined();
-        expect(schedule?.userOneId?.username).toBe(usersToCreate[4].username);
-        expect(schedule?.userOneId?.teamName).toBe(usersToCreate[4].teamName);
-        expect(schedule?.userOneId?.email).toBe(usersToCreate[4].email);
-        expect(schedule?.userOneId?.groupName?.toString()).toBe(gabbanaId);
-
-        expect(schedule?.userTwoId).toBeDefined();
-        expect(schedule?.userTwoId?.username).toBe(usersToCreate[6].username);
-        expect(schedule?.userTwoId?.teamName).toBe(usersToCreate[6].teamName);
-        expect(schedule?.userTwoId?.email).toBe(usersToCreate[6].email);
-        expect(schedule?.userTwoId?.groupName?.toString()).toBe(gabbanaId);
+        assertFetchedSchedule(schedule, expectedRound2GabbanaSchedules[0]);
 
         const schedule2 = findFetchedSchedule(
             round2GabbanaSchedules,
             expectedRound2GabbanaSchedules[1]
         );
-        expect(schedule2).toBeDefined();
-
-        expect(schedule2?.roundNumber).toBe(
-            expectedRound2GabbanaSchedules[1].roundNumber
-        );
-        expect(schedule2?.ligueGroupsId?.toString()).toBe(
-            expectedRound2GabbanaSchedules[1].ligueGroupsId
-        );
-        expect(schedule2?.userOneScore).toBe(
-            expectedRound2GabbanaSchedules[1].userOneScore
-        );
-        expect(schedule2?.userTwoScore).toBe(
-            expectedRound2GabbanaSchedules[1].userTwoScore
-        );
-
-        expect(schedule2?.userOneId).toBeDefined();
-        expect(schedule2?.userOneId?.username).toBe(usersToCreate[7].username);
-        expect(schedule2?.userOneId?.teamName).toBe(usersToCreate[7].teamName);
-        expect(schedule2?.userOneId?.email).toBe(usersToCreate[7].email);
-        expect(schedule2?.userOneId?.groupName?.toString()).toBe(gabbanaId);
-
-        expect(schedule2?.userTwoId).toBeDefined();
-        expect(schedule2?.userTwoId?.username).toBe(usersToCreate[5].username);
-        expect(schedule2?.userTwoId?.teamName).toBe(usersToCreate[5].teamName);
-        expect(schedule2?.userTwoId?.email).toBe(usersToCreate[5].email);
-        expect(schedule2?.userTwoId?.groupName?.toString()).toBe(gabbanaId);
+        assertFetchedSchedule(schedule2, expectedRound2GabbanaSchedules[1]);
     });
 
     test('Should throw error when wrong ligueGroupsId is provided', async () => {

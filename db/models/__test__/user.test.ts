@@ -2,7 +2,11 @@ import mongoose from 'mongoose';
 
 import { DBClient } from '@/db/db-client';
 import LigueGroupsModel from '@/db/models/ligue-groups';
-import UserModel, { FindByIdType, UserType } from '@/db/models/user';
+import UserModel, {
+    FindByIdType,
+    UserByIdDtoType,
+    UserType
+} from '@/db/models/user';
 
 // connect to test db before running tests
 beforeAll(async () => {
@@ -74,19 +78,18 @@ describe('Test UserModel methods and static functions', () => {
             })
         ).save();
 
-        const fetchedUser = await UserModel.getUserById(user._id.toString());
+        const fetchedUser: UserByIdDtoType = await UserModel.getUserById(
+            user._id.toString()
+        );
 
         expect(fetchedUser).not.toBeNull();
-        expect(fetchedUser?.groupName).toBeDefined();
-        expect(fetchedUser?.groupName?._id.toString()).toBe(
-            group._id.toString()
-        );
-        expect(fetchedUser?.groupName?.groupName).toBe('dolce');
-        expect(fetchedUser?.cabinetTrophy).toHaveLength(2);
-        expect(fetchedUser?.cabinetTrophy?.[0]?.season).toBe('2024');
-        expect(fetchedUser?.cabinetTrophy?.[0]?.type).toBe('megaliga');
-        expect(fetchedUser?.cabinetTrophy?.[1]?.season).toBe('2025');
-        expect(fetchedUser?.cabinetTrophy?.[1]?.type).toBe('grandprix');
+        expect(fetchedUser.userId).toBe(user._id.toString());
+        expect(fetchedUser.groupName).toBe('dolce');
+        expect(fetchedUser.cabinetTrophy).toHaveLength(2);
+        expect(fetchedUser.cabinetTrophy?.[0]?.season).toBe('2024');
+        expect(fetchedUser.cabinetTrophy?.[0]?.type).toBe('megaliga');
+        expect(fetchedUser.cabinetTrophy?.[1]?.season).toBe('2025');
+        expect(fetchedUser.cabinetTrophy?.[1]?.type).toBe('grandprix');
     });
     test('Should call getNumberOfUsersAssignedToGroup and return proper number of users assigned to given ligue group', async () => {
         const dolceGroup = await new LigueGroupsModel({

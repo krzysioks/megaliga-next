@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { HistoryTeamType } from '@/db/models/history/history-team';
 import { objectIdSchema } from '@/db/models/schema.types';
+import { SeasonOpsType } from '@/db/models/season-ops';
 
 //HistoryGrandPrixChampion is representation of megaliga_grandprix_champion_history of old megaliga database. It is used to show Hall of Grand Prix Fame section in Trybuna view
 
@@ -15,21 +16,24 @@ export type HistoryGrandPrixChampionType = z.infer<
     typeof historyGrandPrixChampionZodSchema
 >;
 
-type PopulatedSeasonType = { name: string };
-type PopulatedHitoryTeamType = Pick<HistoryTeamType, 'coachName'>;
+export type ChampionsHistoryGrandPrixDtoType = {
+    seasonName: SeasonOpsType['name'];
+    coachName: HistoryTeamType['coachName'];
+};
 
 type PopulatedHistoryGrandPrixChampionType = Omit<
     HistoryGrandPrixChampionType,
-    'season'
+    'season' | 'teamId'
 > & {
-    season?: PopulatedSeasonType;
-    teamId?: PopulatedHitoryTeamType;
+    season?: Pick<SeasonOpsType, 'name'>;
+    teamId?: Pick<HistoryTeamType, 'coachName'>;
 };
 
 export type PopulatedFindType =
     HydratedDocument<PopulatedHistoryGrandPrixChampionType>;
+
 interface HistoryGrandPrixChampionModelType extends Model<HistoryGrandPrixChampionType> {
-    getChampionsHistory: () => Promise<PopulatedFindType[]>;
+    getChampionsHistory: () => Promise<ChampionsHistoryGrandPrixDtoType[]>;
 }
 
 const historyGrandPrixChampionSchema = new Schema<
@@ -48,16 +52,23 @@ historyGrandPrixChampionSchema.static(
     'getChampionsHistory',
     async function getChampionsHistory() {
         try {
-            return this.find()
-                .populate({
+            const documents: PopulatedFindType[] = await this.find()
+                .populate<{ season: Pick<SeasonOpsType, 'name'> }>({
                     path: 'season',
                     select: 'name'
                 })
-                .populate({
+                .populate<{
+                    teamId: Pick<HistoryTeamType, 'coachName'>;
+                }>({
                     path: 'teamId',
                     select: 'coachName'
                 })
                 .exec();
+
+            return documents.map(item => ({
+                seasonName: item.season?.name ?? '',
+                coachName: item.teamId?.coachName ?? ''
+            }));
         } catch (error) {
             console.error(
                 'Error fetching grand prix champion history data:',

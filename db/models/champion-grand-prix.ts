@@ -12,17 +12,18 @@ export const championGrandPrixZodSchema = z.object({
 
 export type ChampionGrandPrixType = z.infer<typeof championGrandPrixZodSchema>;
 
-type PopulatedGroupNameType = { _id: Types.ObjectId; groupName: string };
+export type ChampionGrandPrixDtoType = Pick<UserType, 'coachName'>;
 
-type UserWithPopulatedGroupNameType = Omit<UserType, 'groupName'> & {
-    groupName?: PopulatedGroupNameType;
+type PopulatedUserType = Omit<UserType, 'userId'> & {
+    userId?: Pick<UserType, 'coachName'> & {
+        _id: Types.ObjectId;
+    };
 };
 
-export type PopulatedFindType =
-    HydratedDocument<UserWithPopulatedGroupNameType>;
+export type PopulatedFindType = HydratedDocument<PopulatedUserType>;
 
 interface ChampionGrandPrixModelType extends Model<ChampionGrandPrixType> {
-    getChampion: () => Promise<PopulatedFindType>;
+    getChampion: () => Promise<ChampionGrandPrixDtoType>;
     setChampion: (userId: string) => Promise<void>;
 }
 
@@ -36,11 +37,9 @@ const championGrandPrixSchema = new Schema<
 championGrandPrixSchema.static('getChampion', async function getChampion() {
     try {
         const document = await this.findOne()
-            .populate<{ userId: PopulatedFindType }>({
+            .populate<PopulatedFindType>({
                 path: 'userId',
-                populate: {
-                    path: 'groupName'
-                }
+                select: 'coachName'
             })
             .exec();
 
@@ -48,7 +47,9 @@ championGrandPrixSchema.static('getChampion', async function getChampion() {
             throw new Error('Champion not found');
         }
 
-        return document.userId;
+        return {
+            coachName: document.userId.coachName
+        };
     } catch (error) {
         console.error('Error fetching grand prix champion:', error);
         throw error;

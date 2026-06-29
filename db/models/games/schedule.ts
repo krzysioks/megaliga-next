@@ -18,19 +18,29 @@ export const scheduleZodSchema = z.object({
 
 export type ScheduleType = z.infer<typeof scheduleZodSchema>;
 
-export type ScheduleWithUserPopulatedType = Omit<
-    ScheduleType,
-    'userIdOne' | 'userIdTwo'
-> & {
-    userOneId: UserType & { _id: Types.ObjectId };
-    userTwoId: UserType & { _id: Types.ObjectId };
+type PopulatedScheduleType = Omit<ScheduleType, 'userOneId' | 'userTwoId'> & {
+    userOneId?: Pick<UserType, 'teamName' | 'logoUrl'>;
+    userTwoId?: Pick<UserType, 'teamName' | 'logoUrl'>;
+};
+
+export type PopulatedFindType = HydratedDocument<PopulatedScheduleType>;
+
+export type ScheduleUserDtoType = Pick<UserType, 'teamName' | 'logoUrl'>;
+
+export type ScheduleByRoundDtoType = {
+    roundNumber: number;
+    ligueGroupsId: string;
+    userOne: ScheduleUserDtoType;
+    userTwo: ScheduleUserDtoType;
+    userOneScore?: number;
+    userTwoScore?: number;
 };
 
 interface ScheduleModelType extends Model<ScheduleType> {
     getScheduleByRound: (
         roundNumber: number,
         ligueGroupsId: string
-    ) => Promise<HydratedDocument<ScheduleWithUserPopulatedType>[]>;
+    ) => Promise<ScheduleByRoundDtoType[]>;
 }
 
 const scheduleSchema = new Schema<ScheduleType, ScheduleModelType>({
@@ -60,8 +70,14 @@ scheduleSchema.static(
                 ligueGroupsId,
                 roundNumber
             })
-                .populate('userOneId')
-                .populate('userTwoId')
+                .populate<{ userOneId: ScheduleUserDtoType }>({
+                    path: 'userOneId',
+                    select: 'teamName logoUrl'
+                })
+                .populate<{ userTwoId: ScheduleUserDtoType }>({
+                    path: 'userTwoId',
+                    select: 'teamName logoUrl'
+                })
                 .exec();
 
             if (!documents.length) {
@@ -70,7 +86,22 @@ scheduleSchema.static(
                 );
             }
 
-            return documents;
+            return documents.map(document => {
+                return {
+                    roundNumber: document.roundNumber,
+                    ligueGroupsId: document.ligueGroupsId?.toString() ?? '',
+                    userOne: {
+                        teamName: document.userOneId?.teamName ?? '',
+                        logoUrl: document.userOneId?.logoUrl ?? ''
+                    },
+                    userTwo: {
+                        teamName: document.userTwoId?.teamName ?? '',
+                        logoUrl: document.userTwoId?.logoUrl ?? ''
+                    },
+                    userOneScore: document.userOneScore,
+                    userTwoScore: document.userTwoScore
+                };
+            });
         } catch (error) {
             // TODOKP: this error is thrown to be catched in higher level so that, front end can render error message to user.
             console.error(

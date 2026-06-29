@@ -1,8 +1,7 @@
 import mongoose from 'mongoose';
 
 import { DBClient } from '@/db/db-client';
-import ChampionModel, { PopulatedFindType } from '@/db/models/champion';
-import LigueGroupsModel from '@/db/models/ligue-groups';
+import ChampionModel, { ChampionDtoType } from '@/db/models/champion';
 import UserModel, { UserType } from '@/db/models/user';
 
 // connect to test db before running tests
@@ -17,7 +16,6 @@ beforeAll(async () => {
 beforeEach(async () => {
     await ChampionModel.deleteMany();
     await UserModel.deleteMany();
-    await LigueGroupsModel.deleteMany();
 });
 
 //close connection to server so, that test suite will close
@@ -44,37 +42,16 @@ describe('Test ChampionModel methods and static functions', () => {
     });
 
     test('Should get current champion data', async () => {
-        const group = await new LigueGroupsModel({
-            groupName: 'dolce'
-        }).save();
-
-        const user = await new UserModel(
-            createUserData({
-                groupName: group._id.toString()
-            })
-        ).save();
+        const user = await new UserModel(createUserData()).save();
         const userId = user._id.toString();
 
         await new ChampionModel({ userId }).save();
 
-        const result: PopulatedFindType | null =
-            await ChampionModel.getChampion();
+        const result: ChampionDtoType = await ChampionModel.getChampion();
 
         expect(result).not.toBeNull();
-        expect(result?._id.toString()).toEqual(userId);
-        expect(result?.username).toEqual(user.username);
-        expect(result?.coachName).toEqual(user.coachName);
-        expect(result?.email).toEqual(user.email);
-        expect(result?.teamName).toEqual(user.teamName);
-        expect(result?.logoUrl).toEqual(user.logoUrl);
-        expect(result?.reachedPlayoff).toEqual(user.reachedPlayoff);
-        expect(result?.isFirstRoundDraftOrderDraw).toEqual(
-            user.isFirstRoundDraftOrderDraw
-        );
-        expect(result?.groupName?.groupName).toBe('dolce');
-        expect(result?.bio).toEqual(user.bio);
-        expect(result?.cabinetTrophy).toEqual(user.cabinetTrophy);
-        expect(result?.isAdmin).toEqual(user.isAdmin);
+        expect(result.teamName).toEqual(user.teamName);
+        expect(result.logoUrl).toEqual(user.logoUrl);
     });
 
     test('Should create new champion document when none exists', async () => {
@@ -85,7 +62,8 @@ describe('Test ChampionModel methods and static functions', () => {
 
         const result = await ChampionModel.getChampion();
         expect(result).not.toBeNull();
-        expect(result?._id.toString()).toEqual(userId);
+        expect(result.teamName).toEqual(user.teamName);
+        expect(result.logoUrl).toEqual(user.logoUrl);
     });
 
     test('Should update existing champion document', async () => {
@@ -95,7 +73,9 @@ describe('Test ChampionModel methods and static functions', () => {
         const user2 = await new UserModel(
             createUserData({
                 username: 'user-two',
-                email: 'user-two@example.com'
+                email: 'user-two@example.com',
+                teamName: 'Team Two',
+                logoUrl: 'https://example.com/team-two.png'
             })
         ).save();
 
@@ -106,8 +86,8 @@ describe('Test ChampionModel methods and static functions', () => {
         await ChampionModel.setChampion(user2._id.toString());
 
         const result = await ChampionModel.getChampion();
-        expect(result?._id.toString()).toEqual(user2._id.toString());
-        expect(result?.username).toEqual(user2.username);
+        expect(result.teamName).toEqual(user2.teamName);
+        expect(result.logoUrl).toEqual(user2.logoUrl);
 
         // Verify only one document exists
         const count = await ChampionModel.countDocuments();

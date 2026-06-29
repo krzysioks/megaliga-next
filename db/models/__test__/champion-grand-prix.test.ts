@@ -2,9 +2,8 @@ import mongoose from 'mongoose';
 
 import { DBClient } from '@/db/db-client';
 import ChampionGrandPrixModel, {
-    PopulatedFindType
+    ChampionGrandPrixDtoType
 } from '@/db/models/champion-grand-prix';
-import LigueGroupsModel from '@/db/models/ligue-groups';
 import UserModel, { UserType } from '@/db/models/user';
 
 // connect to test db before running tests
@@ -18,7 +17,6 @@ beforeAll(async () => {
 beforeEach(async () => {
     await ChampionGrandPrixModel.deleteMany();
     await UserModel.deleteMany();
-    await LigueGroupsModel.deleteMany();
 });
 
 //close connection to server so, that test suite will close
@@ -45,37 +43,16 @@ describe('Test ChampionGrandPrixModel methods and static functions', () => {
     });
 
     test('Should get current grand prix champion data', async () => {
-        const group = await new LigueGroupsModel({
-            groupName: 'dolce'
-        }).save();
-
-        const user = await new UserModel(
-            createUserData({
-                groupName: group._id.toString()
-            })
-        ).save();
+        const user = await new UserModel(createUserData()).save();
         const userId = user._id.toString();
 
         await new ChampionGrandPrixModel({ userId }).save();
 
-        const result: PopulatedFindType | null =
+        const result: ChampionGrandPrixDtoType =
             await ChampionGrandPrixModel.getChampion();
 
         expect(result).not.toBeNull();
-        expect(result?._id.toString()).toEqual(userId);
-        expect(result?.username).toEqual(user.username);
-        expect(result?.coachName).toEqual(user.coachName);
-        expect(result?.email).toEqual(user.email);
-        expect(result?.teamName).toEqual(user.teamName);
-        expect(result?.logoUrl).toEqual(user.logoUrl);
-        expect(result?.reachedPlayoff).toEqual(user.reachedPlayoff);
-        expect(result?.isFirstRoundDraftOrderDraw).toEqual(
-            user.isFirstRoundDraftOrderDraw
-        );
-        expect(result?.groupName?.groupName).toBe('dolce');
-        expect(result?.bio).toEqual(user.bio);
-        expect(result?.cabinetTrophy).toEqual(user.cabinetTrophy);
-        expect(result?.isAdmin).toEqual(user.isAdmin);
+        expect(result.coachName).toEqual(user.coachName);
     });
 
     test('Should create new grand prix champion document when none exists', async () => {
@@ -86,7 +63,7 @@ describe('Test ChampionGrandPrixModel methods and static functions', () => {
 
         const result = await ChampionGrandPrixModel.getChampion();
         expect(result).not.toBeNull();
-        expect(result?._id.toString()).toEqual(userId);
+        expect(result.coachName).toEqual(user.coachName);
     });
 
     test('Should update existing grand prix champion document', async () => {
@@ -96,7 +73,8 @@ describe('Test ChampionGrandPrixModel methods and static functions', () => {
         const user2 = await new UserModel(
             createUserData({
                 username: 'user-two',
-                email: 'user-two@example.com'
+                email: 'user-two@example.com',
+                coachName: 'Coach Two'
             })
         ).save();
 
@@ -107,8 +85,7 @@ describe('Test ChampionGrandPrixModel methods and static functions', () => {
         await ChampionGrandPrixModel.setChampion(user2._id.toString());
 
         const result = await ChampionGrandPrixModel.getChampion();
-        expect(result?._id.toString()).toEqual(user2._id.toString());
-        expect(result?.username).toEqual(user2.username);
+        expect(result.coachName).toEqual(user2.coachName);
 
         // Verify only one document exists
         const count = await ChampionGrandPrixModel.countDocuments();

@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import { DBClient } from '@/db/db-client';
 import HistoryModel from '@/db/models/history/history';
 import HistoryGrandPrixChampionModel, {
-    PopulatedFindType
+    ChampionsHistoryGrandPrixDtoType
 } from '@/db/models/history/history-grand-prix-champion';
 import HistoryTeamModel, {
     HistoryTeamType
@@ -130,25 +130,19 @@ describe('Test HistoryGrandPrixChampionModel methods and static functions', () =
                 season: seasons[0]._id.toString(),
                 teamId: teams[1]._id.toString(),
                 expectedSeasonName: '2023',
-                expectedTeamName: 'Wolves 2023',
-                expectedCoachName: 'Coach 2023 B',
-                expectedLogoUrl: 'https://example.com/wolves-2023.png'
+                expectedCoachName: 'Coach 2023 B'
             },
             {
                 season: seasons[1]._id.toString(),
                 teamId: teams[2]._id.toString(),
                 expectedSeasonName: '2024',
-                expectedTeamName: 'Falcons 2024',
-                expectedCoachName: 'Coach 2024 A',
-                expectedLogoUrl: 'https://example.com/falcons-2024.png'
+                expectedCoachName: 'Coach 2024 A'
             },
             {
                 season: seasons[2]._id.toString(),
                 teamId: teams[5]._id.toString(),
                 expectedSeasonName: '2025',
-                expectedTeamName: 'Wolves 2025',
-                expectedCoachName: 'Coach 2025 B',
-                expectedLogoUrl: 'https://example.com/wolves-2025.png'
+                expectedCoachName: 'Coach 2025 B'
             }
         ];
 
@@ -159,20 +153,19 @@ describe('Test HistoryGrandPrixChampionModel methods and static functions', () =
             }))
         );
 
-        const result: PopulatedFindType[] =
+        const result: ChampionsHistoryGrandPrixDtoType[] =
             await HistoryGrandPrixChampionModel.getChampionsHistory();
 
         expect(result).toHaveLength(3);
 
         championsToCreate.forEach(expected => {
             const champion = result.find(
-                item => item.season?.name === expected.expectedSeasonName
+                item => item.seasonName === expected.expectedSeasonName
             );
 
             expect(champion).toBeDefined();
-            expect(champion?.teamId?.coachName).toBe(
-                expected.expectedCoachName
-            );
+            expect(champion?.seasonName).toBe(expected.expectedSeasonName);
+            expect(champion?.coachName).toBe(expected.expectedCoachName);
         });
     });
 });

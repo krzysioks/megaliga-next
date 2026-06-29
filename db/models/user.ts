@@ -52,16 +52,23 @@ interface UserMethodsType {
 
 interface UserModelType extends Model<UserType, '', UserMethodsType> {
     getNumberOfUsersAssignedToGroup: (ligueGroupId: string) => Promise<number>;
-    getUserById: (userId: string) => Promise<PopulatedFindByIdType>;
+    getUserById: (userId: string) => Promise<UserByIdDtoType>;
 }
 
-type PopulatedGroupNameType = LigueGroupsType & { _id: Types.ObjectId };
+export type FindByIdType = HydratedDocument<UserType, UserMethodsType> | null;
+
+export type UserByIdDtoType = Omit<UserType, 'groupName'> & {
+    userId: string;
+    groupName: LigueGroupsType['groupName'];
+};
+
+type PopulatedGroupNameType = Pick<LigueGroupsType, 'groupName'> & {
+    _id: Types.ObjectId;
+};
 
 type UserWithPopulatedGroupNameType = Omit<UserType, 'groupName'> & {
     groupName?: PopulatedGroupNameType;
 };
-
-export type FindByIdType = HydratedDocument<UserType, UserMethodsType> | null;
 
 export type PopulatedFindByIdType = HydratedDocument<
     UserWithPopulatedGroupNameType,
@@ -113,7 +120,32 @@ userSchema.static(
 
 userSchema.static('getUserById', async function getUserById(userId: string) {
     try {
-        return await this.findById(userId).populate('groupName').exec();
+        const userDocument: PopulatedFindByIdType = await this.findById(userId)
+            .select(
+                'username coachName teamName logoUrl reachedPlayoff isFirstRoundDraftOrderDraw groupName bio cabinetTrophy'
+            )
+            .populate<{ groupName: PopulatedGroupNameType }>({
+                path: 'groupName',
+                select: 'groupName'
+            })
+            .exec();
+
+        if (!userDocument) {
+            throw new Error(`User not found: ${userId}`);
+        }
+
+        return {
+            userId: userDocument._id.toString(),
+            username: userDocument.username,
+            coachName: userDocument.coachName,
+            teamName: userDocument.teamName,
+            logoUrl: userDocument.logoUrl,
+            reachedPlayoff: userDocument.reachedPlayoff,
+            isFirstRoundDraftOrderDraw: userDocument.isFirstRoundDraftOrderDraw,
+            groupName: userDocument.groupName?.groupName ?? '',
+            bio: userDocument.bio ?? '',
+            cabinetTrophy: userDocument.cabinetTrophy ?? []
+        };
     } catch (error) {
         console.error('Error fetching user by id:', error);
         throw error;
