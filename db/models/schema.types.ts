@@ -74,7 +74,7 @@ export const standingSchema = z.object({
     defeat: z.number().min(0).max(20),
     balance: z.number(),
     points: z.number().min(0).max(70),
-    ligueGroup: z.string()
+    ligueGroupsId: objectIdSchema
 });
 
 export const historyStandingSchema = z.object({
