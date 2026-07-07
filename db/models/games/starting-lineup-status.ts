@@ -21,7 +21,7 @@ export type StartingLineupStatusType = z.infer<
     typeof startingLineupStatusZodSchema
 >;
 
-interface StartingLineupStatuspModelType extends Model<StartingLineupStatusType> {
+interface StartingLineupStatusModelType extends Model<StartingLineupStatusType> {
     getStartingLineupStatusByRoundAndStage: (
         roundNumber: number,
         seasonStage: z.infer<typeof stageEnumSchema>
@@ -30,7 +30,7 @@ interface StartingLineupStatuspModelType extends Model<StartingLineupStatusType>
 
 const startingLineupStatusSchema = new Schema<
     StartingLineupStatusType,
-    StartingLineupStatuspModelType
+    StartingLineupStatusModelType
 >({
     roundNumber: { type: Number, required: true },
     seasonStage: {
@@ -70,7 +70,7 @@ startingLineupStatusSchema.static(
 
 const StartingLineupStatusModel = model<
     StartingLineupStatusType,
-    StartingLineupStatuspModelType
+    StartingLineupStatusModelType
 >('StartingLineupStatus', startingLineupStatusSchema);
 
 // TODOKP: 1. static function getStartingLineupStatusByRoundAndStage(roundNumber: number, seasonStage: string) to fetch starting lineup status for given round number and season stage

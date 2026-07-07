@@ -28,6 +28,7 @@ export type PopulatedFindType = HydratedDocument<PopulatedScheduleType>;
 export type ScheduleUserDtoType = Pick<UserType, 'teamName' | 'logoUrl'>;
 
 export type ScheduleByRoundDtoType = {
+    id: Types.ObjectId;
     roundNumber: number;
     ligueGroupsId: string;
     userOne: ScheduleUserDtoType;
@@ -88,6 +89,7 @@ scheduleSchema.static(
 
             return documents.map(document => {
                 return {
+                    id: document._id,
                     roundNumber: document.roundNumber,
                     ligueGroupsId: document.ligueGroupsId?.toString() ?? '',
                     userOne: {

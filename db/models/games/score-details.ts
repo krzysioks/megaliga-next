@@ -1,11 +1,15 @@
-import { model, Schema } from 'mongoose';
+import { HydratedDocument, model, Model, Schema } from 'mongoose';
 import { z } from 'zod';
 
+import ScheduleModel, { ScheduleType } from '@/db/models/games/schedule';
+import { StartingLineupType } from '@/db/models/games/starting-lineup';
+import { PlayersType } from '@/db/models/players';
 import {
     objectIdSchema,
     roundNumberSchema,
     teamSchema
 } from '@/db/models/schema.types';
+import { UserType } from '@/db/models/user';
 
 //ScoreDetails is representation of megaliga_scores of old megaliga database. Will be used for displaying detailed scores of given match.
 
@@ -18,7 +22,66 @@ export const scoreDetailsZodSchema = z.object({
 
 export type ScoreDetailsType = z.infer<typeof scoreDetailsZodSchema>;
 
-const scoreDetailsSchema = new Schema<ScoreDetailsType>({
+type PopulatedScoreDetailsPlayerType = Omit<
+    NonNullable<ScoreDetailsType['teamOne']['players']>[number],
+    'playerId'
+> & {
+    playerId: Pick<PlayersType, 'extraligaPlayerName'>;
+};
+
+type PopulatedScoreDetailsType = Omit<
+    ScoreDetailsType,
+    'scheduleId' | 'teamOne' | 'teamTwo'
+> & {
+    scheduleId: Pick<ScheduleType, 'userOneScore' | 'userTwoScore'>;
+    teamOne: Omit<
+        ScoreDetailsType['teamOne'],
+        'userId' | 'players' | 'startingLineupId'
+    > & {
+        userId: Pick<UserType, 'teamName'>;
+        players: PopulatedScoreDetailsPlayerType[];
+        startingLineupId: Pick<StartingLineupType, 'setPlays'>;
+    };
+    teamTwo: Omit<
+        ScoreDetailsType['teamTwo'],
+        'userId' | 'players' | 'startingLineupId'
+    > & {
+        userId: Pick<UserType, 'teamName'>;
+        players: PopulatedScoreDetailsPlayerType[];
+        startingLineupId: Pick<StartingLineupType, 'setPlays'>;
+    };
+};
+export type PopulatedFindType = HydratedDocument<PopulatedScoreDetailsType>;
+
+type ScoreDetailsTeamPlayerDtoType = Omit<
+    PopulatedScoreDetailsPlayerType,
+    'playerId'
+> & {
+    extraligaPlayerName: PlayersType['extraligaPlayerName'];
+};
+
+type ScoreDetailsTeamDtoType = {
+    teamName: PopulatedScoreDetailsType['teamOne']['userId']['teamName'];
+    players: ScoreDetailsTeamPlayerDtoType[];
+    trainer: PopulatedScoreDetailsType['teamOne']['trainer'];
+    setPlays: PopulatedScoreDetailsType['teamOne']['startingLineupId']['setPlays'];
+};
+
+export type ScoreDetailsDtoType = {
+    roundNumber: ScoreDetailsType['roundNumber'];
+    teamOne: ScoreDetailsTeamDtoType;
+    teamTwo: ScoreDetailsTeamDtoType;
+    userOneScore: PopulatedScoreDetailsType['scheduleId']['userOneScore'];
+    userTwoScore: PopulatedScoreDetailsType['scheduleId']['userTwoScore'];
+};
+interface ScoreDetailsModelType extends Model<ScoreDetailsType> {
+    getScoreDetailsByScheduleAndRoundId: (
+        scheduleId: string,
+        roundNumber: number
+    ) => Promise<ScoreDetailsDtoType>;
+}
+
+const scoreDetailsSchema = new Schema<ScoreDetailsType, ScoreDetailsModelType>({
     scheduleId: { type: Schema.Types.ObjectId, ref: 'Schedule' },
     roundNumber: { type: Number, required: true },
     teamOne: {
@@ -89,7 +152,97 @@ const scoreDetailsSchema = new Schema<ScoreDetailsType>({
     }
 });
 
-const ScoreDetailsModel = model<ScoreDetailsType>(
+scoreDetailsSchema.static(
+    'getScoreDetailsByScheduleAndRoundId',
+    async function getScoreDetailsByScheduleIdAndRound(
+        scheduleId: string,
+        roundNumber: number
+    ) {
+        try {
+            const isValidScheduleId = await ScheduleModel.exists({
+                _id: scheduleId
+            });
+
+            if (!isValidScheduleId) {
+                throw new Error(`Invalid scheduleId: ${scheduleId}`);
+            }
+
+            const document = (await this.findOne({
+                scheduleId,
+                roundNumber
+            })
+                .populate({
+                    path: 'scheduleId',
+                    select: 'userOneScore userTwoScore'
+                })
+                .populate({
+                    path: 'teamOne.userId',
+                    select: 'teamName'
+                })
+                .populate({
+                    path: 'teamTwo.userId',
+                    select: 'teamName'
+                })
+                .populate({
+                    path: 'teamOne.players.playerId',
+                    select: 'extraligaPlayerName'
+                })
+                .populate({
+                    path: 'teamTwo.players.playerId',
+                    select: 'extraligaPlayerName'
+                })
+                .populate({
+                    path: 'teamOne.startingLineupId',
+                    select: 'setPlays'
+                })
+                .populate({
+                    path: 'teamTwo.startingLineupId',
+                    select: 'setPlays'
+                })
+                .exec()) as PopulatedFindType | null;
+
+            if (!document) {
+                throw new Error(
+                    `Score details for scheduleId: ${scheduleId} and roundNumber: ${roundNumber} not found`
+                );
+            }
+
+            const mapTeam = (
+                team: PopulatedScoreDetailsType['teamOne']
+            ): ScoreDetailsTeamDtoType => ({
+                teamName: team.userId?.teamName ?? '',
+                players: (team.players ?? []).map(player => ({
+                    heatOne: player.heatOne,
+                    heatTwo: player.heatTwo,
+                    heatThree: player.heatThree,
+                    heatFour: player.heatFour,
+                    heatFive: player.heatFive,
+                    heatSix: player.heatSix,
+                    heatSeven: player.heatSeven,
+                    setPlay: player.setPlay,
+                    comment: player.comment,
+                    extraligaPlayerName:
+                        player.playerId?.extraligaPlayerName ?? ''
+                })),
+                trainer: team.trainer,
+                setPlays: team.startingLineupId?.setPlays
+            });
+
+            return {
+                roundNumber: document.roundNumber,
+                teamOne: mapTeam(document.teamOne),
+                teamTwo: mapTeam(document.teamTwo),
+                userOneScore: document.scheduleId?.userOneScore,
+                userTwoScore: document.scheduleId?.userTwoScore
+            };
+        } catch (error) {
+            console.error('Error fetching score details:', error);
+            throw error;
+        }
+    }
+);
+
+const ScoreDetailsModel = model<ScoreDetailsType, ScoreDetailsModelType>(
     'ScoreDetails',
     scoreDetailsSchema
 );

@@ -1,4 +1,4 @@
-import { model, Schema } from 'mongoose';
+import { model, Model, Schema } from 'mongoose';
 import { z } from 'zod';
 
 import {
@@ -19,7 +19,17 @@ export const megaligaScoresCmsZodSchema = z.object({
 
 export type MegaligaScoresCmsType = z.infer<typeof megaligaScoresCmsZodSchema>;
 
-const megaligaScoresCmsSchema = new Schema<MegaligaScoresCmsType>({
+interface MegaligaScoresCmsModelType extends Model<MegaligaScoresCmsType> {
+    getCmsBlockByRoundAndStage: (
+        roundNumber: number,
+        seasonStage: z.infer<typeof stageEnumSchema>
+    ) => Promise<z.infer<typeof editorJsContentSchema>>;
+}
+
+const megaligaScoresCmsSchema = new Schema<
+    MegaligaScoresCmsType,
+    MegaligaScoresCmsModelType
+>({
     roundNumber: { type: Number, required: true },
     seasonStage: {
         type: String,
@@ -37,9 +47,36 @@ const megaligaScoresCmsSchema = new Schema<MegaligaScoresCmsType>({
     }
 });
 
-const MegaligaScoresCmsModel = model<MegaligaScoresCmsType>(
-    'MegaligaScoresCms',
-    megaligaScoresCmsSchema
+megaligaScoresCmsSchema.static(
+    'getCmsBlockByRoundAndStage',
+    async function getCmsBlockByRoundAndStage(
+        roundNumber: number,
+        seasonStage: (typeof STAGE_ENUM)[number]
+    ) {
+        try {
+            const document = await this.findOne({
+                roundNumber,
+                seasonStage
+            });
+
+            if (!document) {
+                throw new Error(
+                    `Failed to fetch CMS block for megaliga scores round ${roundNumber} and stage ${seasonStage}:`
+                );
+            }
+
+            return document.content;
+        } catch (error) {
+            console.error('Error:', error);
+            // TODOKP: this error is thrown to be catched in higher level so that, front end can render error message to user.
+            throw error;
+        }
+    }
 );
+
+const MegaligaScoresCmsModel = model<
+    MegaligaScoresCmsType,
+    MegaligaScoresCmsModelType
+>('MegaligaScoresCms', megaligaScoresCmsSchema);
 
 export default MegaligaScoresCmsModel;

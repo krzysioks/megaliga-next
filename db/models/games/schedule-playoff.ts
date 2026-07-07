@@ -23,6 +23,7 @@ export type SchedulePlayoffType = z.infer<typeof schedulePlayoffZodSchema>;
 
 interface SchedulePlayoffMatchupTeamDtoType {
     teamName: UserType['teamName'];
+    logoUrl: UserType['logoUrl'];
     seed: SchedulePlayoffType['userOneSeed'];
     score: SchedulePlayoffType['userOneScore'];
 }
@@ -33,22 +34,43 @@ interface SchedulePlayoffMatchupDtoType {
 }
 
 export interface SchedulePlayoffByStageDtoType {
+    id: Types.ObjectId;
     matchupOne: SchedulePlayoffMatchupDtoType;
     matchupTwo: SchedulePlayoffMatchupDtoType;
 }
+
+export type SchedulePlayoffUserDtoType = Pick<UserType, 'teamName' | 'logoUrl'>;
+
+export type SchedulePlayoffByRoundDtoType = {
+    id: Types.ObjectId;
+    roundNumber: number;
+    stage: SchedulePlayoffType['stage'];
+    userOne: SchedulePlayoffUserDtoType;
+    userTwo: SchedulePlayoffUserDtoType;
+    userOneScore?: SchedulePlayoffType['userOneScore'];
+    userTwoScore?: SchedulePlayoffType['userTwoScore'];
+};
 
 interface SchedulePlayoffModelType extends Model<SchedulePlayoffType> {
     getScheduleByStage: (
         stage: (typeof STAGE_ENUM)[number]
     ) => Promise<SchedulePlayoffByStageDtoType[]>;
+    getScheduleByRound: (
+        roundNumber: number
+    ) => Promise<SchedulePlayoffByRoundDtoType[]>;
 }
 
 type PopulatedSchedulePlayoffType = Omit<
     SchedulePlayoffType,
     'userOneId' | 'userTwoId'
 > & {
-    userOneId: Pick<UserType, 'teamName'> & { _id: Types.ObjectId };
-    userTwoId: Pick<UserType, 'teamName'> & { _id: Types.ObjectId };
+    _id: Types.ObjectId;
+    userOneId: Pick<UserType, 'teamName' | 'logoUrl'> & {
+        _id: Types.ObjectId;
+    };
+    userTwoId: Pick<UserType, 'teamName' | 'logoUrl'> & {
+        _id: Types.ObjectId;
+    };
 };
 
 const schedulePlayoffSchema = new Schema<SchedulePlayoffType>({
@@ -73,11 +95,11 @@ schedulePlayoffSchema.static(
             const documents = (await this.find({ stage })
                 .populate({
                     path: 'userOneId',
-                    select: 'teamName'
+                    select: 'teamName logoUrl'
                 })
                 .populate({
                     path: 'userTwoId',
-                    select: 'teamName'
+                    select: 'teamName logoUrl'
                 })
                 .exec()) as PopulatedSchedulePlayoffType[];
 
@@ -92,11 +114,13 @@ schedulePlayoffSchema.static(
                 const mappedMatchup = {
                     teamOne: {
                         teamName: document.userOneId.teamName,
+                        logoUrl: document.userOneId.logoUrl,
                         seed: document.userOneSeed,
                         score: document.userOneScore
                     },
                     teamTwo: {
                         teamName: document.userTwoId.teamName,
+                        logoUrl: document.userTwoId.logoUrl,
                         seed: document.userTwoSeed,
                         score: document.userTwoScore
                     }
@@ -105,10 +129,14 @@ schedulePlayoffSchema.static(
                 const existingGroup = groupedDocuments.get(groupKey) ?? {};
 
                 if (document.roundNumber === 1) {
+                    existingGroup.id = document._id;
                     existingGroup.matchupOne = mappedMatchup;
                 }
 
                 if (document.roundNumber === 2) {
+                    if (!existingGroup.id) {
+                        existingGroup.id = document._id;
+                    }
                     existingGroup.matchupTwo = mappedMatchup;
                 }
 
@@ -122,11 +150,57 @@ schedulePlayoffSchema.static(
                         item.matchupTwo !== undefined
                 )
                 .map(item => ({
+                    id: item.id!,
                     matchupOne: item.matchupOne!,
                     matchupTwo: item.matchupTwo!
                 }));
         } catch (error) {
             console.error('Error fetching schedule playoff data:', error);
+            throw error;
+        }
+    }
+);
+
+schedulePlayoffSchema.static(
+    'getScheduleByRound',
+    async function getScheduleByRound(roundNumber: number) {
+        try {
+            const documents = (await this.find({ roundNumber })
+                .populate({
+                    path: 'userOneId',
+                    select: 'teamName logoUrl'
+                })
+                .populate({
+                    path: 'userTwoId',
+                    select: 'teamName logoUrl'
+                })
+                .exec()) as PopulatedSchedulePlayoffType[];
+
+            if (!documents.length) {
+                throw new Error(
+                    `Schedules playoff for given roundNumber: ${roundNumber} don't exist: `
+                );
+            }
+
+            return documents.map((document: PopulatedSchedulePlayoffType) => {
+                return {
+                    id: document._id,
+                    roundNumber: document.roundNumber,
+                    stage: document.stage,
+                    userOne: {
+                        teamName: document.userOneId?.teamName ?? '',
+                        logoUrl: document.userOneId?.logoUrl ?? ''
+                    },
+                    userTwo: {
+                        teamName: document.userTwoId?.teamName ?? '',
+                        logoUrl: document.userTwoId?.logoUrl ?? ''
+                    },
+                    userOneScore: document.userOneScore,
+                    userTwoScore: document.userTwoScore
+                };
+            });
+        } catch (error) {
+            console.error('Error fetching schedule playoff by round:', error);
             throw error;
         }
     }
