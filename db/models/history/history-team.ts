@@ -21,7 +21,6 @@ export type HistoryTeamType = z.infer<typeof historyTeamZodSchema>;
 const historyTeamSchema = new Schema<HistoryTeamType>({
     historyId: {
         type: Schema.Types.ObjectId,
-        ref: 'History',
         required: true
     },
     name: { type: String, required: true },

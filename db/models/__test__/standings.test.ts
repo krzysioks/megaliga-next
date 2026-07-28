@@ -73,7 +73,6 @@ describe('Test StandingsModel methods and static functions', () => {
 
         const standings: StandingsDtoType[] =
             await StandingsModel.getStandings();
-        console.log('standings: ', standings);
         expect(standings).toHaveLength(12);
 
         standingsToCreate.forEach(expectedStanding => {

@@ -1,4 +1,4 @@
-import { model, Schema } from 'mongoose';
+import { model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
 import { booleanDefaultFalseSchema } from '@/db/models/schema.types';
@@ -38,7 +38,14 @@ export const seasonOpsZodSchema = z.object({
 
 export type SeasonOpsType = z.infer<typeof seasonOpsZodSchema>;
 
-const seasonOpsSchema = new Schema<SeasonOpsType>({
+export type SeasonOpsReturnType = Pick<SeasonOpsType, 'name'> & {
+    id: Types.ObjectId;
+};
+interface SeasonOpsModelType extends Model<SeasonOpsType> {
+    getHistorySeasons: () => Promise<SeasonOpsReturnType[] | []>;
+}
+
+const seasonOpsSchema = new Schema<SeasonOpsType, SeasonOpsModelType>({
     name: { type: String, required: true, unique: true },
     isCurrentSeason: { type: Boolean, default: false },
     numberOfGroups: { type: Number, required: true },
@@ -67,6 +74,34 @@ const seasonOpsSchema = new Schema<SeasonOpsType>({
     }
 });
 
-const SeasonOpsModel = model<SeasonOpsType>('SeasonOps', seasonOpsSchema);
+seasonOpsSchema.static('getHistorySeasons', async function getHistorySeasons() {
+    try {
+        const documents = await this.find(
+            { isCurrentSeason: false },
+            { name: 1 }
+        )
+            .sort({ name: -1 })
+            .exec();
+
+        if (!documents || !documents.length) {
+            return [];
+        }
+
+        return documents.map(document => {
+            return {
+                id: document._id,
+                name: document.name
+            };
+        });
+    } catch (error) {
+        console.error('Error fetching history seasons:', error);
+        throw error;
+    }
+});
+
+const SeasonOpsModel = model<SeasonOpsType, SeasonOpsModelType>(
+    'SeasonOps',
+    seasonOpsSchema
+);
 
 export default SeasonOpsModel;
