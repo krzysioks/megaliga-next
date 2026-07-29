@@ -108,40 +108,40 @@ schedulePlayoffSchema.static(
                 Partial<SchedulePlayoffByStageDtoType>
             >();
 
-            documents.forEach(document => {
-                const groupKey = `${document.userOneId._id.toString()}-${document.userTwoId._id.toString()}`;
+            documents
+                .sort((a, b) => a.roundNumber - b.roundNumber)
+                .forEach(document => {
+                    const groupKey = `${document.userOneId._id.toString()}-${document.userTwoId._id.toString()}`;
 
-                const mappedMatchup = {
-                    teamOne: {
-                        teamName: document.userOneId.teamName,
-                        logoUrl: document.userOneId.logoUrl,
-                        seed: document.userOneSeed,
-                        score: document.userOneScore
-                    },
-                    teamTwo: {
-                        teamName: document.userTwoId.teamName,
-                        logoUrl: document.userTwoId.logoUrl,
-                        seed: document.userTwoSeed,
-                        score: document.userTwoScore
-                    }
-                };
+                    const mappedMatchup = {
+                        teamOne: {
+                            teamName: document.userOneId.teamName,
+                            logoUrl: document.userOneId.logoUrl,
+                            seed: document.userOneSeed,
+                            score: document.userOneScore
+                        },
+                        teamTwo: {
+                            teamName: document.userTwoId.teamName,
+                            logoUrl: document.userTwoId.logoUrl,
+                            seed: document.userTwoSeed,
+                            score: document.userTwoScore
+                        }
+                    };
 
-                const existingGroup = groupedDocuments.get(groupKey) ?? {};
+                    const existingGroup = groupedDocuments.get(groupKey) ?? {};
 
-                if (document.roundNumber === 1) {
-                    existingGroup.id = document._id;
-                    existingGroup.matchupOne = mappedMatchup;
-                }
-
-                if (document.roundNumber === 2) {
-                    if (!existingGroup.id) {
+                    if (!existingGroup.matchupOne) {
                         existingGroup.id = document._id;
+                        existingGroup.matchupOne = mappedMatchup;
+                    } else {
+                        if (!existingGroup.id) {
+                            existingGroup.id = document._id;
+                        }
+                        existingGroup.matchupTwo = mappedMatchup;
                     }
-                    existingGroup.matchupTwo = mappedMatchup;
-                }
 
-                groupedDocuments.set(groupKey, existingGroup);
-            });
+                    groupedDocuments.set(groupKey, existingGroup);
+                });
 
             return Array.from(groupedDocuments.values())
                 .filter(
