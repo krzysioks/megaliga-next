@@ -219,6 +219,7 @@ describe('Test HistoryModel methods and static functions', () => {
                 balance: 15,
                 points: 70,
                 ligueGroup: 'Group A',
+                teamId: teams[0]._id.toString(),
                 teamName: 'Team A'
             })
         );
@@ -229,6 +230,7 @@ describe('Test HistoryModel methods and static functions', () => {
         expect(result.playoff?.[0]).toEqual(
             expect.objectContaining({
                 place: 1,
+                teamId: teams[0]._id.toString(),
                 teamName: 'Team A'
             })
         );
@@ -244,6 +246,7 @@ describe('Test HistoryModel methods and static functions', () => {
                 defeat: 1,
                 balance: 10,
                 points: 50,
+                teamId: teams[2]._id.toString(),
                 teamName: 'Team C'
             })
         );

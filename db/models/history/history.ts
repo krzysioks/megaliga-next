@@ -4,7 +4,7 @@
 // - what type of data is stored (table with season standings, scores of each game, individual stats of players of each game)
 // - in this document we will reference other collections for data for particular details of given view for given season
 
-import { HydratedDocument, model, Model, Schema } from 'mongoose';
+import { HydratedDocument, model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
 import { HistoryGrandPrixStandingsType } from '@/db/models/history/history-grand-prix-standings';
@@ -41,6 +41,7 @@ export type RegularSeasonStandingReturnType = Omit<
     HistoryRegularSeasonStandingsType['standings'][number],
     'teamId'
 > & {
+    teamId: string;
     teamName: HistoryTeamNameReturnType;
 };
 
@@ -49,6 +50,7 @@ export type PlayoffStandingReturnType = Omit<
     HistoryPlayoffStandingsType['standings'][number],
     'teamId'
 > & {
+    teamId: string;
     teamName: HistoryTeamNameReturnType;
 };
 
@@ -57,6 +59,7 @@ export type PlayInStandingReturnType = Omit<
     HistoryPlayinStandingsType['standings'][number],
     'teamId'
 > & {
+    teamId: string;
     teamName: HistoryTeamNameReturnType;
 };
 
@@ -76,7 +79,9 @@ export type HistoryBySeasonReturnType = {
     grandPrix: GrandPrixStandingReturnType[] | null;
 };
 
-type PopulatedTeamNameRef = Pick<HistoryTeamType, 'name'>;
+type PopulatedTeamNameRef = Pick<HistoryTeamType, 'name'> & {
+    _id: Types.ObjectId;
+};
 type PopulatedTeamCoachRef = Pick<HistoryTeamType, 'coachName'>;
 
 type PopulatedRegularSeasonStanding =
@@ -202,6 +207,7 @@ historySchema.static(
                     defeat: standing.defeat,
                     balance: standing.balance,
                     points: standing.points,
+                    teamId: standing.teamId?._id?.toString() ?? '',
                     teamName: standing.teamId?.name ?? ''
                 };
             };
@@ -219,6 +225,7 @@ historySchema.static(
                 ? document.playoff.standings.map(standing => {
                       return {
                           place: standing.place,
+                          teamId: standing.teamId?._id?.toString() ?? '',
                           teamName: standing.teamId?.name ?? ''
                       };
                   })
@@ -240,13 +247,6 @@ historySchema.static(
                       };
                   })
                 : null;
-
-            console.log('Fetched history for seasonId:', seasonId, {
-                regularSeason,
-                playoff,
-                playIn,
-                grandPrix
-            });
 
             return {
                 regularSeason,
