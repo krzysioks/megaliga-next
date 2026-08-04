@@ -53,6 +53,7 @@ interface UserMethodsType {
 interface UserModelType extends Model<UserType, '', UserMethodsType> {
     getNumberOfUsersAssignedToGroup: (ligueGroupId: string) => Promise<number>;
     getUserById: (userId: string) => Promise<UserByIdDtoType>;
+    isAdmin: (username: string) => Promise<boolean>;
 }
 
 export type FindByIdType = HydratedDocument<UserType, UserMethodsType> | null;
@@ -152,6 +153,23 @@ userSchema.static('getUserById', async function getUserById(userId: string) {
     }
 });
 
+userSchema.static('isAdmin', async function isAdmin(username: string) {
+    try {
+        const userDocument = await this.findOne({ username })
+            .select('isAdmin')
+            .exec();
+
+        if (!userDocument) {
+            throw new Error(`User not found: ${username}`);
+        }
+
+        return userDocument.isAdmin;
+    } catch (error) {
+        console.error('Error checking if user is admin:', error);
+        throw error;
+    }
+});
+
 userSchema.method(
     'updateUser',
     async function updateUser(updateData: UserUpdateDataType) {
@@ -175,8 +193,6 @@ userSchema.method(
 );
 
 // save user document - will be triggered directly on UserModel in place of invocation. Example of usage in db/models/__test__/user.test.ts
-
-// TODOKP: 1. later we need to implement static function to fetch all users with populated groupName field and method to fetch desired user by userId with populated groupName field.
 
 const UserModel = model<UserType, UserModelType>('User', userSchema);
 

@@ -12,6 +12,7 @@ import UserModel, {
 beforeAll(async () => {
     const dbClient = new DBClient();
     await dbClient.connect();
+    jest.spyOn(console, 'error').mockImplementation(() => {});
 });
 
 // before any test tear down clear database
@@ -230,6 +231,42 @@ describe('Test UserModel methods and static functions', () => {
 
         expect(countDolce).toBe(0);
         expect(countGabbana).toBe(0);
+    });
+
+    test('Should throw error if username is not valid in isAdmin method', async () => {
+        const invalidUsername = 'missing-user';
+
+        await expect(UserModel.isAdmin(invalidUsername)).rejects.toThrow(
+            `User not found: ${invalidUsername}`
+        );
+    });
+
+    test('Should return true if user is admin', async () => {
+        const adminUser = await new UserModel(
+            createUserData({
+                email: 'admin-user@example.com',
+                username: 'admin-user',
+                isAdmin: true
+            })
+        ).save();
+
+        const isAdmin = await UserModel.isAdmin(adminUser.username);
+
+        expect(isAdmin).toBe(true);
+    });
+
+    test('Should return false if user is not admin', async () => {
+        const regularUser = await new UserModel(
+            createUserData({
+                email: 'regular-user@example.com',
+                username: 'regular-user',
+                isAdmin: false
+            })
+        ).save();
+
+        const isAdmin = await UserModel.isAdmin(regularUser.username);
+
+        expect(isAdmin).toBe(false);
     });
 
     test('Should update allowed fields in updateUser method', async () => {
