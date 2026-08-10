@@ -348,3 +348,131 @@ describe('Test UserModel methods and static functions', () => {
         expect(updatedUser?.teamName).toBe('Team After');
     });
 });
+
+describe('Test password reset flow', () => {
+    const createUserData = (overrides: Partial<UserType> = {}) => ({
+        username: 'reset-user',
+        coachName: 'Reset Coach',
+        email: 'reset-user@example.com',
+        password: 'Password1!',
+        teamName: 'Reset Team',
+        logoUrl: 'https://example.com/reset-team.png',
+        reachedPlayoff: false,
+        isFirstRoundDraftOrderDraw: false,
+        groupName: new mongoose.Types.ObjectId().toString(),
+        bio: '',
+        cabinetTrophy: [],
+        isAdmin: false,
+        ...overrides
+    });
+
+    describe('generatePasswordResetToken', () => {
+        test('Should generate raw token, hash it, save on user document and return rawToken and username', async () => {
+            const user = await new UserModel(createUserData()).save();
+
+            const result = await UserModel.generatePasswordResetToken(
+                user.email
+            );
+
+            const updatedUser = await UserModel.findById(user._id).exec();
+
+            expect(result.rawToken).toBeDefined();
+            expect(result.username).toBe(user.username);
+            // raw token must not be stored — only its hash is persisted
+            expect(updatedUser?.passwordResetObj?.resetToken).not.toBe(
+                result.rawToken
+            );
+            expect(updatedUser?.passwordResetObj?.resetToken).toHaveLength(64);
+            expect(
+                updatedUser?.passwordResetObj?.resetTokenExpiration
+            ).toBeDefined();
+            expect(
+                updatedUser!.passwordResetObj!.resetTokenExpiration > new Date()
+            ).toBe(true);
+        });
+
+        test('Should throw error if email does not match valid email format', async () => {
+            await expect(
+                UserModel.generatePasswordResetToken('not-an-email')
+            ).rejects.toThrow();
+        });
+
+        test('Should throw error if no user found with given email', async () => {
+            await expect(
+                UserModel.generatePasswordResetToken('nobody@example.com')
+            ).rejects.toThrow('User not found: nobody@example.com');
+        });
+    });
+
+    describe('getUserByResetPasswordToken', () => {
+        test('Should hash raw token and return matching user document', async () => {
+            const user = await new UserModel(createUserData()).save();
+            const { rawToken } = await UserModel.generatePasswordResetToken(
+                user.email
+            );
+
+            const foundUser =
+                await UserModel.getUserByResetPasswordToken(rawToken);
+
+            expect(foundUser).not.toBeNull();
+            expect(foundUser!._id.toString()).toBe(user._id.toString());
+        });
+
+        test('Should throw error if hashed token does not match any user', async () => {
+            await expect(
+                UserModel.getUserByResetPasswordToken('invalid-token-value')
+            ).rejects.toThrow('Invalid or expired reset token');
+        });
+
+        test('Should throw error if token is expired', async () => {
+            const user = await new UserModel(createUserData()).save();
+            const crypto = await import('crypto');
+            const rawToken = crypto.randomBytes(32).toString('hex');
+            const hashedToken = crypto
+                .createHash('sha256')
+                .update(rawToken)
+                .digest('hex');
+
+            // store already-expired token
+            await UserModel.findByIdAndUpdate(user._id, {
+                passwordResetObj: {
+                    resetToken: hashedToken,
+                    resetTokenExpiration: new Date(Date.now() - 1000)
+                }
+            });
+
+            await expect(
+                UserModel.getUserByResetPasswordToken(rawToken)
+            ).rejects.toThrow('Invalid or expired reset token');
+        });
+    });
+
+    describe('resetPassword', () => {
+        test('Should hash and update password if new password meets requirements', async () => {
+            const user = await new UserModel(createUserData()).save();
+            const { rawToken } = await UserModel.generatePasswordResetToken(
+                user.email
+            );
+            const foundUser =
+                await UserModel.getUserByResetPasswordToken(rawToken);
+
+            await foundUser!.resetPassword('NewPassword2@');
+
+            const updatedUser = await UserModel.findById(user._id).exec();
+
+            expect(updatedUser?.password).not.toBe('NewPassword2@');
+            expect(updatedUser?.password).not.toBe('Password1!');
+            // Mongoose leaves an empty subdocument wrapper — assert token fields are cleared
+            expect(updatedUser?.passwordResetObj?.resetToken).toBeUndefined();
+            expect(
+                updatedUser?.passwordResetObj?.resetTokenExpiration
+            ).toBeUndefined();
+        });
+
+        test('Should throw error if new password does not meet schema requirements', async () => {
+            const user = await new UserModel(createUserData()).save();
+
+            await expect(user.resetPassword('weak')).rejects.toThrow();
+        });
+    });
+});

@@ -1,3 +1,6 @@
+import crypto from 'crypto';
+
+import { hash } from 'bcrypt-ts';
 import { HydratedDocument, model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
@@ -38,7 +41,13 @@ export const userZodSchema = z.object({
             type: thropyTypeSchema //for what turnament this trophy was won, megaliga or grandprix
         })
     ),
-    isAdmin: z.boolean().default(false) //field added for admin panel, to distinguish between regular users and admins
+    isAdmin: z.boolean().default(false), //field added for admin panel, to distinguish between regular users and admins
+    passwordResetObj: z
+        .object({
+            resetToken: z.string(),
+            resetTokenExpiration: z.date()
+        })
+        .optional()
 });
 
 export type UserType = z.infer<typeof userZodSchema>;
@@ -48,12 +57,22 @@ type UserUpdatableKey = keyof Omit<UserType, 'email' | 'password'>;
 
 interface UserMethodsType {
     updateUser: (updateData: UserUpdateDataType) => Promise<void>;
+    resetPassword: (newPassword: string) => Promise<void>;
 }
+
+export type GeneratePasswordResetTokenReturnType = {
+    rawToken: string;
+    username: string;
+};
 
 interface UserModelType extends Model<UserType, '', UserMethodsType> {
     getNumberOfUsersAssignedToGroup: (ligueGroupId: string) => Promise<number>;
     getUserById: (userId: string) => Promise<UserByIdDtoType>;
     isAdmin: (username: string) => Promise<boolean>;
+    generatePasswordResetToken: (
+        email: string
+    ) => Promise<GeneratePasswordResetTokenReturnType>;
+    getUserByResetPasswordToken: (token: string) => Promise<FindByIdType>;
 }
 
 export type FindByIdType = HydratedDocument<UserType, UserMethodsType> | null;
@@ -93,7 +112,11 @@ const userSchema = new Schema<UserType, UserModelType, UserMethodsType>({
             type: { type: String, enum: ['megaliga', 'grandprix'] }
         }
     ],
-    isAdmin: { type: Boolean, default: false }
+    isAdmin: { type: Boolean, default: false },
+    passwordResetObj: {
+        resetToken: { type: String },
+        resetTokenExpiration: { type: Date }
+    }
 });
 
 const NON_UPDATABLE_FIELDS = new Set(['email', 'password']);
@@ -170,6 +193,69 @@ userSchema.static('isAdmin', async function isAdmin(username: string) {
     }
 });
 
+userSchema.static(
+    'generatePasswordResetToken',
+    async function generatePasswordResetToken(email: string) {
+        try {
+            userZodSchema.shape.email.parse(email);
+
+            const userDocument = await this.findOne({ email })
+                .select('username passwordResetObj')
+                .exec();
+
+            if (!userDocument) {
+                throw new Error(`User not found: ${email}`);
+            }
+
+            const rawToken = crypto.randomBytes(32).toString('hex');
+            // store hash only — raw token travels in the URL, never persisted
+            const hashedToken = crypto
+                .createHash('sha256')
+                .update(rawToken)
+                .digest('hex');
+
+            userDocument.set({
+                passwordResetObj: {
+                    resetToken: hashedToken,
+                    resetTokenExpiration: new Date(Date.now() + 60 * 60 * 1000)
+                }
+            });
+            await userDocument.save();
+
+            return { rawToken, username: userDocument.username };
+        } catch (error) {
+            console.error('Error generating password reset token:', error);
+            throw error;
+        }
+    }
+);
+
+userSchema.static(
+    'getUserByResetPasswordToken',
+    async function getUserByResetPasswordToken(token: string) {
+        try {
+            const hashedToken = crypto
+                .createHash('sha256')
+                .update(token)
+                .digest('hex');
+
+            const userDocument = await this.findOne({
+                'passwordResetObj.resetToken': hashedToken,
+                'passwordResetObj.resetTokenExpiration': { $gt: new Date() }
+            }).exec();
+
+            if (!userDocument) {
+                throw new Error('Invalid or expired reset token');
+            }
+
+            return userDocument;
+        } catch (error) {
+            console.error('Error finding user by reset password token:', error);
+            throw error;
+        }
+    }
+);
+
 userSchema.method(
     'updateUser',
     async function updateUser(updateData: UserUpdateDataType) {
@@ -187,6 +273,26 @@ userSchema.method(
             await this.save();
         } catch (error) {
             console.error('Error updating user:', error);
+            throw error;
+        }
+    }
+);
+
+userSchema.method(
+    'resetPassword',
+    async function resetPassword(newPassword: string) {
+        try {
+            userZodSchema.shape.password.parse(newPassword);
+
+            const hashedPassword = await hash(newPassword, 12);
+
+            this.set({
+                password: hashedPassword,
+                passwordResetObj: undefined // Clear the reset token and expiration
+            });
+            await this.save();
+        } catch (error) {
+            console.error('Error resetting password:', error);
             throw error;
         }
     }
