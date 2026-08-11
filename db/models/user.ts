@@ -52,12 +52,13 @@ export const userZodSchema = z.object({
 
 export type UserType = z.infer<typeof userZodSchema>;
 
-type UserUpdateDataType = Partial<Omit<UserType, 'email' | 'password'>>;
-type UserUpdatableKey = keyof Omit<UserType, 'email' | 'password'>;
+type UserUpdateDataType = Partial<Omit<UserType, 'password'>>;
+type UserUpdatableKey = keyof Omit<UserType, 'password'>;
 
 interface UserMethodsType {
     updateUser: (updateData: UserUpdateDataType) => Promise<void>;
     resetPassword: (newPassword: string) => Promise<void>;
+    changePassword: (newPassword: string) => Promise<void>;
 }
 
 export type GeneratePasswordResetTokenReturnType = {
@@ -119,7 +120,7 @@ const userSchema = new Schema<UserType, UserModelType, UserMethodsType>({
     }
 });
 
-const NON_UPDATABLE_FIELDS = new Set(['email', 'password']);
+const NON_UPDATABLE_FIELDS = new Set(['password']);
 const USER_UPDATABLE_FIELDS = Object.keys(userSchema.paths).filter(
     field => !NON_UPDATABLE_FIELDS.has(field)
 ) as UserUpdatableKey[];
@@ -256,6 +257,7 @@ userSchema.static(
     }
 );
 
+// this method is used to update user fields (Edit profile) except for password.
 userSchema.method(
     'updateUser',
     async function updateUser(updateData: UserUpdateDataType) {
@@ -278,12 +280,31 @@ userSchema.method(
     }
 );
 
+// method used to change password from user profile view
+userSchema.method(
+    'changePassword',
+    async function changePassword(newPassword: string) {
+        try {
+            userZodSchema.shape.password.parse(newPassword);
+            const hashedPassword = await hash(newPassword, 12);
+
+            this.set({
+                password: hashedPassword
+            });
+            await this.save();
+        } catch (error) {
+            console.error('Error changing password:', error);
+            throw error;
+        }
+    }
+);
+
+// method used to change password from reset password view
 userSchema.method(
     'resetPassword',
     async function resetPassword(newPassword: string) {
         try {
             userZodSchema.shape.password.parse(newPassword);
-
             const hashedPassword = await hash(newPassword, 12);
 
             this.set({
