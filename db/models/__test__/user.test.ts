@@ -307,6 +307,41 @@ describe('Test UserModel methods and static functions', () => {
             expect(updatedUser?.email).toBe('update-allowed-2@example.com');
         });
 
+        test('Should correctly update data if user is not admin', async () => {
+            const user = await new UserModel(
+                createUserData({
+                    username: 'non-admin-update-user',
+                    email: 'non-admin-update@example.com',
+                    teamName: 'Initial Team',
+                    logoUrl: 'https://example.com/initial-team.png',
+                    bio: 'Initial bio',
+                    isAdmin: false
+                })
+            ).save();
+
+            await user.updateUser({
+                coachName: 'Updated Coach Name',
+                email: 'non-admin-updated@example.com',
+                teamName: 'Updated Team Name',
+                logoUrl: 'https://example.com/updated-team.png',
+                bio: 'Updated bio'
+            });
+
+            const updatedUser: FindByIdType = await UserModel.findById(
+                user._id
+            ).exec();
+
+            expect(updatedUser).not.toBeNull();
+            expect(updatedUser?.isAdmin).toBe(false);
+            expect(updatedUser?.coachName).toBe('Updated Coach Name');
+            expect(updatedUser?.email).toBe('non-admin-updated@example.com');
+            expect(updatedUser?.teamName).toBe('Updated Team Name');
+            expect(updatedUser?.logoUrl).toBe(
+                'https://example.com/updated-team.png'
+            );
+            expect(updatedUser?.bio).toBe('Updated bio');
+        });
+
         test('Should not update non-editable fields in updateUser method', async () => {
             const user = await new UserModel(
                 createUserData({
