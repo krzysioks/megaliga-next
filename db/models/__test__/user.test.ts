@@ -5,7 +5,8 @@ import LigueGroupsModel from '@/db/models/ligue-groups';
 import UserModel, {
     FindByIdType,
     UserByIdDtoType,
-    UserType
+    UserType,
+    AddUserDataType
 } from '@/db/models/user';
 
 // connect to test db before running tests
@@ -414,6 +415,156 @@ describe('Test UserModel methods and static functions', () => {
             await expect(user.changePassword('weak')).rejects.toThrow();
         });
     });
+
+    describe('getNonAdminUsers', () => {
+        test('Should return array of objects representing user by userId and username if users exist in db', async () => {
+            const userOne = await new UserModel(
+                createUserData({
+                    username: 'non-admin-one',
+                    email: 'non-admin-one@example.com',
+                    isAdmin: false
+                })
+            ).save();
+            const userTwo = await new UserModel(
+                createUserData({
+                    username: 'non-admin-two',
+                    email: 'non-admin-two@example.com',
+                    isAdmin: false
+                })
+            ).save();
+
+            const nonAdminUsers = await UserModel.getNonAdminUsers();
+
+            expect(nonAdminUsers).toEqual(
+                expect.arrayContaining([
+                    {
+                        userId: userOne._id.toString(),
+                        username: userOne.username
+                    },
+                    {
+                        userId: userTwo._id.toString(),
+                        username: userTwo.username
+                    }
+                ])
+            );
+        });
+
+        test('Should throw error if no non admin users exist', async () => {
+            await new UserModel(
+                createUserData({
+                    username: 'admin-only-user',
+                    email: 'admin-only-user@example.com',
+                    isAdmin: true
+                })
+            ).save();
+
+            await expect(UserModel.getNonAdminUsers()).rejects.toThrow(
+                'Users not found'
+            );
+        });
+
+        test('Should not return admin users', async () => {
+            const nonAdminUser = await new UserModel(
+                createUserData({
+                    username: 'non-admin-user',
+                    email: 'non-admin-user@example.com',
+                    isAdmin: false
+                })
+            ).save();
+            await new UserModel(
+                createUserData({
+                    username: 'admin-user',
+                    email: 'admin-user@example.com',
+                    isAdmin: true
+                })
+            ).save();
+
+            const nonAdminUsers = await UserModel.getNonAdminUsers();
+
+            expect(nonAdminUsers).toHaveLength(1);
+            expect(nonAdminUsers[0]?.userId).toBe(nonAdminUser._id.toString());
+            expect(nonAdminUsers[0]?.username).toBe(nonAdminUser.username);
+        });
+    }); // getNonAdminUsers
+
+    describe('deleteUserById', () => {
+        test('Should throw error if provided userId is not valid', async () => {
+            const invalidUserId = new mongoose.Types.ObjectId().toString();
+
+            await expect(
+                UserModel.deleteUserById(invalidUserId)
+            ).rejects.toThrow(`Invalid userId: ${invalidUserId}`);
+        });
+
+        test('Should delete user for valid userId', async () => {
+            const user = await new UserModel(createUserData()).save();
+
+            await UserModel.deleteUserById(user._id.toString());
+
+            const deletedUser = await UserModel.findById(user._id).exec();
+
+            expect(deletedUser).toBeNull();
+        });
+    }); // deleteUserById
+
+    describe('addUser', () => {
+        const createAddUserData = (
+            overrides: Partial<AddUserDataType> = {}
+        ): AddUserDataType => ({
+            username: 'added-user',
+            coachName: 'Added Coach',
+            email: 'added-user@example.com',
+            password: 'Password1!',
+            teamName: 'Added Team',
+            logoUrl: 'https://example.com/added-team.png',
+            bio: 'Added user bio',
+            isAdmin: false,
+            ...overrides
+        });
+
+        test('Should add user with valid userData', async () => {
+            const userData = createAddUserData();
+
+            await UserModel.addUser(userData);
+
+            const createdUser = await UserModel.findOne({
+                username: 'added-user'
+            }).exec();
+
+            expect(createdUser).not.toBeNull();
+            expect(createdUser?.email).toBe('added-user@example.com');
+        });
+
+        test('Should not pass validation schema if user data provided for user creation is not valid', async () => {
+            const invalidUserData = createAddUserData({
+                email: 'not-an-email'
+            });
+
+            await expect(UserModel.addUser(invalidUserData)).rejects.toThrow();
+        });
+
+        test('Should return newly created user as object of type UserByIdDtoType', async () => {
+            const userData = createAddUserData({
+                username: 'dto-user',
+                email: 'dto-user@example.com'
+            });
+
+            const result: UserByIdDtoType = await UserModel.addUser(userData);
+
+            expect(result).toEqual({
+                userId: expect.any(String),
+                username: 'dto-user',
+                coachName: userData.coachName,
+                teamName: userData.teamName,
+                logoUrl: userData.logoUrl,
+                reachedPlayoff: false,
+                isFirstRoundDraftOrderDraw: false,
+                groupName: '',
+                bio: userData.bio,
+                cabinetTrophy: []
+            });
+        });
+    }); // addUser
 });
 
 describe('Test password reset flow', () => {

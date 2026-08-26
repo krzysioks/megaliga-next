@@ -52,6 +52,17 @@ export const userZodSchema = z.object({
 
 export type UserType = z.infer<typeof userZodSchema>;
 
+// fields excluded here are either system-managed or have server-side defaults, not provided when adding a new user
+export const addUserZodSchema = userZodSchema.omit({
+    reachedPlayoff: true,
+    isFirstRoundDraftOrderDraw: true,
+    groupName: true,
+    cabinetTrophy: true,
+    passwordResetObj: true
+});
+
+export type AddUserDataType = z.infer<typeof addUserZodSchema>;
+
 type UserUpdateDataType = Partial<Omit<UserType, 'password'>>;
 type UserUpdatableKey = keyof Omit<UserType, 'password'>;
 
@@ -66,6 +77,11 @@ export type GeneratePasswordResetTokenReturnType = {
     username: string;
 };
 
+export interface NonAdminUserReturnType {
+    userId: string;
+    username: UserType['username'];
+}
+
 interface UserModelType extends Model<UserType, '', UserMethodsType> {
     getNumberOfUsersAssignedToGroup: (ligueGroupId: string) => Promise<number>;
     getUserById: (userId: string) => Promise<UserByIdDtoType>;
@@ -74,6 +90,9 @@ interface UserModelType extends Model<UserType, '', UserMethodsType> {
         email: string
     ) => Promise<GeneratePasswordResetTokenReturnType>;
     getUserByResetPasswordToken: (token: string) => Promise<FindByIdType>;
+    getNonAdminUsers: () => Promise<NonAdminUserReturnType[]>;
+    deleteUserById: (userId: string) => Promise<void>;
+    addUser: (userData: AddUserDataType) => Promise<UserByIdDtoType>;
 }
 
 export type FindByIdType = HydratedDocument<UserType, UserMethodsType> | null;
@@ -256,6 +275,57 @@ userSchema.static(
         }
     }
 );
+
+// used to fetch all non admin users to populate dropdown in admin panel for selecting user to edit by admin
+userSchema.static('getNonAdminUsers', async function getNonAdminUsers() {
+    try {
+        const userDocuments = await this.find({ isAdmin: false })
+            .select('username _id')
+            .exec();
+
+        if (!userDocuments || !userDocuments.length) {
+            throw new Error(`Users not found`);
+        }
+
+        return userDocuments.map(user => ({
+            userId: user._id.toString(),
+            username: user.username
+        }));
+    } catch (error) {
+        console.error('Error fetching non-admin users:', error);
+        throw error;
+    }
+});
+
+userSchema.static(
+    'deleteUserById',
+    async function deleteUserById(userId: string) {
+        try {
+            const isValidUserId = await this.exists({ _id: userId });
+            if (!isValidUserId) {
+                throw new Error(`Invalid userId: ${userId}`);
+            }
+
+            await this.findByIdAndDelete(userId);
+        } catch (error) {
+            console.error('Error deleting user by id:', error);
+            throw error;
+        }
+    }
+);
+
+userSchema.static('addUser', async function addUser(userData: AddUserDataType) {
+    try {
+        addUserZodSchema.parse(userData);
+
+        const newUser = await this.create(userData);
+
+        return await this.getUserById(newUser._id.toString());
+    } catch (error) {
+        console.error('Error adding new user:', error);
+        throw error;
+    }
+});
 
 // this method is used to update user fields (Edit profile) except for password.
 userSchema.method(
