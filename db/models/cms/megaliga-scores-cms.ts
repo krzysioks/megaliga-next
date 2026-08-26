@@ -24,6 +24,11 @@ interface MegaligaScoresCmsModelType extends Model<MegaligaScoresCmsType> {
         roundNumber: number,
         seasonStage: z.infer<typeof stageEnumSchema>
     ) => Promise<z.infer<typeof editorJsContentSchema>>;
+    setScoresCmsBlock: (
+        roundNumber: number,
+        seasonStage: (typeof STAGE_ENUM)[number],
+        content: z.infer<typeof editorJsContentSchema>
+    ) => Promise<void>;
 }
 
 const megaligaScoresCmsSchema = new Schema<
@@ -69,6 +74,26 @@ megaligaScoresCmsSchema.static(
         } catch (error) {
             console.error('Error:', error);
             // TODOKP: this error is thrown to be catched in higher level so that, front end can render error message to user.
+            throw error;
+        }
+    }
+);
+
+megaligaScoresCmsSchema.static(
+    'setScoresCmsBlock',
+    async function setScoresCmsBlock(
+        roundNumber: number,
+        seasonStage: (typeof STAGE_ENUM)[number],
+        content: z.infer<typeof editorJsContentSchema>
+    ) {
+        try {
+            await this.findOneAndUpdate(
+                { roundNumber, seasonStage },
+                { $set: { content } },
+                { upsert: true, runValidators: true }
+            );
+        } catch (error) {
+            console.error('Error setting scores CMS block:', error);
             throw error;
         }
     }
