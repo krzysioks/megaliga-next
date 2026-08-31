@@ -565,6 +565,45 @@ describe('Test UserModel methods and static functions', () => {
             });
         });
     }); // addUser
+
+    describe('getAllUsers', () => {
+        test('Should return all saved users, played in current season', async () => {
+            const userOne = await new UserModel(
+                createUserData({
+                    username: 'all-users-one',
+                    email: 'all-users-one@example.com'
+                })
+            ).save();
+            const userTwo = await new UserModel(
+                createUserData({
+                    username: 'all-users-two',
+                    email: 'all-users-two@example.com'
+                })
+            ).save();
+
+            const result = await UserModel.getAllUsers();
+
+            expect(result).toHaveLength(2);
+            expect(result).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({
+                        userId: userOne._id.toString(),
+                        username: userOne.username
+                    }),
+                    expect.objectContaining({
+                        userId: userTwo._id.toString(),
+                        username: userTwo.username
+                    })
+                ])
+            );
+        });
+
+        test('Should throw error if no users found', async () => {
+            await expect(UserModel.getAllUsers()).rejects.toThrow(
+                'Users not found'
+            );
+        });
+    }); // getAllUsers
 });
 
 describe('Test password reset flow', () => {

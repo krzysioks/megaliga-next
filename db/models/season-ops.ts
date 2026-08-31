@@ -43,6 +43,7 @@ export type SeasonOpsReturnType = Pick<SeasonOpsType, 'name'> & {
 };
 interface SeasonOpsModelType extends Model<SeasonOpsType> {
     getHistorySeasons: () => Promise<SeasonOpsReturnType[] | []>;
+    getCurrentSeason: () => Promise<SeasonOpsReturnType>;
 }
 
 const seasonOpsSchema = new Schema<SeasonOpsType, SeasonOpsModelType>({
@@ -95,6 +96,24 @@ seasonOpsSchema.static('getHistorySeasons', async function getHistorySeasons() {
         });
     } catch (error) {
         console.error('Error fetching history seasons:', error);
+        throw error;
+    }
+});
+
+seasonOpsSchema.static('getCurrentSeason', async function getCurrentSeason() {
+    try {
+        const document = await this.findOne({ isCurrentSeason: true }).exec();
+
+        if (!document) {
+            throw new Error(`Current season not found`);
+        }
+
+        return {
+            id: document._id,
+            name: document.name
+        };
+    } catch (error) {
+        console.error('Error fetching current season:', error);
         throw error;
     }
 });

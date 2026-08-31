@@ -52,33 +52,53 @@ describe('Test SeasonOpsModel methods and static functions', () => {
         ...overrides
     });
 
-    test('should fetch season name and id for history seasons only in descending order', async () => {
-        const olderHistorySeason = await SeasonOpsModel.create(
-            createSeasonData('2023')
-        );
-        const newerHistorySeason = await SeasonOpsModel.create(
-            createSeasonData('2024')
-        );
-        await SeasonOpsModel.create(
-            createSeasonData('2025', { isCurrentSeason: true })
-        );
+    describe('getHistorySeasons', () => {
+        test('should fetch season name and id for history seasons only in descending order', async () => {
+            const olderHistorySeason = await SeasonOpsModel.create(
+                createSeasonData('2023')
+            );
+            const newerHistorySeason = await SeasonOpsModel.create(
+                createSeasonData('2024')
+            );
+            await SeasonOpsModel.create(
+                createSeasonData('2025', { isCurrentSeason: true })
+            );
 
-        const result = await SeasonOpsModel.getHistorySeasons();
+            const result = await SeasonOpsModel.getHistorySeasons();
 
-        expect(result).toHaveLength(2);
-        expect(result[0].name).toBe('2024');
-        expect(result[0].id.toString()).toBe(newerHistorySeason._id.toString());
-        expect(result[1].name).toBe('2023');
-        expect(result[1].id.toString()).toBe(olderHistorySeason._id.toString());
+            expect(result).toHaveLength(2);
+            expect(result[0].name).toBe('2024');
+            expect(result[0].id.toString()).toBe(
+                newerHistorySeason._id.toString()
+            );
+            expect(result[1].name).toBe('2023');
+            expect(result[1].id.toString()).toBe(
+                olderHistorySeason._id.toString()
+            );
+        });
+
+        test('should return empty array if no documents with isCurrentSeason = false are returned', async () => {
+            await SeasonOpsModel.create(
+                createSeasonData('2025', { isCurrentSeason: true })
+            );
+
+            const result = await SeasonOpsModel.getHistorySeasons();
+
+            expect(result).toEqual([]);
+        });
     });
 
-    test('should return empty array if no documents with isCurrentSeason = false are returned', async () => {
-        await SeasonOpsModel.create(
-            createSeasonData('2025', { isCurrentSeason: true })
-        );
+    describe('getCurrentSeason', () => {
+        test('should return current season (id and name)', async () => {
+            await SeasonOpsModel.create(createSeasonData('2024'));
+            const currentSeason = await SeasonOpsModel.create(
+                createSeasonData('2025', { isCurrentSeason: true })
+            );
 
-        const result = await SeasonOpsModel.getHistorySeasons();
+            const result = await SeasonOpsModel.getCurrentSeason();
 
-        expect(result).toEqual([]);
+            expect(result.id.toString()).toBe(currentSeason._id.toString());
+            expect(result.name).toBe('2025');
+        });
     });
 });

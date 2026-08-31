@@ -1,4 +1,4 @@
-import { model, Schema } from 'mongoose';
+import { model, Model, Schema } from 'mongoose';
 import { z } from 'zod';
 
 import {
@@ -12,23 +12,50 @@ import {
 export const historyTeamZodSchema = z.object({
     historyId: objectIdSchema,
     name: teamNameSchema,
-    coachName: nameSchema.optional(),
+    coachName: nameSchema,
     logoUrl: logoUrlSchema
 });
 
 export type HistoryTeamType = z.infer<typeof historyTeamZodSchema>;
 
-const historyTeamSchema = new Schema<HistoryTeamType>({
+interface HistoryTeamModelType extends Model<HistoryTeamType> {
+    saveSeasonTeams: (teams: HistoryTeamType[]) => Promise<void>;
+}
+
+const historyTeamSchema = new Schema<HistoryTeamType, HistoryTeamModelType>({
     historyId: {
         type: Schema.Types.ObjectId,
         required: true
     },
     name: { type: String, required: true },
-    coachName: { type: String },
+    coachName: { type: String, required: true },
     logoUrl: { type: String, required: true }
 });
 
-const HistoryTeamModel = model<HistoryTeamType>(
+historyTeamSchema.static(
+    'saveSeasonTeams',
+    async function saveSeasonTeams(teams: HistoryTeamType[]) {
+        try {
+            for (const team of teams) {
+                const existingTeam = await this.exists({
+                    name: team.name,
+                    coachName: team.coachName
+                });
+
+                if (existingTeam) {
+                    continue;
+                }
+
+                await this.create(team);
+            }
+        } catch (error) {
+            console.error('Error saving season teams:', error);
+            throw error;
+        }
+    }
+);
+
+const HistoryTeamModel = model<HistoryTeamType, HistoryTeamModelType>(
     'HistoryTeam',
     historyTeamSchema
 );

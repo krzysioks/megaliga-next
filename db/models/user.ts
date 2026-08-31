@@ -85,6 +85,7 @@ export interface NonAdminUserReturnType {
 interface UserModelType extends Model<UserType, '', UserMethodsType> {
     getNumberOfUsersAssignedToGroup: (ligueGroupId: string) => Promise<number>;
     getUserById: (userId: string) => Promise<UserByIdDtoType>;
+    getAllUsers: () => Promise<UserByIdDtoType[]>;
     isAdmin: (username: string) => Promise<boolean>;
     generatePasswordResetToken: (
         email: string
@@ -323,6 +324,43 @@ userSchema.static('addUser', async function addUser(userData: AddUserDataType) {
         return await this.getUserById(newUser._id.toString());
     } catch (error) {
         console.error('Error adding new user:', error);
+        throw error;
+    }
+});
+
+userSchema.static('getAllUsers', async function getAllUsers() {
+    try {
+        const userDocuments: PopulatedFindByIdType[] = await this.find({})
+            .select(
+                'username coachName teamName logoUrl reachedPlayoff isFirstRoundDraftOrderDraw groupName bio cabinetTrophy'
+            )
+            .populate<{ groupName: PopulatedGroupNameType }>({
+                path: 'groupName',
+                select: 'groupName'
+            })
+            .exec();
+
+        if (!userDocuments.length) {
+            throw new Error(`Users not found`);
+        }
+
+        return userDocuments.map(userDocument => {
+            return {
+                userId: userDocument?._id.toString(),
+                username: userDocument?.username,
+                coachName: userDocument?.coachName,
+                teamName: userDocument?.teamName,
+                logoUrl: userDocument?.logoUrl,
+                reachedPlayoff: userDocument?.reachedPlayoff,
+                isFirstRoundDraftOrderDraw:
+                    userDocument?.isFirstRoundDraftOrderDraw,
+                groupName: userDocument?.groupName?.groupName ?? '',
+                bio: userDocument?.bio ?? '',
+                cabinetTrophy: userDocument?.cabinetTrophy ?? []
+            };
+        });
+    } catch (error) {
+        console.error('Error fetching users:', error);
         throw error;
     }
 });

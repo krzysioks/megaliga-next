@@ -33,8 +33,8 @@ export const historyZodSchema = z.object({
 export type HistoryType = z.infer<typeof historyZodSchema>;
 
 // Team Return types derived from HistoryTeamType
-export type HistoryTeamNameReturnType = HistoryTeamType['name']; //Pick<HistoryTeamType, 'name'>;
-export type HistoryTeamCoachReturnType = HistoryTeamType['coachName']; //Pick<HistoryTeamType, 'coachName'>;
+export type HistoryTeamNameReturnType = HistoryTeamType['name'];
+export type HistoryTeamCoachReturnType = HistoryTeamType['coachName'];
 
 // Regular Season standing entry Return type derived from HistoryRegularSeasonStandingsType
 export type RegularSeasonStandingReturnType = Omit<
@@ -131,6 +131,7 @@ interface HistoryModelType extends Model<HistoryType> {
     getHistoryBySeasonId: (
         seasonId: string
     ) => Promise<HistoryBySeasonReturnType>;
+    saveSeasonToHistory: (seasonId: string) => Promise<string>;
 }
 
 const historySchema = new Schema<HistoryType, HistoryModelType>({
@@ -256,6 +257,29 @@ historySchema.static(
             };
         } catch (error) {
             console.error('Error fetching history by seasonId:', error);
+            throw error;
+        }
+    }
+);
+
+historySchema.static(
+    'saveSeasonToHistory',
+    async function saveSeasonToHistory(seasonId: string) {
+        try {
+            const existingSeasonHistory = await this.findOne({
+                season: seasonId
+            }).exec();
+
+            if (existingSeasonHistory) {
+                throw new Error(
+                    `Season history for seasonId: ${seasonId} already exists`
+                );
+            }
+
+            const newSeasonHistory = await this.create({ season: seasonId });
+            return newSeasonHistory._id.toString();
+        } catch (error) {
+            console.error('Error saving season to history:', error);
             throw error;
         }
     }

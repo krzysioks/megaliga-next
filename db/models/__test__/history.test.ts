@@ -92,231 +92,277 @@ describe('Test HistoryModel methods and static functions', () => {
         logoUrl: 'https://example.com/default-team.png',
         ...overrides
     });
+    describe('getHistoryBySeasonId', () => {
+        test('should fetch history by season id with all segments populated and mapped to DTO', async () => {
+            const season = await SeasonOpsModel.create(
+                createSeasonData('2024')
+            );
 
-    test('should fetch history by season id with all segments populated and mapped to DTO', async () => {
-        const season = await SeasonOpsModel.create(createSeasonData('2024'));
+            const historyDoc = await HistoryModel.create({
+                season: season._id.toString()
+            });
 
-        const historyDoc = await HistoryModel.create({
-            season: season._id.toString()
-        });
+            const teams = await HistoryTeamModel.create([
+                createHistoryTeamData(historyDoc._id.toString(), {
+                    name: 'Team A',
+                    coachName: 'Coach A',
+                    logoUrl: 'https://example.com/team-a.png'
+                }),
+                createHistoryTeamData(historyDoc._id.toString(), {
+                    name: 'Team B',
+                    coachName: 'Coach B',
+                    logoUrl: 'https://example.com/team-b.png'
+                }),
+                createHistoryTeamData(historyDoc._id.toString(), {
+                    name: 'Team C',
+                    coachName: 'Coach C',
+                    logoUrl: 'https://example.com/team-c.png'
+                })
+            ]);
 
-        const teams = await HistoryTeamModel.create([
-            createHistoryTeamData(historyDoc._id.toString(), {
-                name: 'Team A',
-                coachName: 'Coach A',
-                logoUrl: 'https://example.com/team-a.png'
-            }),
-            createHistoryTeamData(historyDoc._id.toString(), {
-                name: 'Team B',
-                coachName: 'Coach B',
-                logoUrl: 'https://example.com/team-b.png'
-            }),
-            createHistoryTeamData(historyDoc._id.toString(), {
-                name: 'Team C',
-                coachName: 'Coach C',
-                logoUrl: 'https://example.com/team-c.png'
-            })
-        ]);
+            const regularSeasonStandings =
+                await HistoryRegularSeasonStandingsModel.create({
+                    season: season._id.toString(),
+                    standings: [
+                        {
+                            place: 1,
+                            teamId: teams[0]._id.toString(),
+                            played: 14,
+                            wins: 10,
+                            draw: 2,
+                            defeat: 2,
+                            balance: 15,
+                            points: 70,
+                            ligueGroup: 'Group A'
+                        },
+                        {
+                            place: 2,
+                            teamId: teams[1]._id.toString(),
+                            played: 14,
+                            wins: 8,
+                            draw: 3,
+                            defeat: 3,
+                            balance: 12,
+                            points: 60,
+                            ligueGroup: 'Group A'
+                        }
+                    ]
+                } as HistoryRegularSeasonStandingsType);
 
-        const regularSeasonStandings =
-            await HistoryRegularSeasonStandingsModel.create({
+            const playoffStandings = await HistoryPlayoffStandingsModel.create({
                 season: season._id.toString(),
                 standings: [
                     {
                         place: 1,
-                        teamId: teams[0]._id.toString(),
-                        played: 14,
-                        wins: 10,
-                        draw: 2,
-                        defeat: 2,
-                        balance: 15,
-                        points: 70,
-                        ligueGroup: 'Group A'
+                        teamId: teams[0]._id.toString()
                     },
                     {
                         place: 2,
-                        teamId: teams[1]._id.toString(),
-                        played: 14,
-                        wins: 8,
-                        draw: 3,
-                        defeat: 3,
-                        balance: 12,
-                        points: 60,
-                        ligueGroup: 'Group A'
+                        teamId: teams[1]._id.toString()
                     }
                 ]
-            } as HistoryRegularSeasonStandingsType);
+            } as HistoryPlayoffStandingsType);
 
-        const playoffStandings = await HistoryPlayoffStandingsModel.create({
-            season: season._id.toString(),
-            standings: [
-                {
-                    place: 1,
-                    teamId: teams[0]._id.toString()
-                },
-                {
-                    place: 2,
-                    teamId: teams[1]._id.toString()
-                }
-            ]
-        } as HistoryPlayoffStandingsType);
+            const playInStandings = await HistoryPlayInStandingsModel.create({
+                season: season._id.toString(),
+                standings: [
+                    {
+                        place: 1,
+                        teamId: teams[2]._id.toString(),
+                        played: 10,
+                        wins: 7,
+                        draw: 2,
+                        defeat: 1,
+                        balance: 10,
+                        points: 50
+                    }
+                ]
+            } as HistoryPlayinStandingsType);
 
-        const playInStandings = await HistoryPlayInStandingsModel.create({
-            season: season._id.toString(),
-            standings: [
-                {
+            const grandPrixStandings =
+                await HistoryGrandPrixStandingsModel.create({
+                    season: season._id.toString(),
+                    standings: [
+                        {
+                            place: 1,
+                            teamId: teams[0]._id.toString(),
+                            played: 10,
+                            points: 150
+                        },
+                        {
+                            place: 2,
+                            teamId: teams[1]._id.toString(),
+                            played: 10,
+                            points: 130
+                        }
+                    ]
+                } as HistoryGrandPrixStandingsType);
+
+            await HistoryModel.findByIdAndUpdate(historyDoc._id, {
+                regularSeason: regularSeasonStandings._id.toString(),
+                playoff: playoffStandings._id.toString(),
+                playIn: playInStandings._id.toString(),
+                grandPrix: grandPrixStandings._id.toString()
+            });
+
+            const result: HistoryBySeasonReturnType =
+                await HistoryModel.getHistoryBySeasonId(season._id.toString());
+
+            expect(result).toBeDefined();
+
+            // Test regular season
+            expect(result.regularSeason).toHaveLength(2);
+            expect(result.regularSeason?.[0]).toEqual(
+                expect.objectContaining({
                     place: 1,
-                    teamId: teams[2]._id.toString(),
+                    played: 14,
+                    wins: 10,
+                    draw: 2,
+                    defeat: 2,
+                    balance: 15,
+                    points: 70,
+                    ligueGroup: 'Group A',
+                    teamId: teams[0]._id.toString(),
+                    teamName: 'Team A'
+                })
+            );
+            expect(result.regularSeason?.[1].teamName).toBe('Team B');
+
+            // Test playoff
+            expect(result.playoff).toHaveLength(2);
+            expect(result.playoff?.[0]).toEqual(
+                expect.objectContaining({
+                    place: 1,
+                    teamId: teams[0]._id.toString(),
+                    teamName: 'Team A'
+                })
+            );
+
+            // Test play-in
+            expect(result.playIn).toHaveLength(1);
+            expect(result.playIn?.[0]).toEqual(
+                expect.objectContaining({
+                    place: 1,
                     played: 10,
                     wins: 7,
                     draw: 2,
                     defeat: 1,
                     balance: 10,
-                    points: 50
-                }
-            ]
-        } as HistoryPlayinStandingsType);
+                    points: 50,
+                    teamId: teams[2]._id.toString(),
+                    teamName: 'Team C'
+                })
+            );
 
-        const grandPrixStandings = await HistoryGrandPrixStandingsModel.create({
-            season: season._id.toString(),
-            standings: [
-                {
+            // Test grand prix
+            expect(result.grandPrix).toHaveLength(2);
+            expect(result.grandPrix?.[0]).toEqual(
+                expect.objectContaining({
                     place: 1,
-                    teamId: teams[0]._id.toString(),
                     played: 10,
-                    points: 150
-                },
-                {
-                    place: 2,
-                    teamId: teams[1]._id.toString(),
-                    played: 10,
-                    points: 130
-                }
-            ]
-        } as HistoryGrandPrixStandingsType);
-
-        await HistoryModel.findByIdAndUpdate(historyDoc._id, {
-            regularSeason: regularSeasonStandings._id.toString(),
-            playoff: playoffStandings._id.toString(),
-            playIn: playInStandings._id.toString(),
-            grandPrix: grandPrixStandings._id.toString()
+                    points: 150,
+                    coachName: 'Coach A'
+                })
+            );
         });
 
-        const result: HistoryBySeasonReturnType =
-            await HistoryModel.getHistoryBySeasonId(season._id.toString());
+        test('should throw error when history is not found for given seasonId', async () => {
+            const fakeSeasonId = new mongoose.Types.ObjectId().toString();
 
-        expect(result).toBeDefined();
+            await expect(
+                HistoryModel.getHistoryBySeasonId(fakeSeasonId)
+            ).rejects.toThrow(
+                `History not found for seasonId: ${fakeSeasonId}`
+            );
+        });
 
-        // Test regular season
-        expect(result.regularSeason).toHaveLength(2);
-        expect(result.regularSeason?.[0]).toEqual(
-            expect.objectContaining({
-                place: 1,
-                played: 14,
-                wins: 10,
-                draw: 2,
-                defeat: 2,
-                balance: 15,
-                points: 70,
-                ligueGroup: 'Group A',
-                teamId: teams[0]._id.toString(),
-                teamName: 'Team A'
-            })
-        );
-        expect(result.regularSeason?.[1].teamName).toBe('Team B');
+        test('should return null for missing segment references', async () => {
+            const season = await SeasonOpsModel.create(
+                createSeasonData('2024')
+            );
 
-        // Test playoff
-        expect(result.playoff).toHaveLength(2);
-        expect(result.playoff?.[0]).toEqual(
-            expect.objectContaining({
-                place: 1,
-                teamId: teams[0]._id.toString(),
-                teamName: 'Team A'
-            })
-        );
+            const historyDoc = await HistoryModel.create({
+                season: season._id.toString()
+                // regularSeason, playoff, playIn, grandPrix are all undefined
+            });
 
-        // Test play-in
-        expect(result.playIn).toHaveLength(1);
-        expect(result.playIn?.[0]).toEqual(
-            expect.objectContaining({
-                place: 1,
-                played: 10,
-                wins: 7,
-                draw: 2,
-                defeat: 1,
-                balance: 10,
-                points: 50,
-                teamId: teams[2]._id.toString(),
-                teamName: 'Team C'
-            })
-        );
+            const teams = await HistoryTeamModel.create([
+                createHistoryTeamData(historyDoc._id.toString(), {
+                    name: 'Team A',
+                    logoUrl: 'https://example.com/team-a.png'
+                })
+            ]);
 
-        // Test grand prix
-        expect(result.grandPrix).toHaveLength(2);
-        expect(result.grandPrix?.[0]).toEqual(
-            expect.objectContaining({
-                place: 1,
-                played: 10,
-                points: 150,
-                coachName: 'Coach A'
-            })
-        );
+            const regularSeasonStandings =
+                await HistoryRegularSeasonStandingsModel.create({
+                    season: season._id.toString(),
+                    standings: [
+                        {
+                            place: 1,
+                            teamId: teams[0]._id.toString(),
+                            played: 14,
+                            wins: 10,
+                            draw: 2,
+                            defeat: 2,
+                            balance: 15,
+                            points: 70,
+                            ligueGroup: 'Group A'
+                        }
+                    ]
+                } as HistoryRegularSeasonStandingsType);
+
+            // Only set regularSeason, leave others null
+            await HistoryModel.findByIdAndUpdate(historyDoc._id, {
+                regularSeason: regularSeasonStandings._id.toString()
+            });
+
+            const result: HistoryBySeasonReturnType =
+                await HistoryModel.getHistoryBySeasonId(season._id.toString());
+
+            expect(result.regularSeason).toHaveLength(1);
+            expect(result.regularSeason?.[0].teamName).toBe('Team A');
+
+            expect(result.playoff).toBeNull();
+            expect(result.playIn).toBeNull();
+            expect(result.grandPrix).toBeNull();
+        });
     });
 
-    test('should throw error when history is not found for given seasonId', async () => {
-        const fakeSeasonId = new mongoose.Types.ObjectId().toString();
+    describe('saveSeasonToHistory', () => {
+        test('should not save season in history if already exists', async () => {
+            const season = await SeasonOpsModel.create(
+                createSeasonData('2024')
+            );
 
-        await expect(
-            HistoryModel.getHistoryBySeasonId(fakeSeasonId)
-        ).rejects.toThrow(`History not found for seasonId: ${fakeSeasonId}`);
-    });
+            await HistoryModel.create({ season: season._id.toString() });
 
-    test('should return null for missing segment references', async () => {
-        const season = await SeasonOpsModel.create(createSeasonData('2024'));
+            await expect(
+                HistoryModel.saveSeasonToHistory(season._id.toString())
+            ).rejects.toThrow(
+                `Season history for seasonId: ${season._id.toString()} already exists`
+            );
 
-        const historyDoc = await HistoryModel.create({
-            season: season._id.toString()
-            // regularSeason, playoff, playIn, grandPrix are all undefined
+            const historyCount = await HistoryModel.countDocuments({
+                season: season._id.toString()
+            });
+            expect(historyCount).toBe(1);
         });
 
-        const teams = await HistoryTeamModel.create([
-            createHistoryTeamData(historyDoc._id.toString(), {
-                name: 'Team A',
-                logoUrl: 'https://example.com/team-a.png'
-            })
-        ]);
+        test('should save current season in history if not yet saved', async () => {
+            const season = await SeasonOpsModel.create(
+                createSeasonData('2025', { isCurrentSeason: true })
+            );
 
-        const regularSeasonStandings =
-            await HistoryRegularSeasonStandingsModel.create({
-                season: season._id.toString(),
-                standings: [
-                    {
-                        place: 1,
-                        teamId: teams[0]._id.toString(),
-                        played: 14,
-                        wins: 10,
-                        draw: 2,
-                        defeat: 2,
-                        balance: 15,
-                        points: 70,
-                        ligueGroup: 'Group A'
-                    }
-                ]
-            } as HistoryRegularSeasonStandingsType);
+            const historyId = await HistoryModel.saveSeasonToHistory(
+                season._id.toString()
+            );
 
-        // Only set regularSeason, leave others null
-        await HistoryModel.findByIdAndUpdate(historyDoc._id, {
-            regularSeason: regularSeasonStandings._id.toString()
+            const savedHistory = await HistoryModel.findById(historyId).exec();
+
+            expect(savedHistory).not.toBeNull();
+            expect(savedHistory?.season?.toString()).toBe(
+                season._id.toString()
+            );
         });
-
-        const result: HistoryBySeasonReturnType =
-            await HistoryModel.getHistoryBySeasonId(season._id.toString());
-
-        expect(result.regularSeason).toHaveLength(1);
-        expect(result.regularSeason?.[0].teamName).toBe('Team A');
-
-        expect(result.playoff).toBeNull();
-        expect(result.playIn).toBeNull();
-        expect(result.grandPrix).toBeNull();
     });
 });
