@@ -19,7 +19,10 @@ import HistoryRegularSeasonStandingsModel, {
 import HistoryTeamModel, {
     HistoryTeamType
 } from '@/db/models/history/history-team';
+import LigueGroupsModel from '@/db/models/ligue-groups';
 import SeasonOpsModel, { SeasonOpsType } from '@/db/models/season-ops';
+import StandingsModel from '@/db/models/standings';
+import UserModel, { UserType } from '@/db/models/user';
 
 beforeAll(async () => {
     jest.spyOn(console, 'error').mockImplementation(() => {});
@@ -35,6 +38,9 @@ beforeEach(async () => {
     await HistoryGrandPrixStandingsModel.deleteMany();
     await HistoryTeamModel.deleteMany();
     await SeasonOpsModel.deleteMany();
+    await StandingsModel.deleteMany();
+    await UserModel.deleteMany();
+    await LigueGroupsModel.deleteMany();
 });
 
 afterAll(async () => {
@@ -45,6 +51,9 @@ afterAll(async () => {
     await HistoryGrandPrixStandingsModel.deleteMany();
     await HistoryTeamModel.deleteMany();
     await SeasonOpsModel.deleteMany();
+    await StandingsModel.deleteMany();
+    await UserModel.deleteMany();
+    await LigueGroupsModel.deleteMany();
     await mongoose.disconnect();
 });
 
@@ -353,6 +362,47 @@ describe('Test HistoryModel methods and static functions', () => {
                 createSeasonData('2025', { isCurrentSeason: true })
             );
 
+            const ligueGroup = await new LigueGroupsModel({
+                groupName: 'dolce'
+            }).save();
+
+            const user = await new UserModel({
+                username: 'user-one',
+                coachName: 'Coach One',
+                email: 'user-one@example.com',
+                password: 'Password1!',
+                teamName: 'Team One',
+                logoUrl: 'https://example.com/team-one.png',
+                reachedPlayoff: false,
+                isFirstRoundDraftOrderDraw: false,
+                groupName: ligueGroup._id.toString(),
+                bio: 'User one bio',
+                cabinetTrophy: [],
+                isAdmin: false
+            } as UserType).save();
+
+            await StandingsModel.create({
+                place: 1,
+                userId: user._id.toString(),
+                played: 22,
+                wins: 15,
+                draw: 3,
+                defeat: 4,
+                balance: 40,
+                points: 48,
+                ligueGroupsId: ligueGroup._id.toString()
+            });
+
+            await new HistoryTeamModel(
+                createHistoryTeamData(
+                    new mongoose.Types.ObjectId().toString(),
+                    {
+                        name: 'Team One',
+                        coachName: 'Coach One'
+                    }
+                )
+            ).save();
+
             const historyId = await HistoryModel.saveSeasonToHistory(
                 season._id.toString()
             );
@@ -363,6 +413,7 @@ describe('Test HistoryModel methods and static functions', () => {
             expect(savedHistory?.season?.toString()).toBe(
                 season._id.toString()
             );
+            expect(savedHistory?.regularSeason).toBeDefined();
         });
     });
 });

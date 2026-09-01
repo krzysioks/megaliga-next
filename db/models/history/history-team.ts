@@ -20,6 +20,10 @@ export type HistoryTeamType = z.infer<typeof historyTeamZodSchema>;
 
 interface HistoryTeamModelType extends Model<HistoryTeamType> {
     saveSeasonTeams: (teams: HistoryTeamType[]) => Promise<void>;
+    getHistoryTeamIdByNameAndCoachName: (
+        name: HistoryTeamType['name'],
+        coachName: HistoryTeamType['coachName']
+    ) => Promise<string>;
 }
 
 const historyTeamSchema = new Schema<HistoryTeamType, HistoryTeamModelType>({
@@ -50,6 +54,34 @@ historyTeamSchema.static(
             }
         } catch (error) {
             console.error('Error saving season teams:', error);
+            throw error;
+        }
+    }
+);
+
+historyTeamSchema.static(
+    'getHistoryTeamIdByNameAndCoachName',
+    async function getHistoryTeamIdByNameAndCoachName(
+        name: HistoryTeamType['name'],
+        coachName: HistoryTeamType['coachName']
+    ) {
+        try {
+            const document = await this.findOne({ name, coachName })
+                .select('_id')
+                .exec();
+
+            if (!document) {
+                throw new Error(
+                    `History team not found for name: ${name} and coachName: ${coachName}`
+                );
+            }
+
+            return document._id.toString();
+        } catch (error) {
+            console.error(
+                'Error fetching history team id by name and coach name:',
+                error
+            );
             throw error;
         }
     }

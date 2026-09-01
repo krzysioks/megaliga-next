@@ -70,4 +70,34 @@ describe('Test HistoryTeamModel methods and static functions', () => {
             ).toBe(true);
         });
     });
+
+    describe('getHistoryTeamIdByNameAndCoachName', () => {
+        test('should find and return id of history team for provided name and coachName', async () => {
+            const team = await HistoryTeamModel.create(
+                createHistoryTeamData({
+                    name: 'Team A',
+                    coachName: 'Coach A'
+                })
+            );
+
+            const result =
+                await HistoryTeamModel.getHistoryTeamIdByNameAndCoachName(
+                    'Team A',
+                    'Coach A'
+                );
+
+            expect(result).toBe(team._id.toString());
+        });
+
+        test('should throw error if history team not found', async () => {
+            await expect(
+                HistoryTeamModel.getHistoryTeamIdByNameAndCoachName(
+                    'Missing Team',
+                    'Missing Coach'
+                )
+            ).rejects.toThrow(
+                'History team not found for name: Missing Team and coachName: Missing Coach'
+            );
+        });
+    });
 });

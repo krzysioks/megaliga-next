@@ -14,7 +14,7 @@ import HistoryPlayinStandingsModel from '@/db/models/history/history-playin-stan
 import { HistoryPlayoffStandingsType } from '@/db/models/history/history-playoff-standings';
 import HistoryPlayoffStandingsModel from '@/db/models/history/history-playoff-standings'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { HistoryRegularSeasonStandingsType } from '@/db/models/history/history-regular-season-standings';
-import HistoryRegularSeasonStandingsModel from '@/db/models/history/history-regular-season-standings'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import HistoryRegularSeasonStandingsModel from '@/db/models/history/history-regular-season-standings';
 import { HistoryTeamType } from '@/db/models/history/history-team';
 import HistoryTeamModel from '@/db/models/history/history-team'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { objectIdSchema } from '@/db/models/schema.types';
@@ -276,7 +276,16 @@ historySchema.static(
                 );
             }
 
-            const newSeasonHistory = await this.create({ season: seasonId });
+            const regularSeasonId =
+                await HistoryRegularSeasonStandingsModel.saveRegularSeasonStandingsToHistory(
+                    seasonId
+                );
+
+            const newSeasonHistory = await this.create({
+                season: seasonId,
+                regularSeason: regularSeasonId
+            });
+
             return newSeasonHistory._id.toString();
         } catch (error) {
             console.error('Error saving season to history:', error);

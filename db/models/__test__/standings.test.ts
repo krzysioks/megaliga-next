@@ -3,7 +3,8 @@ import mongoose from 'mongoose';
 import { DBClient } from '@/db/db-client';
 import LigueGroupsModel from '@/db/models/ligue-groups';
 import StandingsModel, {
-    StandingsDtoType,
+    StandingsForHistoryReturnType,
+    StandingsReturnType,
     StandingsType
 } from '@/db/models/standings';
 import UserModel, { UserType } from '@/db/models/user';
@@ -68,10 +69,51 @@ afterAll(async () => {
 });
 
 describe('Test StandingsModel methods and static functions', () => {
+    describe('getStandings', () => {
+        test('Should return standings for 12 teams', async () => {
+            await StandingsModel.create(standingsToCreate);
+
+            const standings: StandingsReturnType[] =
+                await StandingsModel.getStandings();
+            expect(standings).toHaveLength(12);
+
+            standingsToCreate.forEach(expectedStanding => {
+                const seededUser = createdUsers.find(
+                    user => user._id.toString() === expectedStanding.userId
+                );
+
+                expect(seededUser).toBeDefined();
+
+                const fetchedStanding = standings.find(
+                    standing => standing.place === expectedStanding.place
+                );
+
+                expect(fetchedStanding).toBeDefined();
+                expect(fetchedStanding?.played).toBe(expectedStanding.played);
+                expect(fetchedStanding?.wins).toBe(expectedStanding.wins);
+                expect(fetchedStanding?.draw).toBe(expectedStanding.draw);
+                expect(fetchedStanding?.defeat).toBe(expectedStanding.defeat);
+                expect(fetchedStanding?.balance).toBe(expectedStanding.balance);
+                expect(fetchedStanding?.points).toBe(expectedStanding.points);
+                expect(fetchedStanding?.ligueGroupsId).toBe(
+                    expectedStanding.ligueGroupsId
+                );
+                expect(fetchedStanding?.teamName).toBe(seededUser?.teamName);
+                expect(fetchedStanding?.logoUrl).toBe(seededUser?.logoUrl);
+            });
+        });
+
+        test('Should throw error if no standings fetched from db', async () => {
+            await expect(StandingsModel.getStandings()).rejects.toThrow(
+                'Standings not found'
+            );
+        });
+    });
+
     test('Should return standings for 12 teams', async () => {
         await StandingsModel.create(standingsToCreate);
 
-        const standings: StandingsDtoType[] =
+        const standings: StandingsReturnType[] =
             await StandingsModel.getStandings();
         expect(standings).toHaveLength(12);
 
@@ -105,5 +147,44 @@ describe('Test StandingsModel methods and static functions', () => {
         await expect(StandingsModel.getStandings()).rejects.toThrow(
             'Standings not found'
         );
+    });
+
+    describe('getStandingsForHistory', () => {
+        test('Should return history standings for 12 teams with team, coach and group name populated', async () => {
+            await StandingsModel.create(standingsToCreate);
+
+            const standings: StandingsForHistoryReturnType[] =
+                await StandingsModel.getStandingsForHistory();
+            expect(standings).toHaveLength(12);
+
+            standingsToCreate.forEach(expectedStanding => {
+                const seededUser = createdUsers.find(
+                    user => user._id.toString() === expectedStanding.userId
+                );
+
+                expect(seededUser).toBeDefined();
+
+                const fetchedStanding = standings.find(
+                    standing => standing.place === expectedStanding.place
+                );
+
+                expect(fetchedStanding).toBeDefined();
+                expect(fetchedStanding?.played).toBe(expectedStanding.played);
+                expect(fetchedStanding?.wins).toBe(expectedStanding.wins);
+                expect(fetchedStanding?.draw).toBe(expectedStanding.draw);
+                expect(fetchedStanding?.defeat).toBe(expectedStanding.defeat);
+                expect(fetchedStanding?.balance).toBe(expectedStanding.balance);
+                expect(fetchedStanding?.points).toBe(expectedStanding.points);
+                expect(fetchedStanding?.ligueGroupName).toBe('dolce');
+                expect(fetchedStanding?.teamName).toBe(seededUser?.teamName);
+                expect(fetchedStanding?.coachName).toBe(seededUser?.coachName);
+            });
+        });
+
+        test('Should throw error if no standings fetched from db', async () => {
+            await expect(
+                StandingsModel.getStandingsForHistory()
+            ).rejects.toThrow('Standings not found');
+        });
     });
 });
