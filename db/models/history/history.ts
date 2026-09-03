@@ -12,7 +12,7 @@ import HistoryGrandPrixStandingsModel from '@/db/models/history/history-grand-pr
 import { HistoryPlayinStandingsType } from '@/db/models/history/history-playin-standings';
 import HistoryPlayinStandingsModel from '@/db/models/history/history-playin-standings'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { HistoryPlayoffStandingsType } from '@/db/models/history/history-playoff-standings';
-import HistoryPlayoffStandingsModel from '@/db/models/history/history-playoff-standings'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import HistoryPlayoffStandingsModel from '@/db/models/history/history-playoff-standings';
 import { HistoryRegularSeasonStandingsType } from '@/db/models/history/history-regular-season-standings';
 import HistoryRegularSeasonStandingsModel from '@/db/models/history/history-regular-season-standings';
 import { HistoryTeamType } from '@/db/models/history/history-team';
@@ -281,9 +281,15 @@ historySchema.static(
                     seasonId
                 );
 
+            const playoffId =
+                await HistoryPlayoffStandingsModel.savePlayoffStandingsToHistory(
+                    seasonId
+                );
+
             const newSeasonHistory = await this.create({
                 season: seasonId,
-                regularSeason: regularSeasonId
+                regularSeason: regularSeasonId,
+                playoff: playoffId
             });
 
             return newSeasonHistory._id.toString();

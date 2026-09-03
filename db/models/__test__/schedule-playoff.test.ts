@@ -4,6 +4,7 @@ import { DBClient } from '@/db/db-client';
 import SchedulePlayoffModel, {
     SchedulePlayoffByRoundDtoType,
     SchedulePlayoffByStageDtoType,
+    SchedulePlayoffStandingsForHistoryReturnType,
     SchedulePlayoffType
 } from '@/db/models/games/schedule-playoff';
 import UserModel, { UserType } from '@/db/models/user';
@@ -251,141 +252,228 @@ describe('Test SchedulePlayoffModel methods and static functions', () => {
         expect(fetchedGame?.userTwoScore).toBe(expectedGame.userTwoScore);
     };
 
-    test('Should return list of playoff games for round 1', async () => {
-        const semifinalPairs = getSemifinalPairs();
-        const thirdPlacePair = getThirdPlacePair();
-        const finalPair = getFinalPair();
+    describe('getScheduleByRound', () => {
+        test('Should return list of playoff games for round 1', async () => {
+            const semifinalPairs = getSemifinalPairs();
+            const thirdPlacePair = getThirdPlacePair();
+            const finalPair = getFinalPair();
 
-        const allPlayoffGames = [
-            ...createStageDocs('semifinal', semifinalPairs, true),
-            ...createStageDocs('3rdplace', thirdPlacePair, true),
-            ...createStageDocs('final', finalPair, true)
-        ];
+            const allPlayoffGames = [
+                ...createStageDocs('semifinal', semifinalPairs, true),
+                ...createStageDocs('3rdplace', thirdPlacePair, true),
+                ...createStageDocs('final', finalPair, true)
+            ];
 
-        await SchedulePlayoffModel.create(allPlayoffGames);
+            await SchedulePlayoffModel.create(allPlayoffGames);
 
-        const roundOneGames: SchedulePlayoffByRoundDtoType[] =
-            await SchedulePlayoffModel.getScheduleByRound(1);
-        const expectedRoundOneGames = getExpectedRoundGames(allPlayoffGames, 1);
+            const roundOneGames: SchedulePlayoffByRoundDtoType[] =
+                await SchedulePlayoffModel.getScheduleByRound(1);
+            const expectedRoundOneGames = getExpectedRoundGames(
+                allPlayoffGames,
+                1
+            );
 
-        expect(roundOneGames).toHaveLength(2);
+            expect(roundOneGames).toHaveLength(2);
 
-        expectedRoundOneGames.forEach(expectedGame => {
-            const game = findFetchedRoundGame(roundOneGames, expectedGame);
-            assertFetchedRoundGame(game, expectedGame);
+            expectedRoundOneGames.forEach(expectedGame => {
+                const game = findFetchedRoundGame(roundOneGames, expectedGame);
+                assertFetchedRoundGame(game, expectedGame);
+            });
         });
-    });
 
-    test('Should return list of playoff games for round 2', async () => {
-        const semifinalPairs = getSemifinalPairs();
-        const thirdPlacePair = getThirdPlacePair();
-        const finalPair = getFinalPair();
+        test('Should return list of playoff games for round 2', async () => {
+            const semifinalPairs = getSemifinalPairs();
+            const thirdPlacePair = getThirdPlacePair();
+            const finalPair = getFinalPair();
 
-        const allPlayoffGames = [
-            ...createStageDocs('semifinal', semifinalPairs, true),
-            ...createStageDocs('3rdplace', thirdPlacePair, true),
-            ...createStageDocs('final', finalPair, true)
-        ];
+            const allPlayoffGames = [
+                ...createStageDocs('semifinal', semifinalPairs, true),
+                ...createStageDocs('3rdplace', thirdPlacePair, true),
+                ...createStageDocs('final', finalPair, true)
+            ];
 
-        await SchedulePlayoffModel.create(allPlayoffGames);
+            await SchedulePlayoffModel.create(allPlayoffGames);
 
-        const roundTwoGames: SchedulePlayoffByRoundDtoType[] =
-            await SchedulePlayoffModel.getScheduleByRound(2);
-        const expectedRoundTwoGames = getExpectedRoundGames(allPlayoffGames, 2);
+            const roundTwoGames: SchedulePlayoffByRoundDtoType[] =
+                await SchedulePlayoffModel.getScheduleByRound(2);
+            const expectedRoundTwoGames = getExpectedRoundGames(
+                allPlayoffGames,
+                2
+            );
 
-        expect(roundTwoGames).toHaveLength(2);
+            expect(roundTwoGames).toHaveLength(2);
 
-        expectedRoundTwoGames.forEach(expectedGame => {
-            const game = findFetchedRoundGame(roundTwoGames, expectedGame);
-            assertFetchedRoundGame(game, expectedGame);
+            expectedRoundTwoGames.forEach(expectedGame => {
+                const game = findFetchedRoundGame(roundTwoGames, expectedGame);
+                assertFetchedRoundGame(game, expectedGame);
+            });
         });
-    });
 
-    test('Should throw error if no playoff games found for given round', async () => {
-        await expect(
-            SchedulePlayoffModel.getScheduleByRound(1)
-        ).rejects.toThrow(
-            "Schedules playoff for given roundNumber: 1 don't exist: "
-        );
-    });
-
-    test('It should return outcome of 1st game in semifinal stage with properly grouped teams (we expect 2 matchups)', async () => {
-        const semifinalPairs = getSemifinalPairs();
-        await SchedulePlayoffModel.create(
-            createStageDocs('semifinal', semifinalPairs, false)
-        );
-
-        const results =
-            await SchedulePlayoffModel.getScheduleByStage('semifinal');
-
-        expect(results).toHaveLength(2);
-        semifinalPairs.forEach(pair => {
-            assertGroupedPair(results, pair, false);
+        test('Should throw error if no playoff games found for given round', async () => {
+            await expect(
+                SchedulePlayoffModel.getScheduleByRound(1)
+            ).rejects.toThrow(
+                "Schedules playoff for given roundNumber: 1 don't exist: "
+            );
         });
-    });
+    }); // getScheduleByRound
 
-    test('It should return outcome of 1st and 2nd game in semifinal stage with properly grouped teams (we expect 2 matchups)', async () => {
-        const semifinalPairs = getSemifinalPairs();
-        await SchedulePlayoffModel.create(
-            createStageDocs('semifinal', semifinalPairs, true)
-        );
+    describe('getScheduleByStage', () => {
+        test('It should return outcome of 1st game in semifinal stage with properly grouped teams (we expect 2 matchups)', async () => {
+            const semifinalPairs = getSemifinalPairs();
+            await SchedulePlayoffModel.create(
+                createStageDocs('semifinal', semifinalPairs, false)
+            );
 
-        const results =
-            await SchedulePlayoffModel.getScheduleByStage('semifinal');
+            const results =
+                await SchedulePlayoffModel.getScheduleByStage('semifinal');
 
-        expect(results).toHaveLength(2);
-        semifinalPairs.forEach(pair => {
-            assertGroupedPair(results, pair, true);
+            expect(results).toHaveLength(2);
+            semifinalPairs.forEach(pair => {
+                assertGroupedPair(results, pair, false);
+            });
         });
-    });
 
-    test('It should return outcome of 1st game in 3rdplace stage with properly grouped teams (we expect 1 matchup)', async () => {
-        const thirdPlacePair = getThirdPlacePair();
-        await SchedulePlayoffModel.create(
-            createStageDocs('3rdplace', thirdPlacePair, false)
-        );
+        test('It should return outcome of 1st and 2nd game in semifinal stage with properly grouped teams (we expect 2 matchups)', async () => {
+            const semifinalPairs = getSemifinalPairs();
+            await SchedulePlayoffModel.create(
+                createStageDocs('semifinal', semifinalPairs, true)
+            );
 
-        const results =
-            await SchedulePlayoffModel.getScheduleByStage('3rdplace');
+            const results =
+                await SchedulePlayoffModel.getScheduleByStage('semifinal');
 
-        expect(results).toHaveLength(1);
-        assertGroupedPair(results, thirdPlacePair[0], false);
-    });
+            expect(results).toHaveLength(2);
+            semifinalPairs.forEach(pair => {
+                assertGroupedPair(results, pair, true);
+            });
+        });
 
-    test('It should return outcome of 1st and 2nd game in 3rdplace stage with properly grouped teams (we expect 1 matchup)', async () => {
-        const thirdPlacePair = getThirdPlacePair();
-        await SchedulePlayoffModel.create(
-            createStageDocs('3rdplace', thirdPlacePair, true)
-        );
+        test('It should return outcome of 1st game in 3rdplace stage with properly grouped teams (we expect 1 matchup)', async () => {
+            const thirdPlacePair = getThirdPlacePair();
+            await SchedulePlayoffModel.create(
+                createStageDocs('3rdplace', thirdPlacePair, false)
+            );
 
-        const results =
-            await SchedulePlayoffModel.getScheduleByStage('3rdplace');
+            const results =
+                await SchedulePlayoffModel.getScheduleByStage('3rdplace');
 
-        expect(results).toHaveLength(1);
-        assertGroupedPair(results, thirdPlacePair[0], true);
-    });
+            expect(results).toHaveLength(1);
+            assertGroupedPair(results, thirdPlacePair[0], false);
+        });
 
-    test('It should return outcome of 1st game in final stage with properly grouped teams (we expect 1 matchup)', async () => {
-        const finalPair = getFinalPair();
-        await SchedulePlayoffModel.create(
-            createStageDocs('final', finalPair, false)
-        );
+        test('It should return outcome of 1st and 2nd game in 3rdplace stage with properly grouped teams (we expect 1 matchup)', async () => {
+            const thirdPlacePair = getThirdPlacePair();
+            await SchedulePlayoffModel.create(
+                createStageDocs('3rdplace', thirdPlacePair, true)
+            );
 
-        const results = await SchedulePlayoffModel.getScheduleByStage('final');
+            const results =
+                await SchedulePlayoffModel.getScheduleByStage('3rdplace');
 
-        expect(results).toHaveLength(1);
-        assertGroupedPair(results, finalPair[0], false);
-    });
+            expect(results).toHaveLength(1);
+            assertGroupedPair(results, thirdPlacePair[0], true);
+        });
 
-    test('It should return outcome of 1st and 2nd game in final stage with properly grouped teams (we expect 1 matchup)', async () => {
-        const finalPair = getFinalPair();
-        await SchedulePlayoffModel.create(
-            createStageDocs('final', finalPair, true)
-        );
+        test('It should return outcome of 1st game in final stage with properly grouped teams (we expect 1 matchup)', async () => {
+            const finalPair = getFinalPair();
+            await SchedulePlayoffModel.create(
+                createStageDocs('final', finalPair, false)
+            );
 
-        const results = await SchedulePlayoffModel.getScheduleByStage('final');
+            const results =
+                await SchedulePlayoffModel.getScheduleByStage('final');
 
-        expect(results).toHaveLength(1);
-        assertGroupedPair(results, finalPair[0], true);
-    });
+            expect(results).toHaveLength(1);
+            assertGroupedPair(results, finalPair[0], false);
+        });
+
+        test('It should return outcome of 1st and 2nd game in final stage with properly grouped teams (we expect 1 matchup)', async () => {
+            const finalPair = getFinalPair();
+            await SchedulePlayoffModel.create(
+                createStageDocs('final', finalPair, true)
+            );
+
+            const results =
+                await SchedulePlayoffModel.getScheduleByStage('final');
+
+            expect(results).toHaveLength(1);
+            assertGroupedPair(results, finalPair[0], true);
+        });
+    }); // getScheduleByStage
+
+    describe('getStandingsForHistory', () => {
+        test('Should return final standings 1-4 with teamName and coachName based on total score across both legs', async () => {
+            const finalPair = getFinalPair();
+            const thirdPlacePair = getThirdPlacePair();
+
+            await SchedulePlayoffModel.create([
+                ...createStageDocs('final', finalPair, true),
+                ...createStageDocs('3rdplace', thirdPlacePair, true)
+            ]);
+
+            const standings: SchedulePlayoffStandingsForHistoryReturnType[] =
+                await SchedulePlayoffModel.getStandingsForHistory();
+
+            expect(standings).toHaveLength(4);
+
+            const finalWinner = findSeededUser(finalPair[0].teamOneId);
+            const finalRunnerUp = findSeededUser(finalPair[0].teamTwoId);
+            const thirdPlaceWinner = findSeededUser(
+                thirdPlacePair[0].teamOneId
+            );
+            const fourthPlace = findSeededUser(thirdPlacePair[0].teamTwoId);
+
+            expect(standings).toEqual([
+                {
+                    place: 1,
+                    teamName: finalWinner?.teamName,
+                    coachName: finalWinner?.coachName
+                },
+                {
+                    place: 2,
+                    teamName: finalRunnerUp?.teamName,
+                    coachName: finalRunnerUp?.coachName
+                },
+                {
+                    place: 3,
+                    teamName: thirdPlaceWinner?.teamName,
+                    coachName: thirdPlaceWinner?.coachName
+                },
+                {
+                    place: 4,
+                    teamName: fourthPlace?.teamName,
+                    coachName: fourthPlace?.coachName
+                }
+            ]);
+        });
+
+        test('Should throw error if final stage documents are missing', async () => {
+            const thirdPlacePair = getThirdPlacePair();
+
+            await SchedulePlayoffModel.create(
+                createStageDocs('3rdplace', thirdPlacePair, true)
+            );
+
+            await expect(
+                SchedulePlayoffModel.getStandingsForHistory()
+            ).rejects.toThrow(
+                'Final standings not found: missing final or 3rdplace schedule data'
+            );
+        });
+
+        test('Should throw error if 3rdplace stage documents are missing', async () => {
+            const finalPair = getFinalPair();
+
+            await SchedulePlayoffModel.create(
+                createStageDocs('final', finalPair, true)
+            );
+
+            await expect(
+                SchedulePlayoffModel.getStandingsForHistory()
+            ).rejects.toThrow(
+                'Final standings not found: missing final or 3rdplace schedule data'
+            );
+        });
+    }); // getStandingsForHistory
 });

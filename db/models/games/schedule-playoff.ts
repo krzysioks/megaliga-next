@@ -41,6 +41,14 @@ export interface SchedulePlayoffByStageDtoType {
 
 export type SchedulePlayoffUserDtoType = Pick<UserType, 'teamName' | 'logoUrl'>;
 
+type PopulatedUserIdForHistoryType = Pick<UserType, 'teamName' | 'coachName'>;
+
+export type SchedulePlayoffStandingsForHistoryReturnType = {
+    place: number;
+    teamName: UserType['teamName'];
+    coachName: UserType['coachName'];
+};
+
 export type SchedulePlayoffByRoundDtoType = {
     id: Types.ObjectId;
     roundNumber: number;
@@ -58,22 +66,70 @@ interface SchedulePlayoffModelType extends Model<SchedulePlayoffType> {
     getScheduleByRound: (
         roundNumber: number
     ) => Promise<SchedulePlayoffByRoundDtoType[]>;
+    getStandingsForHistory: () => Promise<
+        SchedulePlayoffStandingsForHistoryReturnType[]
+    >;
 }
+
+type PopulatedSchedulePlayoffUserIdType = SchedulePlayoffUserDtoType & {
+    _id: Types.ObjectId;
+};
 
 type PopulatedSchedulePlayoffType = Omit<
     SchedulePlayoffType,
     'userOneId' | 'userTwoId'
 > & {
     _id: Types.ObjectId;
-    userOneId: Pick<UserType, 'teamName' | 'logoUrl'> & {
-        _id: Types.ObjectId;
-    };
-    userTwoId: Pick<UserType, 'teamName' | 'logoUrl'> & {
-        _id: Types.ObjectId;
-    };
+    userOneId: PopulatedSchedulePlayoffUserIdType;
+    userTwoId: PopulatedSchedulePlayoffUserIdType;
 };
 
-const schedulePlayoffSchema = new Schema<SchedulePlayoffType>({
+type PopulatedSchedulePlayoffForHistoryType = Omit<
+    SchedulePlayoffType,
+    'userOneId' | 'userTwoId'
+> & {
+    userOneId: PopulatedUserIdForHistoryType;
+    userTwoId: PopulatedUserIdForHistoryType;
+};
+
+// sums scores across both legs, then ranks the pair based on who scored more in total
+const buildStagePlaces = (
+    stageDocuments: PopulatedSchedulePlayoffForHistoryType[],
+    firstPlace: number,
+    secondPlace: number
+) => {
+    const userOneTotalScore = stageDocuments.reduce(
+        (total, document) => total + (document.userOneScore ?? 0),
+        0
+    );
+    const userTwoTotalScore = stageDocuments.reduce(
+        (total, document) => total + (document.userTwoScore ?? 0),
+        0
+    );
+
+    const [winner, runnerUp] =
+        userOneTotalScore >= userTwoTotalScore
+            ? [stageDocuments[0].userOneId, stageDocuments[0].userTwoId]
+            : [stageDocuments[0].userTwoId, stageDocuments[0].userOneId];
+
+    return [
+        {
+            place: firstPlace,
+            teamName: winner.teamName,
+            coachName: winner.coachName
+        },
+        {
+            place: secondPlace,
+            teamName: runnerUp.teamName,
+            coachName: runnerUp.coachName
+        }
+    ];
+};
+
+const schedulePlayoffSchema = new Schema<
+    SchedulePlayoffType,
+    SchedulePlayoffModelType
+>({
     userOneId: { type: Types.ObjectId, ref: 'User' },
     userTwoId: { type: Types.ObjectId, ref: 'User' },
     roundNumber: { type: Number, required: true },
@@ -92,16 +148,18 @@ schedulePlayoffSchema.static(
     'getScheduleByStage',
     async function getScheduleByStage(stage: (typeof STAGE_ENUM)[number]) {
         try {
-            const documents = (await this.find({ stage })
-                .populate({
+            const documents: PopulatedSchedulePlayoffType[] = await this.find({
+                stage
+            })
+                .populate<{ userOneId: PopulatedSchedulePlayoffUserIdType }>({
                     path: 'userOneId',
                     select: 'teamName logoUrl'
                 })
-                .populate({
+                .populate<{ userTwoId: PopulatedSchedulePlayoffUserIdType }>({
                     path: 'userTwoId',
                     select: 'teamName logoUrl'
                 })
-                .exec()) as PopulatedSchedulePlayoffType[];
+                .exec();
 
             const groupedDocuments = new Map<
                 string,
@@ -165,16 +223,18 @@ schedulePlayoffSchema.static(
     'getScheduleByRound',
     async function getScheduleByRound(roundNumber: number) {
         try {
-            const documents = (await this.find({ roundNumber })
-                .populate({
+            const documents: PopulatedSchedulePlayoffType[] = await this.find({
+                roundNumber
+            })
+                .populate<{ userOneId: PopulatedSchedulePlayoffUserIdType }>({
                     path: 'userOneId',
                     select: 'teamName logoUrl'
                 })
-                .populate({
+                .populate<{ userTwoId: PopulatedSchedulePlayoffUserIdType }>({
                     path: 'userTwoId',
                     select: 'teamName logoUrl'
                 })
-                .exec()) as PopulatedSchedulePlayoffType[];
+                .exec();
 
             if (!documents.length) {
                 throw new Error(
@@ -201,6 +261,48 @@ schedulePlayoffSchema.static(
             });
         } catch (error) {
             console.error('Error fetching schedule playoff by round:', error);
+            throw error;
+        }
+    }
+);
+
+schedulePlayoffSchema.static(
+    'getStandingsForHistory',
+    async function getStandingsForHistory() {
+        try {
+            const documents: PopulatedSchedulePlayoffForHistoryType[] =
+                await this.find({
+                    stage: { $in: ['final', '3rdplace'] }
+                })
+                    .populate<{ userOneId: PopulatedUserIdForHistoryType }>({
+                        path: 'userOneId',
+                        select: 'teamName coachName'
+                    })
+                    .populate<{ userTwoId: PopulatedUserIdForHistoryType }>({
+                        path: 'userTwoId',
+                        select: 'teamName coachName'
+                    })
+                    .exec();
+
+            const finalDocuments = documents.filter(
+                document => document.stage === 'final'
+            );
+            const thirdPlaceDocuments = documents.filter(
+                document => document.stage === '3rdplace'
+            );
+
+            if (finalDocuments.length < 2 || thirdPlaceDocuments.length < 2) {
+                throw new Error(
+                    'Final standings not found: missing final or 3rdplace schedule data'
+                );
+            }
+
+            return [
+                ...buildStagePlaces(finalDocuments, 1, 2),
+                ...buildStagePlaces(thirdPlaceDocuments, 3, 4)
+            ];
+        } catch (error) {
+            console.error('Error fetching final standings:', error);
             throw error;
         }
     }

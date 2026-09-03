@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 
 import { DBClient } from '@/db/db-client';
+import SchedulePlayoffModel from '@/db/models/games/schedule-playoff';
 import HistoryModel, {
     HistoryBySeasonReturnType
 } from '@/db/models/history/history';
@@ -39,6 +40,7 @@ beforeEach(async () => {
     await HistoryTeamModel.deleteMany();
     await SeasonOpsModel.deleteMany();
     await StandingsModel.deleteMany();
+    await SchedulePlayoffModel.deleteMany();
     await UserModel.deleteMany();
     await LigueGroupsModel.deleteMany();
 });
@@ -52,6 +54,7 @@ afterAll(async () => {
     await HistoryTeamModel.deleteMany();
     await SeasonOpsModel.deleteMany();
     await StandingsModel.deleteMany();
+    await SchedulePlayoffModel.deleteMany();
     await UserModel.deleteMany();
     await LigueGroupsModel.deleteMany();
     await mongoose.disconnect();
@@ -381,6 +384,51 @@ describe('Test HistoryModel methods and static functions', () => {
                 isAdmin: false
             } as UserType).save();
 
+            const userTwo = await new UserModel({
+                username: 'user-two',
+                coachName: 'Coach Two',
+                email: 'user-two@example.com',
+                password: 'Password1!',
+                teamName: 'Team Two',
+                logoUrl: 'https://example.com/team-two.png',
+                reachedPlayoff: false,
+                isFirstRoundDraftOrderDraw: false,
+                groupName: ligueGroup._id.toString(),
+                bio: 'User two bio',
+                cabinetTrophy: [],
+                isAdmin: false
+            } as UserType).save();
+
+            const userThree = await new UserModel({
+                username: 'user-three',
+                coachName: 'Coach Three',
+                email: 'user-three@example.com',
+                password: 'Password1!',
+                teamName: 'Team Three',
+                logoUrl: 'https://example.com/team-three.png',
+                reachedPlayoff: false,
+                isFirstRoundDraftOrderDraw: false,
+                groupName: ligueGroup._id.toString(),
+                bio: 'User three bio',
+                cabinetTrophy: [],
+                isAdmin: false
+            } as UserType).save();
+
+            const userFour = await new UserModel({
+                username: 'user-four',
+                coachName: 'Coach Four',
+                email: 'user-four@example.com',
+                password: 'Password1!',
+                teamName: 'Team Four',
+                logoUrl: 'https://example.com/team-four.png',
+                reachedPlayoff: false,
+                isFirstRoundDraftOrderDraw: false,
+                groupName: ligueGroup._id.toString(),
+                bio: 'User four bio',
+                cabinetTrophy: [],
+                isAdmin: false
+            } as UserType).save();
+
             await StandingsModel.create({
                 place: 1,
                 userId: user._id.toString(),
@@ -393,15 +441,79 @@ describe('Test HistoryModel methods and static functions', () => {
                 ligueGroupsId: ligueGroup._id.toString()
             });
 
-            await new HistoryTeamModel(
+            await SchedulePlayoffModel.create([
+                {
+                    stage: 'final',
+                    roundNumber: 3,
+                    userOneId: user._id.toString(),
+                    userTwoId: userTwo._id.toString(),
+                    userOneSeed: 1,
+                    userTwoSeed: 2,
+                    userOneScore: 44,
+                    userTwoScore: 40
+                },
+                {
+                    stage: 'final',
+                    roundNumber: 4,
+                    userOneId: user._id.toString(),
+                    userTwoId: userTwo._id.toString(),
+                    userOneSeed: 1,
+                    userTwoSeed: 2,
+                    userOneScore: 42,
+                    userTwoScore: 36
+                },
+                {
+                    stage: '3rdplace',
+                    roundNumber: 3,
+                    userOneId: userThree._id.toString(),
+                    userTwoId: userFour._id.toString(),
+                    userOneSeed: 3,
+                    userTwoSeed: 4,
+                    userOneScore: 44,
+                    userTwoScore: 40
+                },
+                {
+                    stage: '3rdplace',
+                    roundNumber: 4,
+                    userOneId: userThree._id.toString(),
+                    userTwoId: userFour._id.toString(),
+                    userOneSeed: 3,
+                    userTwoSeed: 4,
+                    userOneScore: 42,
+                    userTwoScore: 36
+                }
+            ]);
+
+            await HistoryTeamModel.create([
                 createHistoryTeamData(
                     new mongoose.Types.ObjectId().toString(),
                     {
                         name: 'Team One',
                         coachName: 'Coach One'
                     }
+                ),
+                createHistoryTeamData(
+                    new mongoose.Types.ObjectId().toString(),
+                    {
+                        name: 'Team Two',
+                        coachName: 'Coach Two'
+                    }
+                ),
+                createHistoryTeamData(
+                    new mongoose.Types.ObjectId().toString(),
+                    {
+                        name: 'Team Three',
+                        coachName: 'Coach Three'
+                    }
+                ),
+                createHistoryTeamData(
+                    new mongoose.Types.ObjectId().toString(),
+                    {
+                        name: 'Team Four',
+                        coachName: 'Coach Four'
+                    }
                 )
-            ).save();
+            ]);
 
             const historyId = await HistoryModel.saveSeasonToHistory(
                 season._id.toString()
@@ -414,6 +526,7 @@ describe('Test HistoryModel methods and static functions', () => {
                 season._id.toString()
             );
             expect(savedHistory?.regularSeason).toBeDefined();
+            expect(savedHistory?.playoff).toBeDefined();
         });
     });
 });

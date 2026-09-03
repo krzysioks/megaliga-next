@@ -13,11 +13,13 @@ export type StandingsType = z.infer<typeof StandingsZodSchema>;
 export type StandingsReturnType = Omit<StandingsType, 'userId'> &
     Pick<UserType, 'teamName' | 'logoUrl'>;
 
+type PopulatedUserIdForHistoryType = Pick<UserType, 'teamName' | 'coachName'>;
+
 export type StandingsForHistoryReturnType = Omit<
     StandingsType,
     'userId' | 'ligueGroupsId'
 > &
-    Pick<UserType, 'teamName' | 'coachName'> & {
+    PopulatedUserIdForHistoryType & {
         ligueGroupName: LigueGroupsType['groupName'];
     };
 
@@ -27,7 +29,6 @@ interface StandingsModelType extends Model<StandingsType> {
 }
 
 type PopulatedUserIdType = Pick<UserType, 'teamName' | 'logoUrl'>;
-
 type PopulatedStandingsType = Omit<StandingsType, 'userId'> & {
     userId?: PopulatedUserIdType;
 };
@@ -38,7 +39,7 @@ type PopulatedStandingsForHistoryType = Omit<
     StandingsType,
     'userId' | 'ligueGroupsId'
 > & {
-    userId?: Pick<UserType, 'teamName' | 'coachName'>;
+    userId?: PopulatedUserIdForHistoryType;
     ligueGroupsId?: Pick<LigueGroupsType, 'groupName'>;
 };
 
@@ -100,7 +101,7 @@ StandingsSchema.static(
         try {
             const documents: PopulatedFindForHistoryType[] = await this.find()
                 .populate<{
-                    userId: Pick<UserType, 'teamName' | 'coachName'>;
+                    userId: PopulatedUserIdForHistoryType;
                 }>({
                     path: 'userId',
                     select: 'teamName coachName'

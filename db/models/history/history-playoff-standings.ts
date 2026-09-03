@@ -1,6 +1,8 @@
-import { model, Schema } from 'mongoose';
+import { model, Model, Schema } from 'mongoose';
 import { z } from 'zod';
 
+import SchedulePlayoffModel from '@/db/models/games/schedule-playoff';
+import HistoryTeamModel from '@/db/models/history/history-team';
 import {
     objectIdSchema,
     standingPlayoffSchema
@@ -16,7 +18,17 @@ export type HistoryPlayoffStandingsType = z.infer<
     typeof historyPlayoffStandingsZodSchema
 >;
 
-const historyPlayoffStandingsSchema = new Schema<HistoryPlayoffStandingsType>({
+export type PlayoffStandingsToHistoryDataType =
+    HistoryPlayoffStandingsType['standings'][number];
+
+interface HistoryPlayoffStandingsModelType extends Model<HistoryPlayoffStandingsType> {
+    savePlayoffStandingsToHistory: (seasonId: string) => Promise<string>;
+}
+
+const historyPlayoffStandingsSchema = new Schema<
+    HistoryPlayoffStandingsType,
+    HistoryPlayoffStandingsModelType
+>({
     season: {
         type: Schema.Types.ObjectId,
         ref: 'SeasonOps',
@@ -34,9 +46,47 @@ const historyPlayoffStandingsSchema = new Schema<HistoryPlayoffStandingsType>({
     ]
 });
 
-const HistoryPlayoffStandingsModel = model<HistoryPlayoffStandingsType>(
-    'HistoryPlayoffStandings',
-    historyPlayoffStandingsSchema
+historyPlayoffStandingsSchema.static(
+    'savePlayoffStandingsToHistory',
+    async function savePlayoffStandingsToHistory(seasonId: string) {
+        try {
+            const playoffStandingsData =
+                await SchedulePlayoffModel.getStandingsForHistory();
+            let historyPlayoffStandingsData: PlayoffStandingsToHistoryDataType[] =
+                [];
+            for (const standing of playoffStandingsData) {
+                const historyTeamId =
+                    await HistoryTeamModel.getHistoryTeamIdByNameAndCoachName(
+                        standing.teamName,
+                        standing.coachName
+                    );
+                const historyStandingsItem: PlayoffStandingsToHistoryDataType =
+                    {
+                        place: standing.place,
+                        teamId: historyTeamId
+                    };
+                historyPlayoffStandingsData = [
+                    ...historyPlayoffStandingsData,
+                    historyStandingsItem
+                ];
+            }
+
+            const newHistoryPlayoffStandingsDocument = await this.create({
+                season: seasonId,
+                standings: historyPlayoffStandingsData
+            });
+
+            return newHistoryPlayoffStandingsDocument._id.toString();
+        } catch (error) {
+            console.error('Error saving playoff standings:', error);
+            throw error;
+        }
+    }
 );
+
+const HistoryPlayoffStandingsModel = model<
+    HistoryPlayoffStandingsType,
+    HistoryPlayoffStandingsModelType
+>('HistoryPlayoffStandings', historyPlayoffStandingsSchema);
 
 export default HistoryPlayoffStandingsModel;
