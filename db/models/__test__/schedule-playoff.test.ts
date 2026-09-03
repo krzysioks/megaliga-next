@@ -4,6 +4,7 @@ import { DBClient } from '@/db/db-client';
 import SchedulePlayoffModel, {
     SchedulePlayoffByRoundDtoType,
     SchedulePlayoffByStageDtoType,
+    SchedulePlayoffScheduleForHistoryReturnType,
     SchedulePlayoffStandingsForHistoryReturnType,
     SchedulePlayoffType
 } from '@/db/models/games/schedule-playoff';
@@ -476,4 +477,64 @@ describe('Test SchedulePlayoffModel methods and static functions', () => {
             );
         });
     }); // getStandingsForHistory
+
+    describe('getScheduleForHistory', () => {
+        test('Should return all playoff games with teamName, coachName, scores and stage set to playoff', async () => {
+            const semifinalPairs = [getFinalPair()[0], getThirdPlacePair()[0]];
+            const finalPair = getFinalPair();
+            const thirdPlacePair = getThirdPlacePair();
+
+            const seededDocs = [
+                ...createStageDocs('semifinal', semifinalPairs, true),
+                ...createStageDocs('final', finalPair, true),
+                ...createStageDocs('3rdplace', thirdPlacePair, true)
+            ];
+
+            await SchedulePlayoffModel.create(seededDocs);
+
+            const historySchedules: SchedulePlayoffScheduleForHistoryReturnType[] =
+                await SchedulePlayoffModel.getScheduleForHistory();
+
+            expect(historySchedules).toHaveLength(seededDocs.length);
+
+            seededDocs.forEach(expectedGame => {
+                const expectedUserOne = findSeededUser(
+                    expectedGame.userOneId ?? ''
+                );
+                const expectedUserTwo = findSeededUser(
+                    expectedGame.userTwoId ?? ''
+                );
+
+                const historySchedule = historySchedules.find(
+                    schedule =>
+                        schedule.userOne.teamName ===
+                            expectedUserOne?.teamName &&
+                        schedule.userTwo.teamName ===
+                            expectedUserTwo?.teamName &&
+                        schedule.roundNumber === expectedGame.roundNumber
+                );
+
+                expect(historySchedule).toBeDefined();
+                expect(historySchedule?.userOne.coachName).toBe(
+                    expectedUserOne?.coachName
+                );
+                expect(historySchedule?.userTwo.coachName).toBe(
+                    expectedUserTwo?.coachName
+                );
+                expect(historySchedule?.userOneScore).toBe(
+                    expectedGame.userOneScore
+                );
+                expect(historySchedule?.userTwoScore).toBe(
+                    expectedGame.userTwoScore
+                );
+                expect(historySchedule?.stage).toBe('playoff');
+            });
+        });
+
+        test('Should throw error when there is no schedule playoff data', async () => {
+            await expect(
+                SchedulePlayoffModel.getScheduleForHistory()
+            ).rejects.toThrow('Schedule not found');
+        });
+    }); // getScheduleForHistory
 });

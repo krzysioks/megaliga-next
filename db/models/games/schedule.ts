@@ -37,11 +37,31 @@ export type ScheduleByRoundDtoType = {
     userTwoScore?: number;
 };
 
+type PopulatedUserIdForHistoryType = Pick<UserType, 'teamName' | 'coachName'>;
+
+export type ScheduleForHistoryReturnType = {
+    userOne: PopulatedUserIdForHistoryType;
+    userTwo: PopulatedUserIdForHistoryType;
+    roundNumber: ScheduleType['roundNumber'];
+    userOneScore?: ScheduleType['userOneScore'];
+    userTwoScore?: ScheduleType['userTwoScore'];
+    stage: 'regularSeason';
+};
+
+type PopulatedScheduleForHistoryType = Omit<
+    ScheduleType,
+    'userOneId' | 'userTwoId'
+> & {
+    userOneId?: PopulatedUserIdForHistoryType;
+    userTwoId?: PopulatedUserIdForHistoryType;
+};
+
 interface ScheduleModelType extends Model<ScheduleType> {
     getScheduleByRound: (
         roundNumber: number,
         ligueGroupsId: string
     ) => Promise<ScheduleByRoundDtoType[]>;
+    getScheduleForHistory: () => Promise<ScheduleForHistoryReturnType[]>;
 }
 
 const scheduleSchema = new Schema<ScheduleType, ScheduleModelType>({
@@ -110,6 +130,49 @@ scheduleSchema.static(
                 'Error fetching number of available positions by ligueGroupsIs:',
                 error
             );
+            throw error;
+        }
+    }
+);
+
+scheduleSchema.static(
+    'getScheduleForHistory',
+    async function getScheduleForHistory() {
+        try {
+            const documents: PopulatedScheduleForHistoryType[] =
+                await this.find()
+                    .populate<{ userOneId: PopulatedUserIdForHistoryType }>({
+                        path: 'userOneId',
+                        select: 'teamName coachName'
+                    })
+                    .populate<{ userTwoId: PopulatedUserIdForHistoryType }>({
+                        path: 'userTwoId',
+                        select: 'teamName coachName'
+                    })
+                    .exec();
+
+            if (!documents.length) {
+                throw new Error('Schedule not found');
+            }
+
+            return documents.map(document => {
+                return {
+                    userOne: {
+                        teamName: document.userOneId?.teamName ?? '',
+                        coachName: document.userOneId?.coachName ?? ''
+                    },
+                    userTwo: {
+                        teamName: document.userTwoId?.teamName ?? '',
+                        coachName: document.userTwoId?.coachName ?? ''
+                    },
+                    roundNumber: document.roundNumber,
+                    userOneScore: document.userOneScore,
+                    userTwoScore: document.userTwoScore,
+                    stage: 'regularSeason' as const
+                };
+            });
+        } catch (error) {
+            console.error('Error fetching schedule data for history:', error);
             throw error;
         }
     }

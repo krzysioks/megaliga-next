@@ -49,6 +49,15 @@ export type SchedulePlayoffStandingsForHistoryReturnType = {
     coachName: UserType['coachName'];
 };
 
+export type SchedulePlayoffScheduleForHistoryReturnType = {
+    userOne: PopulatedUserIdForHistoryType;
+    userTwo: PopulatedUserIdForHistoryType;
+    roundNumber: SchedulePlayoffType['roundNumber'];
+    userOneScore?: SchedulePlayoffType['userOneScore'];
+    userTwoScore?: SchedulePlayoffType['userTwoScore'];
+    stage: 'playoff';
+};
+
 export type SchedulePlayoffByRoundDtoType = {
     id: Types.ObjectId;
     roundNumber: number;
@@ -68,6 +77,9 @@ interface SchedulePlayoffModelType extends Model<SchedulePlayoffType> {
     ) => Promise<SchedulePlayoffByRoundDtoType[]>;
     getStandingsForHistory: () => Promise<
         SchedulePlayoffStandingsForHistoryReturnType[]
+    >;
+    getScheduleForHistory: () => Promise<
+        SchedulePlayoffScheduleForHistoryReturnType[]
     >;
 }
 
@@ -303,6 +315,52 @@ schedulePlayoffSchema.static(
             ];
         } catch (error) {
             console.error('Error fetching final standings:', error);
+            throw error;
+        }
+    }
+);
+
+schedulePlayoffSchema.static(
+    'getScheduleForHistory',
+    async function getScheduleForHistory() {
+        try {
+            const documents: PopulatedSchedulePlayoffForHistoryType[] =
+                await this.find()
+                    .populate<{ userOneId: PopulatedUserIdForHistoryType }>({
+                        path: 'userOneId',
+                        select: 'teamName coachName'
+                    })
+                    .populate<{ userTwoId: PopulatedUserIdForHistoryType }>({
+                        path: 'userTwoId',
+                        select: 'teamName coachName'
+                    })
+                    .exec();
+
+            if (!documents.length) {
+                throw new Error('Schedule not found');
+            }
+
+            return documents.map(document => {
+                return {
+                    userOne: {
+                        teamName: document.userOneId?.teamName ?? '',
+                        coachName: document.userOneId?.coachName ?? ''
+                    },
+                    userTwo: {
+                        teamName: document.userTwoId?.teamName ?? '',
+                        coachName: document.userTwoId?.coachName ?? ''
+                    },
+                    roundNumber: document.roundNumber,
+                    userOneScore: document.userOneScore,
+                    userTwoScore: document.userTwoScore,
+                    stage: 'playoff' as const
+                };
+            });
+        } catch (error) {
+            console.error(
+                'Error fetching schedule playoff data for history:',
+                error
+            );
             throw error;
         }
     }

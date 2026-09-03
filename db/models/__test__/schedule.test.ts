@@ -37,7 +37,6 @@ beforeAll(async () => {
 
     const baseUserData = {
         password: 'Password1!',
-        coachName: 'Coach One',
         reachedPlayoff: false,
         isFirstRoundDraftOrderDraw: false,
         bio: 'User one bio',
@@ -49,6 +48,7 @@ beforeAll(async () => {
         {
             username: 'user-one',
             teamName: 'Team One',
+            coachName: 'Coach One',
             logoUrl: 'https://example.com/team-one.png',
             email: 'user-one@example.com',
             groupName: dolceId
@@ -56,6 +56,7 @@ beforeAll(async () => {
         {
             username: 'user-two',
             teamName: 'Team Two',
+            coachName: 'Coach Two',
             logoUrl: 'https://example.com/team-two.png',
             email: 'user-two@example.com',
             groupName: dolceId
@@ -63,6 +64,7 @@ beforeAll(async () => {
         {
             username: 'user-three',
             teamName: 'Team Three',
+            coachName: 'Coach Three',
             logoUrl: 'https://example.com/team-three.png',
             email: 'user-three@example.com',
             groupName: dolceId
@@ -70,6 +72,7 @@ beforeAll(async () => {
         {
             username: 'user-four',
             teamName: 'Team Four',
+            coachName: 'Coach Four',
             logoUrl: 'https://example.com/team-four.png',
             email: 'user-four@example.com',
             groupName: dolceId
@@ -77,6 +80,7 @@ beforeAll(async () => {
         {
             username: 'user-five',
             teamName: 'Team Five',
+            coachName: 'Coach Five',
             logoUrl: 'https://example.com/team-five.png',
             email: 'user-five@example.com',
             groupName: gabbanaId
@@ -84,6 +88,7 @@ beforeAll(async () => {
         {
             username: 'user-six',
             teamName: 'Team Six',
+            coachName: 'Coach Six',
             logoUrl: 'https://example.com/team-six.png',
             email: 'user-six@example.com',
             groupName: gabbanaId
@@ -91,6 +96,7 @@ beforeAll(async () => {
         {
             username: 'user-seven',
             teamName: 'Team Seven',
+            coachName: 'Coach Seven',
             logoUrl: 'https://example.com/team-seven.png',
             email: 'user-seven@example.com',
             groupName: gabbanaId
@@ -98,6 +104,7 @@ beforeAll(async () => {
         {
             username: 'user-eight',
             teamName: 'Team Eight',
+            coachName: 'Coach Eight',
             logoUrl: 'https://example.com/team-eight.png',
             email: 'user-eight@example.com',
             groupName: gabbanaId
@@ -399,5 +406,58 @@ describe('Test ScheduleModel methods and static functions', () => {
         ).rejects.toThrow(
             `Schedules for given ligueGroupsId: ${dolceId} and roundNumber: 99 don't exist: `
         );
+    });
+
+    describe('getScheduleForHistory', () => {
+        test('Should return all schedule documents with team names, coach names, scores and stage set to regularSeason', async () => {
+            const historySchedules =
+                await ScheduleModel.getScheduleForHistory();
+
+            expect(historySchedules).toHaveLength(scheduleData.length);
+
+            scheduleData.forEach(expectedSchedule => {
+                const expectedUserOne = findSeededUser(
+                    expectedSchedule.userOneId ?? ''
+                );
+                const expectedUserTwo = findSeededUser(
+                    expectedSchedule.userTwoId ?? ''
+                );
+
+                const historySchedule = historySchedules.find(
+                    schedule =>
+                        schedule.userOne.teamName ===
+                            expectedUserOne?.teamName &&
+                        schedule.userTwo.teamName === expectedUserTwo?.teamName
+                );
+
+                expect(historySchedule).toBeDefined();
+                expect(historySchedule?.userOne.coachName).toBe(
+                    expectedUserOne?.coachName
+                );
+                expect(historySchedule?.userTwo.coachName).toBe(
+                    expectedUserTwo?.coachName
+                );
+                expect(historySchedule?.roundNumber).toBe(
+                    expectedSchedule.roundNumber
+                );
+                expect(historySchedule?.userOneScore).toBe(
+                    expectedSchedule.userOneScore
+                );
+                expect(historySchedule?.userTwoScore).toBe(
+                    expectedSchedule.userTwoScore
+                );
+                expect(historySchedule?.stage).toBe('regularSeason');
+            });
+        });
+
+        test('Should throw error when there is no schedule data', async () => {
+            await ScheduleModel.deleteMany();
+
+            await expect(ScheduleModel.getScheduleForHistory()).rejects.toThrow(
+                'Schedule not found'
+            );
+
+            await ScheduleModel.create(scheduleData);
+        });
     });
 });
