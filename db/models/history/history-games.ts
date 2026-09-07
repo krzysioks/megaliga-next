@@ -1,6 +1,13 @@
 import { HydratedDocument, model, Model, Schema } from 'mongoose';
 import { z } from 'zod';
 
+import ScheduleModel from '@/db/models/games/schedule';
+import SchedulePlayoffModel from '@/db/models/games/schedule-playoff';
+import ScoreDetailsModel from '@/db/models/games/score-details';
+import ScoreDetailsPlayoffModel from '@/db/models/games/score-details-playoff';
+import HistoryGamesScoreDetailsModel, {
+    HistoryGamesScoreDetailsType
+} from '@/db/models/history/history-games-score-details';
 import HistoryTeamModel, {
     HistoryTeamType
 } from '@/db/models/history/history-team';
@@ -30,7 +37,7 @@ export const historyGamesZodSchema = z.object({
             }),
             roundNumber: roundNumberSchema,
             stage: stageEnumSchema,
-            scoreDetails: objectIdSchema // Reference to HistoryGamesScoreDetails document
+            scoreDetails: objectIdSchema.optional() // Reference to HistoryGamesScoreDetails document
         })
     )
 });
@@ -75,6 +82,8 @@ interface HistoryGamesModelType extends Model<HistoryGamesType> {
         userId: string,
         stage: (typeof STAGE_ENUM)[number]
     ) => Promise<UserSeasonGamesByStageReturnType[]>;
+    saveScheduleToHistory: (seasonId: string) => Promise<string>;
+    saveSchedulePlayoffToHistory: (seasonId: string) => Promise<string>;
 }
 
 const historyGamesSchema = new Schema<HistoryGamesType, HistoryGamesModelType>({
@@ -109,8 +118,7 @@ const historyGamesSchema = new Schema<HistoryGamesType, HistoryGamesModelType>({
             },
             scoreDetails: {
                 type: Schema.Types.ObjectId,
-                ref: 'HistoryGamesScoreDetails',
-                required: true
+                ref: 'HistoryGamesScoreDetails'
             }
         }
     ]
@@ -183,6 +191,187 @@ historyGamesSchema.static(
                 `Error fetching user season games by stage for seasonId: ${seasonId}, userId: ${userId}, stage: ${stage}`,
                 error
             );
+            throw error;
+        }
+    }
+);
+
+historyGamesSchema.static(
+    'saveScheduleToHistory',
+    async function saveScheduleToHistory(seasonId: string) {
+        try {
+            const scheduleData = await ScheduleModel.getScheduleForHistory();
+            const scoreDetailsData =
+                await ScoreDetailsModel.getScoreDetailsForHistory();
+
+            let games: HistoryGamesType['games'] = [];
+            for (const schedule of scheduleData) {
+                const teamOneId =
+                    await HistoryTeamModel.getHistoryTeamIdByNameAndCoachName(
+                        schedule.userOne.teamName,
+                        schedule.userOne.coachName
+                    );
+                const teamTwoId =
+                    await HistoryTeamModel.getHistoryTeamIdByNameAndCoachName(
+                        schedule.userTwo.teamName,
+                        schedule.userTwo.coachName
+                    );
+
+                const matchingScoreDetails = scoreDetailsData.find(
+                    scoreDetails => {
+                        return (
+                            scoreDetails.scheduleId?.toString() ===
+                            schedule.id.toString()
+                        );
+                    }
+                );
+
+                let scoreDetailsId: string | undefined;
+                if (matchingScoreDetails) {
+                    const scoreDetail: HistoryGamesScoreDetailsType = {
+                        teamOne: {
+                            players: matchingScoreDetails.teamOne.players,
+                            trainer: matchingScoreDetails.teamOne.trainer,
+                            setPlays: matchingScoreDetails.teamOne.setPlays
+                                ? [matchingScoreDetails.teamOne.setPlays]
+                                : undefined,
+                            teamId: teamOneId,
+                            score: schedule.userOneScore ?? 0
+                        },
+                        teamTwo: {
+                            players: matchingScoreDetails.teamTwo.players,
+                            trainer: matchingScoreDetails.teamTwo.trainer,
+                            setPlays: matchingScoreDetails.teamTwo.setPlays
+                                ? [matchingScoreDetails.teamTwo.setPlays]
+                                : undefined,
+                            teamId: teamTwoId,
+                            score: schedule.userTwoScore ?? 0
+                        }
+                    };
+
+                    scoreDetailsId =
+                        await HistoryGamesScoreDetailsModel.saveScoreDetailToHistory(
+                            scoreDetail
+                        );
+                }
+
+                games = [
+                    ...games,
+                    {
+                        teamOne: {
+                            teamId: teamOneId,
+                            score: schedule.userOneScore ?? 0
+                        },
+                        teamTwo: {
+                            teamId: teamTwoId,
+                            score: schedule.userTwoScore ?? 0
+                        },
+                        roundNumber: schedule.roundNumber,
+                        stage: 'regularSeason',
+                        scoreDetails: scoreDetailsId
+                    }
+                ];
+            }
+
+            const newHistoryGamesDocument = await this.create({
+                season: seasonId,
+                games
+            });
+
+            return newHistoryGamesDocument._id.toString();
+        } catch (error) {
+            console.error('Error saving schedule to history:', error);
+            throw error;
+        }
+    }
+);
+
+historyGamesSchema.static(
+    'saveSchedulePlayoffToHistory',
+    async function saveSchedulePlayoffToHistory(seasonId: string) {
+        try {
+            const scheduleData =
+                await SchedulePlayoffModel.getScheduleForHistory();
+            const scoreDetailsData =
+                await ScoreDetailsPlayoffModel.getScoreDetailsForHistory();
+
+            let games: HistoryGamesType['games'] = [];
+            for (const schedule of scheduleData) {
+                const teamOneId =
+                    await HistoryTeamModel.getHistoryTeamIdByNameAndCoachName(
+                        schedule.userOne.teamName,
+                        schedule.userOne.coachName
+                    );
+                const teamTwoId =
+                    await HistoryTeamModel.getHistoryTeamIdByNameAndCoachName(
+                        schedule.userTwo.teamName,
+                        schedule.userTwo.coachName
+                    );
+
+                const matchingScoreDetails = scoreDetailsData.find(
+                    scoreDetails => {
+                        return (
+                            scoreDetails.scheduleId?.toString() ===
+                            schedule.id.toString()
+                        );
+                    }
+                );
+
+                let scoreDetailsId: string | undefined;
+                if (matchingScoreDetails) {
+                    const scoreDetail: HistoryGamesScoreDetailsType = {
+                        teamOne: {
+                            players: matchingScoreDetails.teamOne.players,
+                            trainer: matchingScoreDetails.teamOne.trainer,
+                            setPlays: matchingScoreDetails.teamOne.setPlays
+                                ? [matchingScoreDetails.teamOne.setPlays]
+                                : undefined,
+                            teamId: teamOneId,
+                            score: schedule.userOneScore ?? 0
+                        },
+                        teamTwo: {
+                            players: matchingScoreDetails.teamTwo.players,
+                            trainer: matchingScoreDetails.teamTwo.trainer,
+                            setPlays: matchingScoreDetails.teamTwo.setPlays
+                                ? [matchingScoreDetails.teamTwo.setPlays]
+                                : undefined,
+                            teamId: teamTwoId,
+                            score: schedule.userTwoScore ?? 0
+                        }
+                    };
+
+                    scoreDetailsId =
+                        await HistoryGamesScoreDetailsModel.saveScoreDetailToHistory(
+                            scoreDetail
+                        );
+                }
+
+                games = [
+                    ...games,
+                    {
+                        teamOne: {
+                            teamId: teamOneId,
+                            score: schedule.userOneScore ?? 0
+                        },
+                        teamTwo: {
+                            teamId: teamTwoId,
+                            score: schedule.userTwoScore ?? 0
+                        },
+                        roundNumber: schedule.roundNumber,
+                        stage: 'playoff',
+                        scoreDetails: scoreDetailsId
+                    }
+                ];
+            }
+
+            const newHistoryGamesDocument = await this.create({
+                season: seasonId,
+                games
+            });
+
+            return newHistoryGamesDocument._id.toString();
+        } catch (error) {
+            console.error('Error saving schedule playoff to history:', error);
             throw error;
         }
     }

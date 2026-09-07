@@ -70,6 +70,9 @@ interface HistoryGamesScoreDetailsModelType extends Model<HistoryGamesScoreDetai
     getHistoryScoreDetailsById: (
         id: string
     ) => Promise<HistoryGamesScoreDetailsByIdReturnType>;
+    saveScoreDetailToHistory: (
+        scoreDetail: HistoryGamesScoreDetailsType
+    ) => Promise<string>;
 }
 
 const historyGamesScoreDetails = new Schema<
@@ -214,6 +217,22 @@ historyGamesScoreDetails.static(
             };
         } catch (error) {
             console.error('Error fetching history score details by id:', error);
+            throw error;
+        }
+    }
+);
+
+historyGamesScoreDetails.static(
+    'saveScoreDetailToHistory',
+    async function saveScoreDetailToHistory(
+        scoreDetail: HistoryGamesScoreDetailsType
+    ) {
+        try {
+            const newDocument = await this.create(scoreDetail);
+
+            return newDocument._id.toString();
+        } catch (error) {
+            console.error('Error saving score details to history:', error);
             throw error;
         }
     }

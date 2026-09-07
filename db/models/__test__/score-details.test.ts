@@ -60,7 +60,13 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             { extraligaPlayerName: 'Player One' },
             { extraligaPlayerName: 'Player Two' },
             { extraligaPlayerName: 'Player Three' },
-            { extraligaPlayerName: 'Player Four' }
+            { extraligaPlayerName: 'Player Four' },
+            { extraligaPlayerName: 'Player Five' },
+            { extraligaPlayerName: 'Player Six' },
+            { extraligaPlayerName: 'Player Seven' },
+            { extraligaPlayerName: 'Player Eight' },
+            { extraligaPlayerName: 'Player Nine' },
+            { extraligaPlayerName: 'Player Ten' }
         ]);
 
         const startingLineupOne = await new StartingLineupModel({
@@ -69,20 +75,20 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             setPlays: 'team-one-setplay',
             playerOne: players[0]._id.toString(),
             playerTwo: players[1]._id.toString(),
-            playerThree: players[0]._id.toString(),
-            playerFour: players[1]._id.toString(),
-            playerFive: players[0]._id.toString()
+            playerThree: players[2]._id.toString(),
+            playerFour: players[3]._id.toString(),
+            playerFive: players[4]._id.toString()
         }).save();
 
         const startingLineupTwo = await new StartingLineupModel({
             userId: userTwo._id.toString(),
             roundNumber: 3,
             setPlays: 'team-two-setplay',
-            playerOne: players[2]._id.toString(),
-            playerTwo: players[3]._id.toString(),
-            playerThree: players[2]._id.toString(),
-            playerFour: players[3]._id.toString(),
-            playerFive: players[2]._id.toString()
+            playerOne: players[5]._id.toString(),
+            playerTwo: players[6]._id.toString(),
+            playerThree: players[7]._id.toString(),
+            playerFour: players[8]._id.toString(),
+            playerFive: players[9]._id.toString()
         }).save();
 
         const schedule = await new ScheduleModel({
@@ -232,5 +238,142 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
         ).rejects.toThrow(
             `Score details for scheduleId: ${schedule._id.toString()} and roundNumber: ${missingRoundNumber} not found`
         );
+    });
+
+    describe('getScoreDetailsForHistory', () => {
+        test('Should return all score details documents with players, trainer and setPlays populated for both teams', async () => {
+            const userOne = await new UserModel(createUserData(20)).save();
+            const userTwo = await new UserModel(createUserData(21)).save();
+
+            const players = await PlayersModel.create([
+                { extraligaPlayerName: 'Player One' },
+                { extraligaPlayerName: 'Player Two' },
+                { extraligaPlayerName: 'Player Three' },
+                { extraligaPlayerName: 'Player Four' },
+                { extraligaPlayerName: 'Player Five' },
+                { extraligaPlayerName: 'Player Six' },
+                { extraligaPlayerName: 'Player Seven' },
+                { extraligaPlayerName: 'Player Eight' },
+                { extraligaPlayerName: 'Player Nine' },
+                { extraligaPlayerName: 'Player Ten' }
+            ]);
+
+            const startingLineupOne = await new StartingLineupModel({
+                userId: userOne._id.toString(),
+                roundNumber: 3,
+                setPlays: 'team-one-setplay',
+                playerOne: players[0]._id.toString(),
+                playerTwo: players[1]._id.toString(),
+                playerThree: players[2]._id.toString(),
+                playerFour: players[3]._id.toString(),
+                playerFive: players[4]._id.toString()
+            }).save();
+
+            const startingLineupTwo = await new StartingLineupModel({
+                userId: userTwo._id.toString(),
+                roundNumber: 3,
+                setPlays: 'team-two-setplay',
+                playerOne: players[5]._id.toString(),
+                playerTwo: players[6]._id.toString(),
+                playerThree: players[7]._id.toString(),
+                playerFour: players[8]._id.toString(),
+                playerFive: players[9]._id.toString()
+            }).save();
+
+            const schedule = await new ScheduleModel({
+                userOneId: userOne._id.toString(),
+                userTwoId: userTwo._id.toString(),
+                roundNumber: 3,
+                ligueGroupsId: new mongoose.Types.ObjectId().toString(),
+                userOneScore: 46,
+                userTwoScore: 44
+            }).save();
+
+            const scoreDetailsToCreate: ScoreDetailsType = {
+                scheduleId: schedule._id.toString(),
+                roundNumber: 3,
+                teamOne: {
+                    userId: userOne._id.toString(),
+                    players: [
+                        {
+                            playerId: players[0]._id.toString(),
+                            heatOne: 3,
+                            setPlay: 1,
+                            comment: 'Solid ride'
+                        }
+                    ],
+                    trainer: {
+                        heatOne: 1,
+                        setPlay: 0,
+                        comment: 'Trainer one'
+                    },
+                    startingLineupId: startingLineupOne._id.toString()
+                },
+                teamTwo: {
+                    userId: userTwo._id.toString(),
+                    players: [
+                        {
+                            playerId: players[1]._id.toString(),
+                            heatOne: 2,
+                            setPlay: 0,
+                            comment: 'Strong start'
+                        }
+                    ],
+                    trainer: {
+                        heatOne: 0,
+                        setPlay: 1,
+                        comment: 'Trainer two'
+                    },
+                    startingLineupId: startingLineupTwo._id.toString()
+                }
+            };
+
+            await new ScoreDetailsModel(scoreDetailsToCreate).save();
+
+            const result = await ScoreDetailsModel.getScoreDetailsForHistory();
+
+            expect(result).toHaveLength(1);
+
+            const [scoreDetails] = result;
+
+            expect(scoreDetails.teamOne.setPlays).toBe(
+                startingLineupOne.setPlays
+            );
+            expect(scoreDetails.teamTwo.setPlays).toBe(
+                startingLineupTwo.setPlays
+            );
+
+            expect(scoreDetails.teamOne.trainer?.heatOne).toBe(1);
+            expect(scoreDetails.teamOne.trainer?.setPlay).toBe(0);
+            expect(scoreDetails.teamOne.trainer?.comment).toBe('Trainer one');
+
+            expect(scoreDetails.teamTwo.trainer?.heatOne).toBe(0);
+            expect(scoreDetails.teamTwo.trainer?.setPlay).toBe(1);
+            expect(scoreDetails.teamTwo.trainer?.comment).toBe('Trainer two');
+
+            expect(scoreDetails.teamOne.players).toHaveLength(1);
+            expect(scoreDetails.teamOne.players[0].playerId?.toString()).toBe(
+                players[0]._id.toString()
+            );
+            expect(scoreDetails.teamOne.players[0].heatOne).toBe(3);
+            expect(scoreDetails.teamOne.players[0].setPlay).toBe(1);
+            expect(scoreDetails.teamOne.players[0].comment).toBe('Solid ride');
+
+            expect(scoreDetails.teamTwo.players).toHaveLength(1);
+            expect(scoreDetails.teamTwo.players[0].playerId?.toString()).toBe(
+                players[1]._id.toString()
+            );
+            expect(scoreDetails.teamTwo.players[0].heatOne).toBe(2);
+            expect(scoreDetails.teamTwo.players[0].setPlay).toBe(0);
+            expect(scoreDetails.teamTwo.players[0].comment).toBe(
+                'Strong start'
+            );
+        });
+
+        test('Should throw error when there is no score details data', async () => {
+            await expect(
+                ScoreDetailsModel.getScoreDetailsForHistory()
+            ).rejects.toThrow('Score details not found');
+        });
     });
 });

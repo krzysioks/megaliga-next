@@ -490,14 +490,14 @@ describe('Test SchedulePlayoffModel methods and static functions', () => {
                 ...createStageDocs('3rdplace', thirdPlacePair, true)
             ];
 
-            await SchedulePlayoffModel.create(seededDocs);
+            const createdDocs = await SchedulePlayoffModel.create(seededDocs);
 
             const historySchedules: SchedulePlayoffScheduleForHistoryReturnType[] =
                 await SchedulePlayoffModel.getScheduleForHistory();
 
             expect(historySchedules).toHaveLength(seededDocs.length);
 
-            seededDocs.forEach(expectedGame => {
+            seededDocs.forEach((expectedGame, index) => {
                 const expectedUserOne = findSeededUser(
                     expectedGame.userOneId ?? ''
                 );
@@ -515,6 +515,9 @@ describe('Test SchedulePlayoffModel methods and static functions', () => {
                 );
 
                 expect(historySchedule).toBeDefined();
+                expect(historySchedule?.id.toString()).toBe(
+                    createdDocs[index]._id.toString()
+                );
                 expect(historySchedule?.userOne.coachName).toBe(
                     expectedUserOne?.coachName
                 );

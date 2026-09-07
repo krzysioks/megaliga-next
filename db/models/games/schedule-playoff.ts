@@ -50,6 +50,7 @@ export type SchedulePlayoffStandingsForHistoryReturnType = {
 };
 
 export type SchedulePlayoffScheduleForHistoryReturnType = {
+    id: Types.ObjectId;
     userOne: PopulatedUserIdForHistoryType;
     userTwo: PopulatedUserIdForHistoryType;
     roundNumber: SchedulePlayoffType['roundNumber'];
@@ -100,6 +101,7 @@ type PopulatedSchedulePlayoffForHistoryType = Omit<
     SchedulePlayoffType,
     'userOneId' | 'userTwoId'
 > & {
+    _id: Types.ObjectId;
     userOneId: PopulatedUserIdForHistoryType;
     userTwoId: PopulatedUserIdForHistoryType;
 };
@@ -342,6 +344,7 @@ schedulePlayoffSchema.static(
 
             return documents.map(document => {
                 return {
+                    id: document._id,
                     userOne: {
                         teamName: document.userOneId?.teamName ?? '',
                         coachName: document.userOneId?.coachName ?? ''

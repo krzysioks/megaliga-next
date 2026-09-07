@@ -74,11 +74,39 @@ export type ScoreDetailsDtoType = {
     userOneScore: PopulatedScoreDetailsType['scheduleId']['userOneScore'];
     userTwoScore: PopulatedScoreDetailsType['scheduleId']['userTwoScore'];
 };
+
+type ScoreDetailsForHistoryTeamDtoType = {
+    players: NonNullable<ScoreDetailsType['teamOne']['players']>;
+    trainer: ScoreDetailsType['teamOne']['trainer'];
+    setPlays: StartingLineupType['setPlays'];
+};
+
+export type ScoreDetailsForHistoryReturnType = {
+    scheduleId: ScoreDetailsType['scheduleId'];
+    teamOne: ScoreDetailsForHistoryTeamDtoType;
+    teamTwo: ScoreDetailsForHistoryTeamDtoType;
+};
+
+type PopulatedScoreDetailsForHistoryType = Omit<
+    ScoreDetailsType,
+    'teamOne' | 'teamTwo'
+> & {
+    teamOne: Omit<ScoreDetailsType['teamOne'], 'startingLineupId'> & {
+        startingLineupId?: Pick<StartingLineupType, 'setPlays'>;
+    };
+    teamTwo: Omit<ScoreDetailsType['teamTwo'], 'startingLineupId'> & {
+        startingLineupId?: Pick<StartingLineupType, 'setPlays'>;
+    };
+};
+
 interface ScoreDetailsModelType extends Model<ScoreDetailsType> {
     getScoreDetailsByScheduleAndRoundId: (
         scheduleId: string,
         roundNumber: number
     ) => Promise<ScoreDetailsDtoType>;
+    getScoreDetailsForHistory: () => Promise<
+        ScoreDetailsForHistoryReturnType[]
+    >;
 }
 
 const scoreDetailsSchema = new Schema<ScoreDetailsType, ScoreDetailsModelType>({
@@ -237,6 +265,57 @@ scoreDetailsSchema.static(
             };
         } catch (error) {
             console.error('Error fetching score details:', error);
+            throw error;
+        }
+    }
+);
+
+scoreDetailsSchema.static(
+    'getScoreDetailsForHistory',
+    async function getScoreDetailsForHistory() {
+        try {
+            const documents: PopulatedScoreDetailsForHistoryType[] =
+                await this.find()
+                    .populate<{
+                        teamOne: PopulatedScoreDetailsForHistoryType['teamOne'];
+                    }>({
+                        path: 'teamOne.startingLineupId',
+                        select: 'setPlays'
+                    })
+                    .populate<{
+                        teamTwo: PopulatedScoreDetailsForHistoryType['teamTwo'];
+                    }>({
+                        path: 'teamTwo.startingLineupId',
+                        select: 'setPlays'
+                    })
+                    .exec();
+
+            if (!documents.length) {
+                throw new Error('Score details not found');
+            }
+
+            const mapTeam = (
+                team: PopulatedScoreDetailsForHistoryType['teamOne']
+            ): ScoreDetailsForHistoryTeamDtoType => {
+                return {
+                    players: team.players ?? [],
+                    trainer: team.trainer,
+                    setPlays: team.startingLineupId?.setPlays
+                };
+            };
+
+            return documents.map(document => {
+                return {
+                    scheduleId: document.scheduleId,
+                    teamOne: mapTeam(document.teamOne),
+                    teamTwo: mapTeam(document.teamTwo)
+                };
+            });
+        } catch (error) {
+            console.error(
+                'Error fetching score details data for history:',
+                error
+            );
             throw error;
         }
     }

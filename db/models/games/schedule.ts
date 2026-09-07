@@ -40,6 +40,7 @@ export type ScheduleByRoundDtoType = {
 type PopulatedUserIdForHistoryType = Pick<UserType, 'teamName' | 'coachName'>;
 
 export type ScheduleForHistoryReturnType = {
+    id: Types.ObjectId;
     userOne: PopulatedUserIdForHistoryType;
     userTwo: PopulatedUserIdForHistoryType;
     roundNumber: ScheduleType['roundNumber'];
@@ -52,6 +53,7 @@ type PopulatedScheduleForHistoryType = Omit<
     ScheduleType,
     'userOneId' | 'userTwoId'
 > & {
+    _id: Types.ObjectId;
     userOneId?: PopulatedUserIdForHistoryType;
     userTwoId?: PopulatedUserIdForHistoryType;
 };
@@ -157,6 +159,7 @@ scheduleSchema.static(
 
             return documents.map(document => {
                 return {
+                    id: document._id,
                     userOne: {
                         teamName: document.userOneId?.teamName ?? '',
                         coachName: document.userOneId?.coachName ?? ''

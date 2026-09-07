@@ -168,4 +168,89 @@ describe('Test HistoryGamesScoreDetailsModel methods and static functions', () =
             (result.teamOne as Record<string, unknown>).teamId
         ).toBeUndefined();
     });
+
+    describe('saveScoreDetailToHistory', () => {
+        test('should create a document and return its id', async () => {
+            const teamOne = await HistoryTeamModel.create(
+                createHistoryTeamData(
+                    new mongoose.Types.ObjectId().toString(),
+                    {
+                        name: 'Team A'
+                    }
+                )
+            );
+            const teamTwo = await HistoryTeamModel.create(
+                createHistoryTeamData(
+                    new mongoose.Types.ObjectId().toString(),
+                    {
+                        name: 'Team B'
+                    }
+                )
+            );
+
+            const players = await PlayersModel.create([
+                { extraligaPlayerName: 'Player One' },
+                { extraligaPlayerName: 'Player Two' }
+            ]);
+
+            const scoreDetail: HistoryGamesScoreDetailsType = {
+                teamOne: {
+                    teamId: teamOne._id.toString(),
+                    score: 46,
+                    setPlays: ['team-one-setplay'],
+                    players: [
+                        {
+                            playerId: players[0]._id.toString(),
+                            heatOne: 3,
+                            setPlay: 1,
+                            comment: 'Solid ride'
+                        }
+                    ],
+                    trainer: {
+                        heatOne: 1,
+                        setPlay: 0,
+                        comment: 'Trainer one'
+                    }
+                },
+                teamTwo: {
+                    teamId: teamTwo._id.toString(),
+                    score: 44,
+                    setPlays: ['team-two-setplay'],
+                    players: [
+                        {
+                            playerId: players[1]._id.toString(),
+                            heatOne: 2,
+                            setPlay: 0,
+                            comment: 'Strong start'
+                        }
+                    ],
+                    trainer: {
+                        heatOne: 0,
+                        setPlay: 1,
+                        comment: 'Trainer two'
+                    }
+                }
+            };
+
+            const savedId =
+                await HistoryGamesScoreDetailsModel.saveScoreDetailToHistory(
+                    scoreDetail
+                );
+
+            const savedDocument = await HistoryGamesScoreDetailsModel.findById(
+                savedId
+            )
+                .lean()
+                .exec();
+
+            expect(savedDocument?.teamOne.teamId?.toString()).toBe(
+                teamOne._id.toString()
+            );
+            expect(savedDocument?.teamTwo.teamId?.toString()).toBe(
+                teamTwo._id.toString()
+            );
+            expect(savedDocument?.teamOne.score).toBe(46);
+            expect(savedDocument?.teamTwo.score).toBe(44);
+        });
+    });
 });

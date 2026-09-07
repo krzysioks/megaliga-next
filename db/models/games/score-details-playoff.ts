@@ -81,11 +81,38 @@ export type ScoreDetailsPlayoffDtoType = {
     userTwoScore: PopulatedScoreDetailsPlayoffType['scheduleId']['userTwoScore'];
 };
 
+type ScoreDetailsPlayoffForHistoryTeamDtoType = {
+    players: NonNullable<ScoreDetailsPlayoffType['teamOne']['players']>;
+    trainer: ScoreDetailsPlayoffType['teamOne']['trainer'];
+    setPlays: StartingLineupPlayoffType['setPlays'];
+};
+
+export type ScoreDetailsPlayoffForHistoryReturnType = {
+    scheduleId: ScoreDetailsPlayoffType['scheduleId'];
+    teamOne: ScoreDetailsPlayoffForHistoryTeamDtoType;
+    teamTwo: ScoreDetailsPlayoffForHistoryTeamDtoType;
+};
+
+type PopulatedScoreDetailsPlayoffForHistoryType = Omit<
+    ScoreDetailsPlayoffType,
+    'teamOne' | 'teamTwo'
+> & {
+    teamOne: Omit<ScoreDetailsPlayoffType['teamOne'], 'startingLineupId'> & {
+        startingLineupId?: Pick<StartingLineupPlayoffType, 'setPlays'>;
+    };
+    teamTwo: Omit<ScoreDetailsPlayoffType['teamTwo'], 'startingLineupId'> & {
+        startingLineupId?: Pick<StartingLineupPlayoffType, 'setPlays'>;
+    };
+};
+
 interface ScoreDetailsPlayoffModelType extends Model<ScoreDetailsPlayoffType> {
     getScoreDetailsByScheduleAndRoundId: (
         scheduleId: string,
         roundNumber: number
     ) => Promise<ScoreDetailsPlayoffDtoType>;
+    getScoreDetailsForHistory: () => Promise<
+        ScoreDetailsPlayoffForHistoryReturnType[]
+    >;
 }
 
 const scoreDetailsPlayoffSchema = new Schema<
@@ -253,6 +280,57 @@ scoreDetailsPlayoffSchema.static(
             };
         } catch (error) {
             console.error('Error fetching score details playoff:', error);
+            throw error;
+        }
+    }
+);
+
+scoreDetailsPlayoffSchema.static(
+    'getScoreDetailsForHistory',
+    async function getScoreDetailsForHistory() {
+        try {
+            const documents: PopulatedScoreDetailsPlayoffForHistoryType[] =
+                await this.find()
+                    .populate<{
+                        teamOne: PopulatedScoreDetailsPlayoffForHistoryType['teamOne'];
+                    }>({
+                        path: 'teamOne.startingLineupId',
+                        select: 'setPlays'
+                    })
+                    .populate<{
+                        teamTwo: PopulatedScoreDetailsPlayoffForHistoryType['teamTwo'];
+                    }>({
+                        path: 'teamTwo.startingLineupId',
+                        select: 'setPlays'
+                    })
+                    .exec();
+
+            if (!documents.length) {
+                throw new Error('Score details not found');
+            }
+
+            const mapTeam = (
+                team: PopulatedScoreDetailsPlayoffForHistoryType['teamOne']
+            ): ScoreDetailsPlayoffForHistoryTeamDtoType => {
+                return {
+                    players: team.players ?? [],
+                    trainer: team.trainer,
+                    setPlays: team.startingLineupId?.setPlays
+                };
+            };
+
+            return documents.map(document => {
+                return {
+                    scheduleId: document.scheduleId,
+                    teamOne: mapTeam(document.teamOne),
+                    teamTwo: mapTeam(document.teamTwo)
+                };
+            });
+        } catch (error) {
+            console.error(
+                'Error fetching score details playoff data for history:',
+                error
+            );
             throw error;
         }
     }

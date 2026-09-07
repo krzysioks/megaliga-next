@@ -12,6 +12,7 @@ let dolceId: string;
 let gabbanaId: string;
 let usersToCreate: Record<string, string>[];
 let scheduleData: ScheduleType[];
+let createdSchedules: Awaited<ReturnType<typeof ScheduleModel.create>>;
 
 // connect to test db before running tests
 beforeAll(async () => {
@@ -190,7 +191,7 @@ beforeAll(async () => {
         }
     ];
 
-    await ScheduleModel.create(scheduleData);
+    createdSchedules = await ScheduleModel.create(scheduleData);
 });
 
 //close connection to server so, that test suite will close
@@ -415,7 +416,7 @@ describe('Test ScheduleModel methods and static functions', () => {
 
             expect(historySchedules).toHaveLength(scheduleData.length);
 
-            scheduleData.forEach(expectedSchedule => {
+            scheduleData.forEach((expectedSchedule, index) => {
                 const expectedUserOne = findSeededUser(
                     expectedSchedule.userOneId ?? ''
                 );
@@ -431,6 +432,9 @@ describe('Test ScheduleModel methods and static functions', () => {
                 );
 
                 expect(historySchedule).toBeDefined();
+                expect(historySchedule?.id.toString()).toBe(
+                    createdSchedules[index]._id.toString()
+                );
                 expect(historySchedule?.userOne.coachName).toBe(
                     expectedUserOne?.coachName
                 );
@@ -457,7 +461,7 @@ describe('Test ScheduleModel methods and static functions', () => {
                 'Schedule not found'
             );
 
-            await ScheduleModel.create(scheduleData);
+            createdSchedules = await ScheduleModel.create(scheduleData);
         });
     });
 });
