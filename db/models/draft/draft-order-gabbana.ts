@@ -23,6 +23,7 @@ interface DraftOrderGabbanaModelType extends Model<DraftOrderGabbanaType> {
         roundNumber: number
     ) => Promise<Types.ObjectId>;
     getDraftOrder: () => Promise<DraftOrderDtoType[]>;
+    resetDraftOrder: () => Promise<void>;
 }
 
 const draftOrderGabbanaSchema = new Schema<
@@ -73,6 +74,21 @@ draftOrderGabbanaSchema.static('getDraftOrder', async function getDraftOrder() {
         throw error;
     }
 });
+
+draftOrderGabbanaSchema.static(
+    'resetDraftOrder',
+    async function resetDraftOrder() {
+        try {
+            await this.deleteMany({});
+        } catch (error) {
+            console.error(
+                'Error resetting draft order for gabbana group:',
+                error
+            );
+            throw error;
+        }
+    }
+);
 
 const DraftOrderGabbanaModel = model<
     DraftOrderGabbanaType,

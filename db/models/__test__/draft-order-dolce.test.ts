@@ -42,34 +42,38 @@ afterAll(async () => {
 });
 
 describe('Test DraftOrderDolceModel methods and static functions', () => {
-    it('Should get proper userId for given roundNumber', async () => {
-        const userOne = await new UserModel(
-            createUserData({
-                username: 'dolce-user-one',
-                email: 'dolce-user-one@example.com'
-            })
-        ).save();
-        const userTwo = await new UserModel(
-            createUserData({
-                username: 'dolce-user-two',
-                email: 'dolce-user-two@example.com'
-            })
-        ).save();
+    describe('getCurrentDraftOrderUserIdByRound', () => {
+        it('Should get proper userId for given roundNumber', async () => {
+            const userOne = await new UserModel(
+                createUserData({
+                    username: 'dolce-user-one',
+                    email: 'dolce-user-one@example.com'
+                })
+            ).save();
+            const userTwo = await new UserModel(
+                createUserData({
+                    username: 'dolce-user-two',
+                    email: 'dolce-user-two@example.com'
+                })
+            ).save();
 
-        await DraftOrderDolceModel.create([
-            { userId: userOne._id.toString(), draftOrder: 1 },
-            { userId: userTwo._id.toString(), draftOrder: 2 }
-        ]);
+            await DraftOrderDolceModel.create([
+                { userId: userOne._id.toString(), draftOrder: 1 },
+                { userId: userTwo._id.toString(), draftOrder: 2 }
+            ]);
 
-        const roundOneUserId =
-            await DraftOrderDolceModel.getCurrentDraftOrderUserIdByRound(1);
-        const roundTwoUserId =
-            await DraftOrderDolceModel.getCurrentDraftOrderUserIdByRound(2);
+            const roundOneUserId =
+                await DraftOrderDolceModel.getCurrentDraftOrderUserIdByRound(1);
+            const roundTwoUserId =
+                await DraftOrderDolceModel.getCurrentDraftOrderUserIdByRound(2);
 
-        expect(roundOneUserId?.toString()).toBe(userOne._id.toString());
-        expect(roundTwoUserId?.toString()).toBe(userTwo._id.toString());
+            expect(roundOneUserId?.toString()).toBe(userOne._id.toString());
+            expect(roundTwoUserId?.toString()).toBe(userTwo._id.toString());
+        });
     });
-    it('Should get whole draft order for 6 users in expected order', async () => {
+
+    describe('getDraftOrder', () => {
+        it('Should get whole draft order for 6 users in expected order', async () => {
         const users = await UserModel.create([
             createUserData({
                 username: 'dolce-user-1',
@@ -114,25 +118,54 @@ describe('Test DraftOrderDolceModel methods and static functions', () => {
 
         await DraftOrderDolceModel.create(randomizedDraftEntries);
 
-        const draftOrder: DraftOrderDtoType[] =
-            await DraftOrderDolceModel.getDraftOrder();
+            const draftOrder: DraftOrderDtoType[] =
+                await DraftOrderDolceModel.getDraftOrder();
 
-        expect(draftOrder).toHaveLength(6);
-        expect(draftOrder.map(item => item.draftOrder)).toEqual([
-            1, 2, 3, 4, 5, 6
-        ]);
+            expect(draftOrder).toHaveLength(6);
+            expect(draftOrder.map(item => item.draftOrder)).toEqual([
+                1, 2, 3, 4, 5, 6
+            ]);
 
-        const expectedTeamByOrder: Record<number, string> = {
-            1: users[1].teamName,
-            2: users[3].teamName,
-            3: users[5].teamName,
-            4: users[0].teamName,
-            5: users[4].teamName,
-            6: users[2].teamName
-        };
+            const expectedTeamByOrder: Record<number, string> = {
+                1: users[1].teamName,
+                2: users[3].teamName,
+                3: users[5].teamName,
+                4: users[0].teamName,
+                5: users[4].teamName,
+                6: users[2].teamName
+            };
 
-        draftOrder.forEach(item => {
-            expect(item.teamName).toBe(expectedTeamByOrder[item.draftOrder]);
+            draftOrder.forEach(item => {
+                expect(item.teamName).toBe(expectedTeamByOrder[item.draftOrder]);
+            });
+        });
+    });
+
+    describe('resetDraftOrder', () => {
+        it('Should remove all documents from the collection', async () => {
+            const userOne = await new UserModel(
+                createUserData({
+                    username: 'dolce-user-one',
+                    email: 'dolce-user-one@example.com'
+                })
+            ).save();
+            const userTwo = await new UserModel(
+                createUserData({
+                    username: 'dolce-user-two',
+                    email: 'dolce-user-two@example.com'
+                })
+            ).save();
+
+            await DraftOrderDolceModel.create([
+                { userId: userOne._id.toString(), draftOrder: 1 },
+                { userId: userTwo._id.toString(), draftOrder: 2 }
+            ]);
+
+            await DraftOrderDolceModel.resetDraftOrder();
+
+            const remainingDocuments = await DraftOrderDolceModel.find().exec();
+
+            expect(remainingDocuments).toHaveLength(0);
         });
     });
 });

@@ -32,6 +32,7 @@ interface DraftOrderDolceModelType extends Model<DraftOrderDolceType> {
         roundNumber: number
     ) => Promise<Types.ObjectId>;
     getDraftOrder: () => Promise<DraftOrderDtoType[]>;
+    resetDraftOrder: () => Promise<void>;
 }
 
 const draftOrderDolceSchema = new Schema<
@@ -80,6 +81,21 @@ draftOrderDolceSchema.static('getDraftOrder', async function getDraftOrder() {
         throw error;
     }
 });
+
+draftOrderDolceSchema.static(
+    'resetDraftOrder',
+    async function resetDraftOrder() {
+        try {
+            await this.deleteMany({});
+        } catch (error) {
+            console.error(
+                'Error resetting draft order for dolce group:',
+                error
+            );
+            throw error;
+        }
+    }
+);
 
 const DraftOrderDolceModel = model<
     DraftOrderDolceType,
