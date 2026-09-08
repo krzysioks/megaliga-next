@@ -604,6 +604,46 @@ describe('Test UserModel methods and static functions', () => {
             );
         });
     }); // getAllUsers
+
+    describe('resetUsers', () => {
+        test('Should clear reachedPlayoff, isFirstRoundDraftOrderDraw and groupName for all users', async () => {
+            const groupId = new mongoose.Types.ObjectId().toString();
+
+            const userOne = await new UserModel(
+                createUserData({
+                    username: 'reset-season-one',
+                    email: 'reset-season-one@example.com',
+                    reachedPlayoff: true,
+                    isFirstRoundDraftOrderDraw: true,
+                    groupName: groupId
+                })
+            ).save();
+            const userTwo = await new UserModel(
+                createUserData({
+                    username: 'reset-season-two',
+                    email: 'reset-season-two@example.com',
+                    reachedPlayoff: true,
+                    isFirstRoundDraftOrderDraw: true,
+                    groupName: groupId
+                })
+            ).save();
+
+            await UserModel.resetUsers();
+
+            const [updatedUserOne, updatedUserTwo] = await Promise.all([
+                UserModel.findById(userOne._id).exec(),
+                UserModel.findById(userTwo._id).exec()
+            ]);
+
+            expect(updatedUserOne?.reachedPlayoff).toBe(false);
+            expect(updatedUserOne?.isFirstRoundDraftOrderDraw).toBe(false);
+            expect(updatedUserOne?.groupName).toBeUndefined();
+
+            expect(updatedUserTwo?.reachedPlayoff).toBe(false);
+            expect(updatedUserTwo?.isFirstRoundDraftOrderDraw).toBe(false);
+            expect(updatedUserTwo?.groupName).toBeUndefined();
+        });
+    }); // resetUsers
 });
 
 describe('Test password reset flow', () => {

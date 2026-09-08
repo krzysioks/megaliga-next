@@ -94,6 +94,7 @@ interface UserModelType extends Model<UserType, '', UserMethodsType> {
     getNonAdminUsers: () => Promise<NonAdminUserReturnType[]>;
     deleteUserById: (userId: string) => Promise<void>;
     addUser: (userData: AddUserDataType) => Promise<UserByIdDtoType>;
+    resetUsers: () => Promise<void>;
 }
 
 export type FindByIdType = HydratedDocument<UserType, UserMethodsType> | null;
@@ -387,6 +388,24 @@ userSchema.method(
         }
     }
 );
+
+userSchema.static('resetUsers', async function resetUsers() {
+    try {
+        await this.updateMany(
+            {},
+            {
+                $set: {
+                    reachedPlayoff: false,
+                    isFirstRoundDraftOrderDraw: false
+                },
+                $unset: { groupName: '' }
+            }
+        );
+    } catch (error) {
+        console.error('Error resetting users for new season:', error);
+        throw error;
+    }
+});
 
 // method used to change password from user profile view
 userSchema.method(
