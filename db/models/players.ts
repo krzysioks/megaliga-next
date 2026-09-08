@@ -42,6 +42,7 @@ interface PlayersModelType extends Model<PlayersType, '', PlayersMethodsType> {
     getAvailablePlayersByAssignmentType: (
         type: PlayerAssignmentType
     ) => Promise<HydratedDocument<PlayersType>[]>;
+    resetPlayersAssignment: () => Promise<void>;
 }
 
 const playersSchema = new Schema<
@@ -124,6 +125,30 @@ playersSchema.static(
         } catch (error) {
             console.error('Error fetching players:', error);
             // TODOKP: this error is thrown to be catched in higher level so that, front end can render error message to user.
+            throw error;
+        }
+    }
+);
+
+playersSchema.static(
+    'resetPlayersAssignment',
+    async function resetPlayersAssignment() {
+        try {
+            await this.updateMany(
+                {},
+                {
+                    $set: {
+                        dolceUserId: null,
+                        gabbanaUserId: null,
+                        playoffUserId: null,
+                        draftedWithNumberDolce: null,
+                        draftedWithNumberGabbana: null,
+                        draftedWithNumberPlayoff: null
+                    }
+                }
+            );
+        } catch (error) {
+            console.error('Error resetting players assignment:', error);
             throw error;
         }
     }
