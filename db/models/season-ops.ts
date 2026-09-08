@@ -41,12 +41,28 @@ export type SeasonOpsType = z.infer<typeof seasonOpsZodSchema>;
 export type SeasonOpsReturnType = Pick<SeasonOpsType, 'name'> & {
     id: Types.ObjectId;
 };
-interface SeasonOpsModelType extends Model<SeasonOpsType> {
-    getHistorySeasons: () => Promise<SeasonOpsReturnType[] | []>;
-    getCurrentSeason: () => Promise<SeasonOpsReturnType>;
+
+type SeasonOpsUpdateDataType = Partial<SeasonOpsType>;
+
+interface SeasonOpsMethodsType {
+    updateSeason: (updateData: SeasonOpsUpdateDataType) => Promise<void>;
 }
 
-const seasonOpsSchema = new Schema<SeasonOpsType, SeasonOpsModelType>({
+interface SeasonOpsModelType extends Model<
+    SeasonOpsType,
+    '',
+    SeasonOpsMethodsType
+> {
+    getHistorySeasons: () => Promise<SeasonOpsReturnType[] | []>;
+    getCurrentSeason: () => Promise<SeasonOpsReturnType>;
+    setNewSeason: () => Promise<void>;
+}
+
+const seasonOpsSchema = new Schema<
+    SeasonOpsType,
+    SeasonOpsModelType,
+    SeasonOpsMethodsType
+>({
     name: { type: String, required: true, unique: true },
     isCurrentSeason: { type: Boolean, default: false },
     numberOfGroups: { type: Number, required: true },
@@ -114,6 +130,59 @@ seasonOpsSchema.static('getCurrentSeason', async function getCurrentSeason() {
         };
     } catch (error) {
         console.error('Error fetching current season:', error);
+        throw error;
+    }
+});
+
+// this method is used to update season fields, all fields of the document can be updated
+seasonOpsSchema.method(
+    'updateSeason',
+    async function updateSeason(updateData: SeasonOpsUpdateDataType) {
+        try {
+            const safeUpdateData = Object.fromEntries(
+                Object.entries(updateData).filter(
+                    ([, value]) => value !== undefined
+                )
+            ) as SeasonOpsUpdateDataType;
+
+            this.set(safeUpdateData);
+            await this.save();
+        } catch (error) {
+            console.error('Error updating season:', error);
+            throw error;
+        }
+    }
+);
+
+seasonOpsSchema.static('setNewSeason', async function setNewSeason() {
+    try {
+        const currentSeason = await this.getCurrentSeason();
+
+        if (!currentSeason) {
+            throw new Error('Current season not found');
+        }
+
+        const newSeasonName = (Number(currentSeason.name) + 1).toString();
+
+        const currentSeasonDocument = await this.findById(
+            currentSeason.id
+        ).exec();
+
+        if (!currentSeasonDocument) {
+            throw new Error(
+                `Season document not found for id: ${currentSeason.id}`
+            );
+        }
+
+        await currentSeasonDocument.updateSeason({ isCurrentSeason: false });
+
+        await this.create({
+            name: newSeasonName,
+            isCurrentSeason: true,
+            numberOfGroups: 2
+        });
+    } catch (error) {
+        console.error('Error setting new season:', error);
         throw error;
     }
 });
