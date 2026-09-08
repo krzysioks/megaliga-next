@@ -63,9 +63,13 @@ describe('Test DraftOrderGabbanaModel methods and static functions', () => {
             ]);
 
             const roundOneUserId =
-                await DraftOrderGabbanaModel.getCurrentDraftOrderUserIdByRound(1);
+                await DraftOrderGabbanaModel.getCurrentDraftOrderUserIdByRound(
+                    1
+                );
             const roundTwoUserId =
-                await DraftOrderGabbanaModel.getCurrentDraftOrderUserIdByRound(2);
+                await DraftOrderGabbanaModel.getCurrentDraftOrderUserIdByRound(
+                    2
+                );
 
             expect(roundOneUserId?.toString()).toBe(userOne._id.toString());
             expect(roundTwoUserId?.toString()).toBe(userTwo._id.toString());
@@ -74,49 +78,49 @@ describe('Test DraftOrderGabbanaModel methods and static functions', () => {
 
     describe('getDraftOrder', () => {
         it('Should get whole draft order for 6 users in expected order', async () => {
-        const users = await UserModel.create([
-            createUserData({
-                username: 'gabbana-user-1',
-                email: 'gabbana-user-1@example.com',
-                teamName: 'Team 1'
-            }),
-            createUserData({
-                username: 'gabbana-user-2',
-                email: 'gabbana-user-2@example.com',
-                teamName: 'Team 2'
-            }),
-            createUserData({
-                username: 'gabbana-user-3',
-                email: 'gabbana-user-3@example.com',
-                teamName: 'Team 3'
-            }),
-            createUserData({
-                username: 'gabbana-user-4',
-                email: 'gabbana-user-4@example.com',
-                teamName: 'Team 4'
-            }),
-            createUserData({
-                username: 'gabbana-user-5',
-                email: 'gabbana-user-5@example.com',
-                teamName: 'Team 5'
-            }),
-            createUserData({
-                username: 'gabbana-user-6',
-                email: 'gabbana-user-6@example.com',
-                teamName: 'Team 6'
-            })
-        ]);
+            const users = await UserModel.create([
+                createUserData({
+                    username: 'gabbana-user-1',
+                    email: 'gabbana-user-1@example.com',
+                    teamName: 'Team 1'
+                }),
+                createUserData({
+                    username: 'gabbana-user-2',
+                    email: 'gabbana-user-2@example.com',
+                    teamName: 'Team 2'
+                }),
+                createUserData({
+                    username: 'gabbana-user-3',
+                    email: 'gabbana-user-3@example.com',
+                    teamName: 'Team 3'
+                }),
+                createUserData({
+                    username: 'gabbana-user-4',
+                    email: 'gabbana-user-4@example.com',
+                    teamName: 'Team 4'
+                }),
+                createUserData({
+                    username: 'gabbana-user-5',
+                    email: 'gabbana-user-5@example.com',
+                    teamName: 'Team 5'
+                }),
+                createUserData({
+                    username: 'gabbana-user-6',
+                    email: 'gabbana-user-6@example.com',
+                    teamName: 'Team 6'
+                })
+            ]);
 
-        const randomizedDraftEntries = [
-            { userId: users[0]._id.toString(), draftOrder: 4 },
-            { userId: users[1]._id.toString(), draftOrder: 1 },
-            { userId: users[2]._id.toString(), draftOrder: 6 },
-            { userId: users[3]._id.toString(), draftOrder: 2 },
-            { userId: users[4]._id.toString(), draftOrder: 5 },
-            { userId: users[5]._id.toString(), draftOrder: 3 }
-        ];
+            const randomizedDraftEntries = [
+                { userId: users[0]._id.toString(), draftOrder: 4 },
+                { userId: users[1]._id.toString(), draftOrder: 1 },
+                { userId: users[2]._id.toString(), draftOrder: 6 },
+                { userId: users[3]._id.toString(), draftOrder: 2 },
+                { userId: users[4]._id.toString(), draftOrder: 5 },
+                { userId: users[5]._id.toString(), draftOrder: 3 }
+            ];
 
-        await DraftOrderGabbanaModel.create(randomizedDraftEntries);
+            await DraftOrderGabbanaModel.create(randomizedDraftEntries);
 
             const draftOrder: DraftOrderDtoType[] =
                 await DraftOrderGabbanaModel.getDraftOrder();
@@ -136,7 +140,9 @@ describe('Test DraftOrderGabbanaModel methods and static functions', () => {
             };
 
             draftOrder.forEach(item => {
-                expect(item.teamName).toBe(expectedTeamByOrder[item.draftOrder]);
+                expect(item.teamName).toBe(
+                    expectedTeamByOrder[item.draftOrder]
+                );
             });
         });
     });
