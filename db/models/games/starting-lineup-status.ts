@@ -26,6 +26,7 @@ interface StartingLineupStatusModelType extends Model<StartingLineupStatusType> 
         roundNumber: number,
         seasonStage: z.infer<typeof stageEnumSchema>
     ) => Promise<boolean>;
+    resetStartingLineupStatus: () => Promise<void>;
 }
 
 const startingLineupStatusSchema = new Schema<
@@ -68,12 +69,23 @@ startingLineupStatusSchema.static(
     }
 );
 
+startingLineupStatusSchema.static(
+    'resetStartingLineupStatus',
+    async function resetStartingLineupStatus() {
+        try {
+            await this.updateMany({}, { $set: { isOpen: false } });
+        } catch (error) {
+            console.error('Error resetting starting lineup status:', error);
+            throw error;
+        }
+    }
+);
+
 const StartingLineupStatusModel = model<
     StartingLineupStatusType,
     StartingLineupStatusModelType
 >('StartingLineupStatus', startingLineupStatusSchema);
 
-// TODOKP: 1. static function getStartingLineupStatusByRoundAndStage(roundNumber: number, seasonStage: string) to fetch starting lineup status for given round number and season stage
 // TODOKP: 2 method setStartingLineupStatus(roundNumber: number, seasonStage: string, isOpen: boolean) to set starting lineup status for given round number and season stage. Will implement later when admin panel will be implemented
 
 export default StartingLineupStatusModel;

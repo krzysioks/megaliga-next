@@ -22,43 +22,71 @@ afterAll(async () => {
 });
 
 describe('Test StartingLineupStatusModel methods and static functions', () => {
-    test('Should return isOpen status for given roundNumber and seasonStage', async () => {
-        await StartingLineupStatusModel.create([
-            {
-                roundNumber: 1,
-                seasonStage: 'regularSeason',
-                isOpen: true
-            },
-            {
-                roundNumber: 2,
-                seasonStage: 'playoff',
-                isOpen: false
-            }
-        ]);
+    describe('getStartingLineupStatusByRoundAndStage', () => {
+        test('Should return isOpen status for given roundNumber and seasonStage', async () => {
+            await StartingLineupStatusModel.create([
+                {
+                    roundNumber: 1,
+                    seasonStage: 'regularSeason',
+                    isOpen: true
+                },
+                {
+                    roundNumber: 2,
+                    seasonStage: 'playoff',
+                    isOpen: false
+                }
+            ]);
 
-        const regularSeasonStatus =
-            await StartingLineupStatusModel.getStartingLineupStatusByRoundAndStage(
-                1,
-                'regularSeason'
-            );
-        const playoffStatus =
-            await StartingLineupStatusModel.getStartingLineupStatusByRoundAndStage(
-                2,
-                'playoff'
-            );
+            const regularSeasonStatus =
+                await StartingLineupStatusModel.getStartingLineupStatusByRoundAndStage(
+                    1,
+                    'regularSeason'
+                );
+            const playoffStatus =
+                await StartingLineupStatusModel.getStartingLineupStatusByRoundAndStage(
+                    2,
+                    'playoff'
+                );
 
-        expect(regularSeasonStatus).toBe(true);
-        expect(playoffStatus).toBe(false);
+            expect(regularSeasonStatus).toBe(true);
+            expect(playoffStatus).toBe(false);
+        });
+
+        test('Should throw error if document not found for given roundNumber and seasonStage', async () => {
+            await expect(
+                StartingLineupStatusModel.getStartingLineupStatusByRoundAndStage(
+                    3,
+                    'playIn'
+                )
+            ).rejects.toThrow(
+                'Failed to fetch starting lineup status for round: 3 and season stage: playIn'
+            );
+        });
     });
 
-    test('Should throw error if document not found for given roundNumber and seasonStage', async () => {
-        await expect(
-            StartingLineupStatusModel.getStartingLineupStatusByRoundAndStage(
-                3,
-                'playIn'
-            )
-        ).rejects.toThrow(
-            'Failed to fetch starting lineup status for round: 3 and season stage: playIn'
-        );
+    describe('resetStartingLineupStatus', () => {
+        test('Should set isOpen to false for all documents', async () => {
+            await StartingLineupStatusModel.create([
+                {
+                    roundNumber: 1,
+                    seasonStage: 'regularSeason',
+                    isOpen: true
+                },
+                {
+                    roundNumber: 2,
+                    seasonStage: 'playoff',
+                    isOpen: true
+                }
+            ]);
+
+            await StartingLineupStatusModel.resetStartingLineupStatus();
+
+            const documents = await StartingLineupStatusModel.find().exec();
+
+            expect(documents).toHaveLength(2);
+            documents.forEach(document => {
+                expect(document.isOpen).toBe(false);
+            });
+        });
     });
 });
