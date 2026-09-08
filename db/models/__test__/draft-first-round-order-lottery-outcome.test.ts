@@ -305,4 +305,60 @@ describe('Test DraftFirstRoundOrderLotteryOutcomeModel methods and static functi
             );
         });
     });
+
+    describe('resetLotteryOutcome', () => {
+        it('Should clear one, two, three, four, five, six and ligueGroupsId for all documents', async () => {
+            const dolceGroup = await LigueGroupsModel.findOne({
+                groupName: 'dolce'
+            }).exec();
+
+            const gabbanaGroup = await LigueGroupsModel.findOne({
+                groupName: 'gabbana'
+            }).exec();
+
+            const dolceGroupId = dolceGroup?._id.toString() || '';
+            const gabbanaGroupId = gabbanaGroup?._id.toString() || '';
+
+            const dolceUsers = await UserModel.find({
+                groupName: dolceGroupId
+            }).exec();
+
+            const gabbanaUsers = await UserModel.find({
+                groupName: gabbanaGroupId
+            }).exec();
+
+            const outcomes =
+                await DraftFirstRoundOrderLotteryOutcomeModel.create([
+                    {
+                        ligueGroupsId: dolceGroupId,
+                        one: dolceUsers[0]._id,
+                        two: dolceUsers[1]._id,
+                        six: dolceUsers[2]._id
+                    },
+                    {
+                        ligueGroupsId: gabbanaGroupId,
+                        four: gabbanaUsers[0]._id,
+                        five: gabbanaUsers[1]._id
+                    }
+                ]);
+
+            await DraftFirstRoundOrderLotteryOutcomeModel.resetLotteryOutcome();
+
+            const updatedOutcomes =
+                await DraftFirstRoundOrderLotteryOutcomeModel.find({
+                    _id: { $in: outcomes.map(outcome => outcome._id) }
+                }).exec();
+
+            expect(updatedOutcomes).toHaveLength(2);
+            updatedOutcomes.forEach(outcome => {
+                expect(outcome.one).toBe('');
+                expect(outcome.two).toBe('');
+                expect(outcome.three).toBe('');
+                expect(outcome.four).toBe('');
+                expect(outcome.five).toBe('');
+                expect(outcome.six).toBe('');
+                expect(outcome.ligueGroupsId).toBe('');
+            });
+        });
+    });
 });

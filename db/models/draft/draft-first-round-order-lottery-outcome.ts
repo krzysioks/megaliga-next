@@ -44,6 +44,7 @@ interface DraftFirstRoundOrderLotteryOutcomesModelType extends Model<
     getFirstRoundDraftOrderStatusByLigueGroupId: (
         ligueGroupsId: string
     ) => Promise<DraftFirstRoundOrderLotteryOutcomeDocumentType>;
+    resetLotteryOutcome: () => Promise<void>;
 }
 
 const draftFirstRoundOrderLotteryOutcomeSchema = new Schema<
@@ -75,6 +76,31 @@ draftFirstRoundOrderLotteryOutcomeSchema.static(
                 'Error fetching first round draft order status by ligueGroupsIs:',
                 error
             );
+            throw error;
+        }
+    }
+);
+
+draftFirstRoundOrderLotteryOutcomeSchema.static(
+    'resetLotteryOutcome',
+    async function resetLotteryOutcome() {
+        try {
+            await this.updateMany(
+                {},
+                {
+                    $set: {
+                        one: '',
+                        two: '',
+                        three: '',
+                        four: '',
+                        five: '',
+                        six: '',
+                        ligueGroupsId: ''
+                    }
+                }
+            );
+        } catch (error) {
+            console.error('Error resetting lottery outcome:', error);
             throw error;
         }
     }
