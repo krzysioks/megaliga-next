@@ -23,6 +23,7 @@ interface DraftOrderModelType extends Model<DraftOrderType> {
     getAvailablePositionsByLigueGroup: (
         ligueGroupsId: string
     ) => Promise<number>;
+    resetDraftOrder: () => Promise<void>;
 }
 
 const draftOrderSchema = new Schema<DraftOrderType, DraftOrderModelType>({
@@ -64,6 +65,15 @@ draftOrderSchema.static(
         }
     }
 );
+
+draftOrderSchema.static('resetDraftOrder', async function resetDraftOrder() {
+    try {
+        await this.updateMany({}, { $set: { 'spot.$[].isSelected': false } });
+    } catch (error) {
+        console.error('Error resetting draft order:', error);
+        throw error;
+    }
+});
 
 export const DraftOrderModel = model<DraftOrderType, DraftOrderModelType>(
     'DraftOrder',
