@@ -1,4 +1,4 @@
-import { model, Model, Schema } from 'mongoose';
+import { HydratedDocument, model, Model, Schema } from 'mongoose';
 import { z } from 'zod';
 
 import {
@@ -34,7 +34,10 @@ interface DraftOpsModelType extends Model<
     '',
     DraftOpsMethodsType
 > {
-    getDraftConfig: () => Promise<DraftOpsType | null>;
+    getDraftConfig: () => Promise<HydratedDocument<
+        DraftOpsType,
+        DraftOpsMethodsType
+    > | null>;
 }
 
 const draftOpsSchema = new Schema<
@@ -51,17 +54,14 @@ const draftOpsSchema = new Schema<
     groupLotteryOpen: { type: Boolean, default: false }
 });
 
-draftOpsSchema.static(
-    'getDraftConfig',
-    async function getDraftConfig(): Promise<DraftOpsType | null> {
-        try {
-            return await this.findOne().exec();
-        } catch (error) {
-            console.error('Error fetching draft config:', error);
-            throw error;
-        }
+draftOpsSchema.static('getDraftConfig', async function getDraftConfig() {
+    try {
+        return await this.findOne().exec();
+    } catch (error) {
+        console.error('Error fetching draft config:', error);
+        throw error;
     }
-);
+});
 
 draftOpsSchema.method(
     'updateDraftOps',
