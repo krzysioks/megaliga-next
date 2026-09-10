@@ -55,6 +55,7 @@ interface StartingLineupModelType extends Model<
         userId: string,
         roundNumber: number
     ) => Promise<void>;
+    deleteAll: () => Promise<void>;
 }
 
 const startingLineupSchema = new Schema<
@@ -164,6 +165,15 @@ startingLineupSchema.method(
         }
     }
 );
+
+startingLineupSchema.static('deleteAll', async function deleteAll() {
+    try {
+        await this.deleteMany({});
+    } catch (error) {
+        console.error('Error deleting all starting lineups:', error);
+        throw error;
+    }
+});
 
 const StartingLineupModel = model<StartingLineupType, StartingLineupModelType>(
     'StartingLineup',

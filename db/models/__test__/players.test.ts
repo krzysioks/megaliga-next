@@ -338,4 +338,56 @@ describe('Test PlayersModel methods and static functions', () => {
             });
         });
     }); // resetPlayersAssignment
+
+    describe('importPlayers', () => {
+        it('Should add new players from the imported list as active', async () => {
+            await PlayersModel.importPlayers(
+                'Player One, Player Two, Player Three'
+            );
+
+            const players = await PlayersModel.find().exec();
+
+            expect(players).toHaveLength(3);
+            expect(
+                players.map(player => player.extraligaPlayerName).sort()
+            ).toEqual(['Player One', 'Player Three', 'Player Two']);
+            players.forEach(player => {
+                expect(player.playerStatus).toBe('active');
+            });
+        });
+
+        it('Should not duplicate players who already exist in the collection', async () => {
+            await new PlayersModel(
+                createPlayerData({ extraligaPlayerName: 'Player One' })
+            ).save();
+
+            await PlayersModel.importPlayers('Player One, Player Two');
+
+            const players = await PlayersModel.find().exec();
+
+            expect(players).toHaveLength(2);
+            expect(
+                players.map(player => player.extraligaPlayerName).sort()
+            ).toEqual(['Player One', 'Player Two']);
+        });
+
+        it('Should set playerStatus to inactive for players missing from the imported list', async () => {
+            await PlayersModel.create([
+                createPlayerData({ extraligaPlayerName: 'Player One' }),
+                createPlayerData({ extraligaPlayerName: 'Player Two' })
+            ]);
+
+            await PlayersModel.importPlayers('Player One');
+
+            const playerOne = await PlayersModel.findOne({
+                extraligaPlayerName: 'Player One'
+            }).exec();
+            const playerTwo = await PlayersModel.findOne({
+                extraligaPlayerName: 'Player Two'
+            }).exec();
+
+            expect(playerOne?.playerStatus).toBe('active');
+            expect(playerTwo?.playerStatus).toBe('inactive');
+        });
+    }); // importPlayers
 });

@@ -1,7 +1,10 @@
 import { HydratedDocument, model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
-import { HistoryTeamType } from '@/db/models/history/history-team';
+import ChampionModel from '@/db/models/champion';
+import HistoryTeamModel, {
+    HistoryTeamType
+} from '@/db/models/history/history-team';
 import { objectIdSchema } from '@/db/models/schema.types';
 import { SeasonOpsType } from '@/db/models/season-ops';
 
@@ -32,6 +35,7 @@ export type PopulatedFindType = HydratedDocument<PopulatedHistoryChampionType>;
 
 interface HistoryChampionModelType extends Model<HistoryChampionType> {
     getChampionsHistory: () => Promise<ChampionsHistoryDtoType[]>;
+    saveChamptionToHistory: (seasonId: string) => Promise<void>;
 }
 
 const historyChampionSchema = new Schema<
@@ -70,6 +74,28 @@ historyChampionSchema.static(
             }));
         } catch (error) {
             console.error('Error fetching chmpion history data:', error);
+            throw error;
+        }
+    }
+);
+
+historyChampionSchema.static(
+    'saveChamptionToHistory',
+    async function saveChamptionToHistory(seasonId: string) {
+        try {
+            const champion = await ChampionModel.getChampion();
+            const teamId =
+                await HistoryTeamModel.getHistoryTeamIdByNameAndCoachName(
+                    champion.teamName,
+                    champion.coachName
+                );
+
+            await this.create({
+                season: seasonId,
+                teamId
+            });
+        } catch (error) {
+            console.error('Error saving champion to history:', error);
             throw error;
         }
     }

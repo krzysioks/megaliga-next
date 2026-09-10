@@ -540,4 +540,23 @@ describe('Test SchedulePlayoffModel methods and static functions', () => {
             ).rejects.toThrow('Schedule not found');
         });
     }); // getScheduleForHistory
+
+    describe('deleteAll', () => {
+        test('Should remove all documents from the collection', async () => {
+            await SchedulePlayoffModel.create({
+                userOneId: seededUsers[0]._id.toString(),
+                userTwoId: seededUsers[1]._id.toString(),
+                roundNumber: 1,
+                userOneSeed: 1,
+                userTwoSeed: 4,
+                stage: 'semifinal'
+            });
+
+            await SchedulePlayoffModel.deleteAll();
+
+            const remainingDocuments = await SchedulePlayoffModel.find().exec();
+
+            expect(remainingDocuments).toHaveLength(0);
+        });
+    });
 });

@@ -82,6 +82,7 @@ interface SchedulePlayoffModelType extends Model<SchedulePlayoffType> {
     getScheduleForHistory: () => Promise<
         SchedulePlayoffScheduleForHistoryReturnType[]
     >;
+    deleteAll: () => Promise<void>;
 }
 
 type PopulatedSchedulePlayoffUserIdType = SchedulePlayoffUserDtoType & {
@@ -368,6 +369,15 @@ schedulePlayoffSchema.static(
         }
     }
 );
+
+schedulePlayoffSchema.static('deleteAll', async function deleteAll() {
+    try {
+        await this.deleteMany({});
+    } catch (error) {
+        console.error('Error deleting all schedule playoff documents:', error);
+        throw error;
+    }
+});
 
 const SchedulePlayoffModel = model<
     SchedulePlayoffType,

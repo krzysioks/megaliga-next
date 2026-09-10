@@ -43,6 +43,7 @@ interface PlayersModelType extends Model<PlayersType, '', PlayersMethodsType> {
         type: PlayerAssignmentType
     ) => Promise<HydratedDocument<PlayersType>[]>;
     resetPlayersAssignment: () => Promise<void>;
+    importPlayers: (newPlayers: string) => Promise<void>;
 }
 
 const playersSchema = new Schema<
@@ -149,6 +150,57 @@ playersSchema.static(
             );
         } catch (error) {
             console.error('Error resetting players assignment:', error);
+            throw error;
+        }
+    }
+);
+
+playersSchema.static(
+    'importPlayers',
+    async function importPlayers(newPlayers: string) {
+        try {
+            const newPlayerNames = newPlayers
+                .split(',')
+                .map(name => {
+                    return name.trim();
+                })
+                .filter(Boolean);
+
+            const existingPlayers = await this.find(
+                {},
+                'extraligaPlayerName'
+            ).exec();
+            const existingPlayerNames = existingPlayers.map(player => {
+                return player.extraligaPlayerName;
+            });
+
+            const playerNamesToAdd = newPlayerNames.filter(name => {
+                return !existingPlayerNames.includes(name);
+            });
+
+            if (playerNamesToAdd.length) {
+                await this.create(
+                    playerNamesToAdd.map(name => {
+                        return {
+                            extraligaPlayerName: name,
+                            playerStatus: 'active'
+                        };
+                    })
+                );
+            }
+
+            const playerNamesToDeactivate = existingPlayerNames.filter(name => {
+                return !newPlayerNames.includes(name);
+            });
+
+            if (playerNamesToDeactivate.length) {
+                await this.updateMany(
+                    { extraligaPlayerName: { $in: playerNamesToDeactivate } },
+                    { $set: { playerStatus: 'inactive' } }
+                );
+            }
+        } catch (error) {
+            console.error('Error importing players:', error);
             throw error;
         }
     }

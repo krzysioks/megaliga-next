@@ -273,4 +273,21 @@ describe('Test StartingLineupPlayoffModel methods and static functions', () => {
             initialPositions.playerFive
         );
     });
+
+    test('Should remove all documents from the collection when deleteAll is called', async () => {
+        const user = await new UserModel(createUserData()).save();
+
+        await new StartingLineupPlayoffModel({
+            userId: user._id.toString(),
+            roundNumber: 1,
+            ...createPositions()
+        }).save();
+
+        await StartingLineupPlayoffModel.deleteAll();
+
+        const remainingDocuments =
+            await StartingLineupPlayoffModel.find().exec();
+
+        expect(remainingDocuments).toHaveLength(0);
+    });
 });

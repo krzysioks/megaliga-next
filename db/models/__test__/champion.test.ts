@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 
 import { DBClient } from '@/db/db-client';
-import ChampionModel, { ChampionDtoType } from '@/db/models/champion';
+import ChampionModel, { ChampionReturnType } from '@/db/models/champion';
 import UserModel, { UserType } from '@/db/models/user';
 
 // connect to test db before running tests
@@ -47,11 +47,12 @@ describe('Test ChampionModel methods and static functions', () => {
 
         await new ChampionModel({ userId }).save();
 
-        const result: ChampionDtoType = await ChampionModel.getChampion();
+        const result: ChampionReturnType = await ChampionModel.getChampion();
 
         expect(result).not.toBeNull();
         expect(result.teamName).toEqual(user.teamName);
         expect(result.logoUrl).toEqual(user.logoUrl);
+        expect(result.coachName).toEqual(user.coachName);
     });
 
     test('Should create new champion document when none exists', async () => {
@@ -64,6 +65,7 @@ describe('Test ChampionModel methods and static functions', () => {
         expect(result).not.toBeNull();
         expect(result.teamName).toEqual(user.teamName);
         expect(result.logoUrl).toEqual(user.logoUrl);
+        expect(result.coachName).toEqual(user.coachName);
     });
 
     test('Should update existing champion document', async () => {
@@ -75,7 +77,8 @@ describe('Test ChampionModel methods and static functions', () => {
                 username: 'user-two',
                 email: 'user-two@example.com',
                 teamName: 'Team Two',
-                logoUrl: 'https://example.com/team-two.png'
+                logoUrl: 'https://example.com/team-two.png',
+                coachName: 'Coach Two'
             })
         ).save();
 
@@ -88,6 +91,7 @@ describe('Test ChampionModel methods and static functions', () => {
         const result = await ChampionModel.getChampion();
         expect(result.teamName).toEqual(user2.teamName);
         expect(result.logoUrl).toEqual(user2.logoUrl);
+        expect(result.coachName).toEqual(user2.coachName);
 
         // Verify only one document exists
         const count = await ChampionModel.countDocuments();

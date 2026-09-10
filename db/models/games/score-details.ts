@@ -107,6 +107,7 @@ interface ScoreDetailsModelType extends Model<ScoreDetailsType> {
     getScoreDetailsForHistory: () => Promise<
         ScoreDetailsForHistoryReturnType[]
     >;
+    deleteAll: () => Promise<void>;
 }
 
 const scoreDetailsSchema = new Schema<ScoreDetailsType, ScoreDetailsModelType>({
@@ -320,6 +321,15 @@ scoreDetailsSchema.static(
         }
     }
 );
+
+scoreDetailsSchema.static('deleteAll', async function deleteAll() {
+    try {
+        await this.deleteMany({});
+    } catch (error) {
+        console.error('Error deleting all score details:', error);
+        throw error;
+    }
+});
 
 const ScoreDetailsModel = model<ScoreDetailsType, ScoreDetailsModelType>(
     'ScoreDetails',

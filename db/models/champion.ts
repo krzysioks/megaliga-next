@@ -12,10 +12,13 @@ export const championZodSchema = z.object({
 
 export type ChampionType = z.infer<typeof championZodSchema>;
 
-export type ChampionDtoType = Pick<UserType, 'teamName' | 'logoUrl'>;
+export type ChampionReturnType = Pick<
+    UserType,
+    'teamName' | 'logoUrl' | 'coachName'
+>;
 
 type PopulatedUserType = Omit<UserType, 'userId'> & {
-    userId?: Pick<UserType, 'teamName' | 'logoUrl'> & {
+    userId?: Pick<UserType, 'teamName' | 'logoUrl' | 'coachName'> & {
         _id: Types.ObjectId;
     };
 };
@@ -23,7 +26,7 @@ type PopulatedUserType = Omit<UserType, 'userId'> & {
 export type PopulatedFindType = HydratedDocument<PopulatedUserType>;
 
 interface ChampionModelType extends Model<ChampionType> {
-    getChampion: () => Promise<ChampionDtoType>;
+    getChampion: () => Promise<ChampionReturnType>;
     setChampion: (userId: string) => Promise<void>;
 }
 
@@ -36,7 +39,7 @@ championSchema.static('getChampion', async function getChampion() {
         const document = await this.findOne()
             .populate<PopulatedFindType>({
                 path: 'userId',
-                select: 'teamName logoUrl'
+                select: 'teamName coachName logoUrl'
             })
             .exec();
 
@@ -46,6 +49,7 @@ championSchema.static('getChampion', async function getChampion() {
 
         return {
             teamName: document.userId.teamName,
+            coachName: document.userId.coachName,
             logoUrl: document.userId.logoUrl
         };
     } catch (error) {

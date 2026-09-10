@@ -113,6 +113,7 @@ interface ScoreDetailsPlayoffModelType extends Model<ScoreDetailsPlayoffType> {
     getScoreDetailsForHistory: () => Promise<
         ScoreDetailsPlayoffForHistoryReturnType[]
     >;
+    deleteAll: () => Promise<void>;
 }
 
 const scoreDetailsPlayoffSchema = new Schema<
@@ -335,6 +336,15 @@ scoreDetailsPlayoffSchema.static(
         }
     }
 );
+
+scoreDetailsPlayoffSchema.static('deleteAll', async function deleteAll() {
+    try {
+        await this.deleteMany({});
+    } catch (error) {
+        console.error('Error deleting all score details playoff:', error);
+        throw error;
+    }
+});
 
 const ScoreDetailsPlayoffModel = model<
     ScoreDetailsPlayoffType,

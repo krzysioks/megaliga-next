@@ -464,4 +464,16 @@ describe('Test ScheduleModel methods and static functions', () => {
             createdSchedules = await ScheduleModel.create(scheduleData);
         });
     });
+
+    describe('deleteAll', () => {
+        test('Should remove all documents from the collection', async () => {
+            await ScheduleModel.deleteAll();
+
+            const remainingDocuments = await ScheduleModel.find().exec();
+
+            expect(remainingDocuments).toHaveLength(0);
+
+            createdSchedules = await ScheduleModel.create(scheduleData);
+        });
+    });
 });

@@ -386,4 +386,25 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
             ).rejects.toThrow('Score details not found');
         });
     });
+
+    describe('deleteAll', () => {
+        test('Should remove all documents from the collection', async () => {
+            const userOne = await new UserModel(createUserData(30)).save();
+            const userTwo = await new UserModel(createUserData(31)).save();
+
+            await new ScoreDetailsPlayoffModel({
+                scheduleId: new mongoose.Types.ObjectId().toString(),
+                roundNumber: 1,
+                teamOne: { userId: userOne._id.toString() },
+                teamTwo: { userId: userTwo._id.toString() }
+            }).save();
+
+            await ScoreDetailsPlayoffModel.deleteAll();
+
+            const remainingDocuments =
+                await ScoreDetailsPlayoffModel.find().exec();
+
+            expect(remainingDocuments).toHaveLength(0);
+        });
+    });
 });

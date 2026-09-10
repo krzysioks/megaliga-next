@@ -258,4 +258,20 @@ describe('Test StartingLineupModel methods and static functions', () => {
             initialPositions.playerFive
         );
     });
+
+    test('Should remove all documents from the collection when deleteAll is called', async () => {
+        const user = await new UserModel(createUserData()).save();
+
+        await new StartingLineupModel({
+            userId: user._id.toString(),
+            roundNumber: 1,
+            ...createPositions()
+        }).save();
+
+        await StartingLineupModel.deleteAll();
+
+        const remainingDocuments = await StartingLineupModel.find().exec();
+
+        expect(remainingDocuments).toHaveLength(0);
+    });
 });

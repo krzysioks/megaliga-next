@@ -61,6 +61,7 @@ interface StartingLineupPlayoffModelType extends Model<
         userId: string,
         roundNumber: number
     ) => Promise<void>;
+    deleteAll: () => Promise<void>;
 }
 
 const startingLineupPlayoffSchema = new Schema<
@@ -170,6 +171,15 @@ startingLineupPlayoffSchema.method(
         }
     }
 );
+
+startingLineupPlayoffSchema.static('deleteAll', async function deleteAll() {
+    try {
+        await this.deleteMany({});
+    } catch (error) {
+        console.error('Error deleting all playoff starting lineups:', error);
+        throw error;
+    }
+});
 
 const StartingLineupPlayoffModel = model<
     StartingLineupPlayoffType,

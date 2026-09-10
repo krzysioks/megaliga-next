@@ -64,6 +64,7 @@ interface ScheduleModelType extends Model<ScheduleType> {
         ligueGroupsId: string
     ) => Promise<ScheduleByRoundDtoType[]>;
     getScheduleForHistory: () => Promise<ScheduleForHistoryReturnType[]>;
+    deleteAll: () => Promise<void>;
 }
 
 const scheduleSchema = new Schema<ScheduleType, ScheduleModelType>({
@@ -180,6 +181,15 @@ scheduleSchema.static(
         }
     }
 );
+
+scheduleSchema.static('deleteAll', async function deleteAll() {
+    try {
+        await this.deleteMany({});
+    } catch (error) {
+        console.error('Error deleting all schedule documents:', error);
+        throw error;
+    }
+});
 
 const ScheduleModel = model<ScheduleType, ScheduleModelType>(
     'Schedule',
