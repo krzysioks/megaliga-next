@@ -1,9 +1,21 @@
 import { HydratedDocument, model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
+import {
+    generateBergerTableRounds,
+    generateInterGroupRounds
+} from '@/db/db.utils';
 import LigueGroupsModel from '@/db/models/ligue-groups';
 import { objectIdSchema, roundNumberSchema } from '@/db/models/schema.types';
-import { UserType } from '@/db/models/user';
+import UserModel, { UserType } from '@/db/models/user';
+
+export enum ScheduleStatus {
+    Generated = 'schedule generated',
+    ReadyForGeneration = 'schedule ready for generation',
+    NotReadyForGeneration = 'schedule not ready for generation'
+}
+
+const CROSS_GROUP_NAME = 'dolce&gabbana';
 
 //Schedule is representation of megaliga_schedule of old megaliga database. Will be used for displaying results of latest round in Trybuna and Wyniki view. id_rematch_schedule fields are not migrated, as there is no more rule to add extra point for winning rematch.
 
@@ -65,6 +77,8 @@ interface ScheduleModelType extends Model<ScheduleType> {
     ) => Promise<ScheduleByRoundDtoType[]>;
     getScheduleForHistory: () => Promise<ScheduleForHistoryReturnType[]>;
     deleteAll: () => Promise<void>;
+    getScheduleStatus: () => Promise<ScheduleStatus>;
+    generateSchedule: () => Promise<void>;
 }
 
 const scheduleSchema = new Schema<ScheduleType, ScheduleModelType>({
@@ -190,6 +204,156 @@ scheduleSchema.static('deleteAll', async function deleteAll() {
         throw error;
     }
 });
+
+scheduleSchema.static(
+    'getScheduleStatus',
+    async function getScheduleStatus(): Promise<ScheduleStatus> {
+        try {
+            const count = await this.countDocuments({});
+            if (count > 0) {
+                return ScheduleStatus.Generated;
+            }
+
+            const notDrawnGroup = await LigueGroupsModel.findOne({
+                groupName: 'nie wylosowano'
+            }).exec();
+            const notDrawnGroupId = notDrawnGroup?._id.toString();
+
+            const users = await UserModel.find({}, 'groupName').exec();
+
+            const hasUndrawnUser = users.some(user => {
+                return user.groupName?.toString() === notDrawnGroupId;
+            });
+
+            if (hasUndrawnUser) {
+                return ScheduleStatus.NotReadyForGeneration;
+            }
+
+            return ScheduleStatus.ReadyForGeneration;
+        } catch (error) {
+            console.error('Error checking schedule status:', error);
+            throw error;
+        }
+    }
+);
+
+scheduleSchema.static(
+    'generateSchedule',
+    async function generateSchedule(): Promise<void> {
+        try {
+            const existingSchedulesCount = await this.countDocuments({});
+            if (existingSchedulesCount > 0) {
+                throw new Error('Schedule has already been generated');
+            }
+
+            const dolceGroup = await LigueGroupsModel.findOne({
+                groupName: 'dolce'
+            }).exec();
+            const gabbanaGroup = await LigueGroupsModel.findOne({
+                groupName: 'gabbana'
+            }).exec();
+
+            if (!dolceGroup || !gabbanaGroup) {
+                throw new Error('Dolce or gabbana ligue group not found');
+            }
+
+            let crossGroup = await LigueGroupsModel.findOne({
+                groupName: CROSS_GROUP_NAME
+            }).exec();
+            if (!crossGroup) {
+                crossGroup = await new LigueGroupsModel({
+                    groupName: CROSS_GROUP_NAME
+                }).save();
+            }
+
+            const dolceUsers = await UserModel.find(
+                { groupName: dolceGroup._id },
+                '_id'
+            ).exec();
+            const gabbanaUsers = await UserModel.find(
+                { groupName: gabbanaGroup._id },
+                '_id'
+            ).exec();
+
+            const dolceTeamIds = dolceUsers.map(user => {
+                return user._id.toString();
+            });
+            const gabbanaTeamIds = gabbanaUsers.map(user => {
+                return user._id.toString();
+            });
+
+            if (dolceTeamIds.length !== 6 || gabbanaTeamIds.length !== 6) {
+                throw new Error(
+                    'Both dolce and gabbana groups must have exactly 6 teams to generate schedule'
+                );
+            }
+
+            const dolceGroupId = dolceGroup._id.toString();
+            const gabbanaGroupId = gabbanaGroup._id.toString();
+            const crossGroupId = crossGroup._id.toString();
+
+            const scheduleDocuments: ScheduleType[] = [];
+
+            const addGroupRounds = (
+                teamIds: string[],
+                ligueGroupsId: string
+            ) => {
+                const firstLegRounds = generateBergerTableRounds(teamIds);
+                const numberOfGroupRounds = firstLegRounds.length;
+
+                firstLegRounds.forEach((matches, roundIndex) => {
+                    matches.forEach(([userOneId, userTwoId]) => {
+                        scheduleDocuments.push({
+                            userOneId,
+                            userTwoId,
+                            roundNumber: roundIndex + 1,
+                            ligueGroupsId
+                        });
+                    });
+                });
+
+                // return leg: same pairs with home/away swapped
+                firstLegRounds.forEach((matches, roundIndex) => {
+                    matches.forEach(([userOneId, userTwoId]) => {
+                        scheduleDocuments.push({
+                            userOneId: userTwoId,
+                            userTwoId: userOneId,
+                            roundNumber: numberOfGroupRounds + roundIndex + 1,
+                            ligueGroupsId
+                        });
+                    });
+                });
+
+                return numberOfGroupRounds * 2;
+            };
+
+            const dolceRoundsUsed = addGroupRounds(dolceTeamIds, dolceGroupId);
+            addGroupRounds(gabbanaTeamIds, gabbanaGroupId);
+
+            const interGroupRounds = generateInterGroupRounds(
+                dolceTeamIds,
+                gabbanaTeamIds,
+                4
+            );
+
+            interGroupRounds.forEach((matches, roundIndex) => {
+                matches.forEach(([userOneId, userTwoId]) => {
+                    scheduleDocuments.push({
+                        userOneId,
+                        userTwoId,
+                        roundNumber: dolceRoundsUsed + roundIndex + 1,
+                        ligueGroupsId: crossGroupId
+                    });
+                });
+            });
+
+            await this.create(scheduleDocuments);
+        } catch (error) {
+            console.error('Error generating schedule:', error);
+            throw error;
+        }
+    }
+);
 
 const ScheduleModel = model<ScheduleType, ScheduleModelType>(
     'Schedule',

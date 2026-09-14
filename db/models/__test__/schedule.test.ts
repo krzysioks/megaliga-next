@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { DBClient } from '@/db/db-client';
 import ScheduleModel, {
     ScheduleByRoundDtoType,
+    ScheduleStatus,
     ScheduleType
 } from '@/db/models/games/schedule';
 import LigueGroupsModel from '@/db/models/ligue-groups';
@@ -474,6 +475,289 @@ describe('Test ScheduleModel methods and static functions', () => {
             expect(remainingDocuments).toHaveLength(0);
 
             createdSchedules = await ScheduleModel.create(scheduleData);
+        });
+    });
+
+    describe('getScheduleStatus', () => {
+        test('Should return "schedule generated" when schedule documents exist', async () => {
+            const status = await ScheduleModel.getScheduleStatus();
+
+            expect(status).toBe(ScheduleStatus.Generated);
+        });
+
+        test('Should return "schedule ready for generation" when no schedule exists and no user is assigned to the not-drawn group', async () => {
+            await ScheduleModel.deleteMany();
+
+            const status = await ScheduleModel.getScheduleStatus();
+
+            expect(status).toBe(ScheduleStatus.ReadyForGeneration);
+
+            createdSchedules = await ScheduleModel.create(scheduleData);
+        });
+
+        test('Should return "schedule not ready for generation" when no schedule exists and at least one user is assigned to the not-drawn group', async () => {
+            await ScheduleModel.deleteMany();
+
+            const notDrawnGroup = await new LigueGroupsModel({
+                groupName: 'nie wylosowano'
+            }).save();
+
+            const firstUser = usersToCreate[0];
+            await UserModel.updateOne(
+                { _id: firstUser?._id },
+                { $set: { groupName: notDrawnGroup._id } }
+            );
+
+            const status = await ScheduleModel.getScheduleStatus();
+
+            expect(status).toBe(ScheduleStatus.NotReadyForGeneration);
+
+            await UserModel.updateOne(
+                { _id: firstUser?._id },
+                { $set: { groupName: dolceId } }
+            );
+            await LigueGroupsModel.deleteOne({ _id: notDrawnGroup._id });
+            createdSchedules = await ScheduleModel.create(scheduleData);
+        });
+    });
+
+    describe('generateSchedule', () => {
+        test('Should throw error when a group does not have exactly 6 teams', async () => {
+            await ScheduleModel.deleteMany();
+
+            await expect(ScheduleModel.generateSchedule()).rejects.toThrow(
+                'Both dolce and gabbana groups must have exactly 6 teams to generate schedule'
+            );
+
+            createdSchedules = await ScheduleModel.create(scheduleData);
+        });
+
+        test('Should generate 14 rounds of schedule when both groups have 6 teams', async () => {
+            await ScheduleModel.deleteMany();
+
+            const baseUserData = {
+                password: 'Password1!',
+                reachedPlayoff: false,
+                isFirstRoundDraftOrderDraw: false,
+                bio: 'Extra user bio',
+                cabinetTrophy: [],
+                isAdmin: false
+            };
+
+            await UserModel.create([
+                {
+                    ...baseUserData,
+                    username: 'user-nine',
+                    teamName: 'Team Nine',
+                    coachName: 'Coach Nine',
+                    logoUrl: 'https://example.com/team-nine.png',
+                    email: 'user-nine@example.com',
+                    groupName: dolceId
+                },
+                {
+                    ...baseUserData,
+                    username: 'user-ten',
+                    teamName: 'Team Ten',
+                    coachName: 'Coach Ten',
+                    logoUrl: 'https://example.com/team-ten.png',
+                    email: 'user-ten@example.com',
+                    groupName: dolceId
+                },
+                {
+                    ...baseUserData,
+                    username: 'user-eleven',
+                    teamName: 'Team Eleven',
+                    coachName: 'Coach Eleven',
+                    logoUrl: 'https://example.com/team-eleven.png',
+                    email: 'user-eleven@example.com',
+                    groupName: gabbanaId
+                },
+                {
+                    ...baseUserData,
+                    username: 'user-twelve',
+                    teamName: 'Team Twelve',
+                    coachName: 'Coach Twelve',
+                    logoUrl: 'https://example.com/team-twelve.png',
+                    email: 'user-twelve@example.com',
+                    groupName: gabbanaId
+                }
+            ]);
+
+            const dolceGroupUsers = await UserModel.find(
+                { groupName: dolceId },
+                '_id'
+            ).exec();
+            const gabbanaGroupUsers = await UserModel.find(
+                { groupName: gabbanaId },
+                '_id'
+            ).exec();
+            const dolceUserIds = dolceGroupUsers.map(user => {
+                return user._id.toString();
+            });
+            const gabbanaUserIds = gabbanaGroupUsers.map(user => {
+                return user._id.toString();
+            });
+            const getPairKey = (userOneId: string, userTwoId: string) => {
+                return [userOneId, userTwoId].sort().join('-');
+            };
+
+            await ScheduleModel.generateSchedule();
+
+            const generatedSchedules = await ScheduleModel.find().lean().exec();
+
+            expect(generatedSchedules).toHaveLength(84);
+
+            // 1. all teams play exactly once per round
+            for (let roundNumber = 1; roundNumber <= 14; roundNumber++) {
+                const roundMatches = generatedSchedules.filter(schedule => {
+                    return schedule.roundNumber === roundNumber;
+                });
+                const teamIdsInRound = roundMatches.flatMap(match => {
+                    return [
+                        match.userOneId?.toString() ?? '',
+                        match.userTwoId?.toString() ?? ''
+                    ];
+                });
+
+                expect(new Set(teamIdsInRound).size).toBe(
+                    teamIdsInRound.length
+                );
+                expect(teamIdsInRound).toHaveLength(12);
+            }
+
+            // 2. in the first 10 rounds only teams from the same group may play each other
+            const firstTenRoundsMatches = generatedSchedules.filter(
+                schedule => {
+                    return schedule.roundNumber <= 10;
+                }
+            );
+            firstTenRoundsMatches.forEach(match => {
+                const userOneId = match.userOneId?.toString() ?? '';
+                const userTwoId = match.userTwoId?.toString() ?? '';
+                const bothDolce =
+                    dolceUserIds.includes(userOneId) &&
+                    dolceUserIds.includes(userTwoId);
+                const bothGabbana =
+                    gabbanaUserIds.includes(userOneId) &&
+                    gabbanaUserIds.includes(userTwoId);
+
+                expect(bothDolce || bothGabbana).toBe(true);
+            });
+
+            // 3. in the first 5 rounds a team cannot play another team more than once
+            const firstLegPairKeys = generatedSchedules
+                .filter(schedule => schedule.roundNumber <= 5)
+                .map(match => {
+                    return getPairKey(
+                        match.userOneId?.toString() ?? '',
+                        match.userTwoId?.toString() ?? ''
+                    );
+                });
+
+            expect(new Set(firstLegPairKeys).size).toBe(
+                firstLegPairKeys.length
+            );
+
+            // 4. in rounds 6-10 each team can only play one return game with the same team
+            const secondLegPairKeys = generatedSchedules
+                .filter(schedule => {
+                    return (
+                        schedule.roundNumber >= 6 && schedule.roundNumber <= 10
+                    );
+                })
+                .map(match => {
+                    return getPairKey(
+                        match.userOneId?.toString() ?? '',
+                        match.userTwoId?.toString() ?? ''
+                    );
+                });
+
+            expect(new Set(secondLegPairKeys).size).toBe(
+                secondLegPairKeys.length
+            );
+
+            for (let roundNumber = 1; roundNumber <= 14; roundNumber++) {
+                const roundMatches = generatedSchedules.filter(schedule => {
+                    return schedule.roundNumber === roundNumber;
+                });
+
+                expect(roundMatches).toHaveLength(6);
+            }
+
+            const dolceMatches = generatedSchedules.filter(schedule => {
+                return schedule.ligueGroupsId?.toString() === dolceId;
+            });
+            const gabbanaMatches = generatedSchedules.filter(schedule => {
+                return schedule.ligueGroupsId?.toString() === gabbanaId;
+            });
+
+            expect(dolceMatches).toHaveLength(30);
+            expect(gabbanaMatches).toHaveLength(30);
+            dolceMatches.forEach(match => {
+                expect(match.roundNumber).toBeLessThanOrEqual(10);
+            });
+            gabbanaMatches.forEach(match => {
+                expect(match.roundNumber).toBeLessThanOrEqual(10);
+            });
+
+            const crossGroup = await LigueGroupsModel.findOne({
+                groupName: 'dolce&gabbana'
+            }).exec();
+
+            expect(crossGroup).not.toBeNull();
+
+            const crossGroupMatches = generatedSchedules.filter(schedule => {
+                return (
+                    schedule.ligueGroupsId?.toString() ===
+                    crossGroup?._id.toString()
+                );
+            });
+
+            expect(crossGroupMatches).toHaveLength(24);
+            crossGroupMatches.forEach(match => {
+                expect(match.roundNumber).toBeGreaterThanOrEqual(11);
+                expect(match.roundNumber).toBeLessThanOrEqual(14);
+            });
+
+            // 5. in rounds 11-14 every match must have teams from different groups
+            crossGroupMatches.forEach(match => {
+                const userOneId = match.userOneId?.toString() ?? '';
+                const userTwoId = match.userTwoId?.toString() ?? '';
+                const isCrossGroupMatch =
+                    (dolceUserIds.includes(userOneId) &&
+                        gabbanaUserIds.includes(userTwoId)) ||
+                    (gabbanaUserIds.includes(userOneId) &&
+                        dolceUserIds.includes(userTwoId));
+
+                expect(isCrossGroupMatch).toBe(true);
+            });
+
+            // 6. in rounds 11-14 a team cannot play another team from the other group more than once
+            const interGroupPairKeys = crossGroupMatches.map(match => {
+                return getPairKey(
+                    match.userOneId?.toString() ?? '',
+                    match.userTwoId?.toString() ?? ''
+                );
+            });
+
+            expect(new Set(interGroupPairKeys).size).toBe(
+                interGroupPairKeys.length
+            );
+
+            await ScheduleModel.deleteMany();
+            await UserModel.deleteMany({
+                username: {
+                    $in: ['user-nine', 'user-ten', 'user-eleven', 'user-twelve']
+                }
+            });
+            await LigueGroupsModel.deleteOne({ _id: crossGroup?._id });
+            createdSchedules = await ScheduleModel.create(scheduleData);
+        });
+
+        test('Should throw error when schedule has already been generated', async () => {
+            await expect(ScheduleModel.generateSchedule()).rejects.toThrow(
+                'Schedule has already been generated'
+            );
         });
     });
 });
