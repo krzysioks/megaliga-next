@@ -64,6 +64,68 @@ describe('Test StartingLineupStatusModel methods and static functions', () => {
         });
     });
 
+    describe('setStartingLineupStatus', () => {
+        test('Should update existing document with isOpen state', async () => {
+            await StartingLineupStatusModel.create({
+                roundNumber: 1,
+                seasonStage: 'regularSeason',
+                isOpen: false
+            });
+
+            await StartingLineupStatusModel.setStartingLineupStatus(
+                1,
+                'regularSeason',
+                true
+            );
+
+            const document = await StartingLineupStatusModel.findOne({
+                roundNumber: 1,
+                seasonStage: 'regularSeason'
+            }).exec();
+
+            expect(document?.isOpen).toBe(true);
+        });
+
+        test('Should add new document if document for given roundNumber and seasonStage does not exist', async () => {
+            await StartingLineupStatusModel.setStartingLineupStatus(
+                3,
+                'playIn',
+                true
+            );
+
+            const document = await StartingLineupStatusModel.findOne({
+                roundNumber: 3,
+                seasonStage: 'playIn'
+            }).exec();
+
+            expect(document?.isOpen).toBe(true);
+        });
+
+        test('Should not allow to set roundNumber > 14 if seasonStage === regularSeason', async () => {
+            await expect(
+                StartingLineupStatusModel.setStartingLineupStatus(
+                    15,
+                    'regularSeason',
+                    true
+                )
+            ).rejects.toThrow(
+                'Invalid roundNumber: 15 for regularSeason. Max allowed is 14'
+            );
+        });
+
+        test('Should not allow to set roundNumber > 4 if seasonStage === playoff', async () => {
+            await expect(
+                StartingLineupStatusModel.setStartingLineupStatus(
+                    5,
+                    'playoff',
+                    true
+                )
+            ).rejects.toThrow(
+                'Invalid roundNumber: 5 for playoff. Max allowed is 4'
+            );
+        });
+    });
+
     describe('resetStartingLineupStatus', () => {
         test('Should set isOpen to false for all documents', async () => {
             await StartingLineupStatusModel.create([

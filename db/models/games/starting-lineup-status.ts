@@ -27,6 +27,11 @@ interface StartingLineupStatusModelType extends Model<StartingLineupStatusType> 
         seasonStage: z.infer<typeof stageEnumSchema>
     ) => Promise<boolean>;
     resetStartingLineupStatus: () => Promise<void>;
+    setStartingLineupStatus: (
+        roundNumber: number,
+        seasonStage: z.infer<typeof stageEnumSchema>,
+        isOpen: boolean
+    ) => Promise<void>;
 }
 
 const startingLineupStatusSchema = new Schema<
@@ -81,11 +86,41 @@ startingLineupStatusSchema.static(
     }
 );
 
+startingLineupStatusSchema.static(
+    'setStartingLineupStatus',
+    async function setStartingLineupStatus(
+        roundNumber: number,
+        seasonStage: z.infer<typeof stageEnumSchema>,
+        isOpen: boolean
+    ) {
+        try {
+            if (seasonStage === 'regularSeason' && roundNumber > 14) {
+                throw new Error(
+                    `Invalid roundNumber: ${roundNumber} for regularSeason. Max allowed is 14`
+                );
+            }
+
+            if (seasonStage === 'playoff' && roundNumber > 4) {
+                throw new Error(
+                    `Invalid roundNumber: ${roundNumber} for playoff. Max allowed is 4`
+                );
+            }
+
+            await this.updateOne(
+                { roundNumber, seasonStage },
+                { $set: { isOpen } },
+                { upsert: true }
+            );
+        } catch (error) {
+            console.error('Error setting starting lineup status:', error);
+            throw error;
+        }
+    }
+);
+
 const StartingLineupStatusModel = model<
     StartingLineupStatusType,
     StartingLineupStatusModelType
 >('StartingLineupStatus', startingLineupStatusSchema);
-
-// TODOKP: 2 method setStartingLineupStatus(roundNumber: number, seasonStage: string, isOpen: boolean) to set starting lineup status for given round number and season stage. Will implement later when admin panel will be implemented
 
 export default StartingLineupStatusModel;

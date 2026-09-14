@@ -4,6 +4,7 @@ import { DBClient } from '@/db/db-client';
 import StartingLineupModel, {
     PlayerPostions
 } from '@/db/models/games/starting-lineup';
+import PlayersModel from '@/db/models/players';
 import UserModel, { UserType } from '@/db/models/user';
 
 const createUserData = (overrides: Partial<UserType> = {}) => ({
@@ -33,6 +34,24 @@ const createPositions = (
     ...overrides
 });
 
+const createPlayerPositions = async (): Promise<PlayerPostions> => {
+    const players = await PlayersModel.create([
+        { extraligaPlayerName: 'Player One' },
+        { extraligaPlayerName: 'Player Two' },
+        { extraligaPlayerName: 'Player Three' },
+        { extraligaPlayerName: 'Player Four' },
+        { extraligaPlayerName: 'Player Five' }
+    ]);
+
+    return {
+        playerOne: players[0]._id.toString(),
+        playerTwo: players[1]._id.toString(),
+        playerThree: players[2]._id.toString(),
+        playerFour: players[3]._id.toString(),
+        playerFive: players[4]._id.toString()
+    };
+};
+
 // connect to test db before running tests
 beforeAll(async () => {
     // Mock console.error to silence logs during testing
@@ -45,12 +64,14 @@ beforeAll(async () => {
 beforeEach(async () => {
     await StartingLineupModel.deleteMany();
     await UserModel.deleteMany();
+    await PlayersModel.deleteMany();
 });
 
 // close connection to server so that test suite will close
 afterAll(async () => {
     await StartingLineupModel.deleteMany();
     await UserModel.deleteMany();
+    await PlayersModel.deleteMany();
     await mongoose.disconnect();
 });
 
@@ -273,5 +294,61 @@ describe('Test StartingLineupModel methods and static functions', () => {
         const remainingDocuments = await StartingLineupModel.find().exec();
 
         expect(remainingDocuments).toHaveLength(0);
+    });
+
+    describe('getStartingLineupPlayersByRound', () => {
+        test('Should throw error if number of documents for given round < 12 - not all users entered starting lineup', async () => {
+            const roundNumber = 5;
+            const user = await new UserModel(createUserData()).save();
+            const positions = await createPlayerPositions();
+
+            await new StartingLineupModel({
+                userId: user._id.toString(),
+                roundNumber,
+                ...positions
+            }).save();
+
+            await expect(
+                StartingLineupModel.getStartingLineupPlayersByRound(roundNumber)
+            ).rejects.toThrow(
+                `Expected 12 starting lineups for round ${roundNumber}, but found 1.`
+            );
+        });
+
+        test('Should properly return array of objects with player id and playerName if all starting lineups provided', async () => {
+            const roundNumber = 6;
+            const numberOfUsers = 12;
+
+            for (let i = 0; i < numberOfUsers; i++) {
+                const user = await new UserModel(
+                    createUserData({
+                        username: `user-${i}`,
+                        email: `user-${i}@example.com`
+                    })
+                ).save();
+                const positions = await createPlayerPositions();
+
+                await new StartingLineupModel({
+                    userId: user._id.toString(),
+                    roundNumber,
+                    ...positions
+                }).save();
+            }
+
+            const result =
+                await StartingLineupModel.getStartingLineupPlayersByRound(
+                    roundNumber
+                );
+
+            expect(result).toHaveLength(numberOfUsers * 5);
+            result.forEach(player => {
+                expect(player).toEqual(
+                    expect.objectContaining({
+                        playerId: expect.any(String),
+                        playerName: expect.any(String)
+                    })
+                );
+            });
+        });
     });
 });

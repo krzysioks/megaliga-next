@@ -1,4 +1,4 @@
-import { HydratedDocument, model, Model, Schema } from 'mongoose';
+import { HydratedDocument, model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
 import {
@@ -41,6 +41,29 @@ const PLAYER_POSITION_KEYS = [
 
 type StartingLineupDocumentType = Promise<HydratedDocument<StartingLineupType>>;
 
+export interface StartingLineupPlayersByRoundReturnType {
+    playerId: string;
+    playerName: string;
+}
+
+type PopulatedPlayerType = {
+    _id: Types.ObjectId;
+    extraligaPlayerName: string;
+};
+
+type PopulatedStartingLineupType = Omit<
+    StartingLineupType,
+    'playerOne' | 'playerTwo' | 'playerThree' | 'playerFour' | 'playerFive'
+> & {
+    playerOne: PopulatedPlayerType;
+    playerTwo: PopulatedPlayerType;
+    playerThree: PopulatedPlayerType;
+    playerFour: PopulatedPlayerType;
+    playerFive: PopulatedPlayerType;
+};
+
+export type PopulatedFindType = HydratedDocument<PopulatedStartingLineupType>;
+
 interface StartingLineupModelType extends Model<
     StartingLineupType,
     '',
@@ -56,6 +79,9 @@ interface StartingLineupModelType extends Model<
         roundNumber: number
     ) => Promise<void>;
     deleteAll: () => Promise<void>;
+    getStartingLineupPlayersByRound: (
+        roundNumber: number
+    ) => Promise<StartingLineupPlayersByRoundReturnType[]>;
 }
 
 const startingLineupSchema = new Schema<
@@ -174,6 +200,60 @@ startingLineupSchema.static('deleteAll', async function deleteAll() {
         throw error;
     }
 });
+
+startingLineupSchema.static(
+    'getStartingLineupPlayersByRound',
+    async function getStartingLineupPlayersByRound(roundNumber: number) {
+        try {
+            const startingLineups = await this.find({ roundNumber })
+                .populate<PopulatedFindType>({
+                    path: 'playerOne playerTwo playerThree playerFour playerFive',
+                    select: '_id extraligaPlayerName'
+                })
+                .exec();
+
+            if (startingLineups.length < 12) {
+                throw new Error(
+                    `Expected 12 starting lineups for round ${roundNumber}, but found ${startingLineups.length}.`
+                );
+            }
+
+            return startingLineups.reduce<
+                StartingLineupPlayersByRoundReturnType[]
+            >((startingPlayersList, lineup) => {
+                return [
+                    ...startingPlayersList,
+                    {
+                        playerId: lineup.playerOne._id.toString(),
+                        playerName: lineup.playerOne.extraligaPlayerName
+                    },
+                    {
+                        playerId: lineup.playerTwo._id.toString(),
+                        playerName: lineup.playerTwo.extraligaPlayerName
+                    },
+                    {
+                        playerId: lineup.playerThree._id.toString(),
+                        playerName: lineup.playerThree.extraligaPlayerName
+                    },
+                    {
+                        playerId: lineup.playerFour._id.toString(),
+                        playerName: lineup.playerFour.extraligaPlayerName
+                    },
+                    {
+                        playerId: lineup.playerFive._id.toString(),
+                        playerName: lineup.playerFive.extraligaPlayerName
+                    }
+                ];
+            }, []);
+        } catch (error) {
+            console.error(
+                `Error while getting starting lineup players by round: ${roundNumber}`,
+                error
+            );
+            throw error;
+        }
+    }
+);
 
 const StartingLineupModel = model<StartingLineupType, StartingLineupModelType>(
     'StartingLineup',
