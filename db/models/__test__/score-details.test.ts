@@ -795,4 +795,114 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             expect(documentForUserFour?.teamTwo.players?.[0]?.heatTwo).toBe(0);
         });
     });
+
+    describe('isScoreCalculationsEnabled', () => {
+        const createCompletePlayer = () => ({
+            playerId: new mongoose.Types.ObjectId().toString(),
+            heatOne: 1,
+            heatTwo: 1,
+            heatThree: 1,
+            heatFour: 1,
+            heatFive: 1,
+            heatSix: 1,
+            heatSeven: 1,
+            setPlay: 1
+        });
+
+        const createCompletePlayers = () =>
+            Array.from({ length: 5 }, () => createCompletePlayer());
+
+        const createCompleteScoreDetails = (roundNumber: number) => ({
+            scheduleId: new mongoose.Types.ObjectId().toString(),
+            roundNumber,
+            teamOne: {
+                userId: new mongoose.Types.ObjectId().toString(),
+                players: createCompletePlayers()
+            },
+            teamTwo: {
+                userId: new mongoose.Types.ObjectId().toString(),
+                players: createCompletePlayers()
+            }
+        });
+
+        test('Should throw error if roundNumber not in range 1 - 14', async () => {
+            await expect(
+                ScoreDetailsModel.isScoreCalculationsEnabled(15)
+            ).rejects.toThrow(
+                'Invalid roundNumber: 15. Must be between 1 and 14'
+            );
+        });
+
+        test('Should return false if fewer than 6 score details documents exist for given roundNumber', async () => {
+            await ScoreDetailsModel.create([
+                createCompleteScoreDetails(1),
+                createCompleteScoreDetails(1)
+            ]);
+
+            const result =
+                await ScoreDetailsModel.isScoreCalculationsEnabled(1);
+
+            expect(result).toBe(false);
+        });
+
+        test('Should return false if 6 documents exist but not all players have heats and setPlay filled in', async () => {
+            const scoreDetailsData = [
+                createCompleteScoreDetails(2),
+                createCompleteScoreDetails(2),
+                createCompleteScoreDetails(2),
+                createCompleteScoreDetails(2),
+                createCompleteScoreDetails(2),
+                createCompleteScoreDetails(2)
+            ];
+            const incompletePlayer = createCompletePlayer();
+            delete (incompletePlayer as Record<string, unknown>).heatSeven;
+            scoreDetailsData[5]!.teamTwo.players = [
+                incompletePlayer,
+                ...createCompletePlayers().slice(1)
+            ];
+
+            await ScoreDetailsModel.create(scoreDetailsData);
+
+            const result =
+                await ScoreDetailsModel.isScoreCalculationsEnabled(2);
+
+            expect(result).toBe(false);
+        });
+
+        test('Should return false if a team has a players array with length other than 5', async () => {
+            const scoreDetailsData = [
+                createCompleteScoreDetails(4),
+                createCompleteScoreDetails(4),
+                createCompleteScoreDetails(4),
+                createCompleteScoreDetails(4),
+                createCompleteScoreDetails(4),
+                createCompleteScoreDetails(4)
+            ];
+            scoreDetailsData[5]!.teamOne.players =
+                createCompletePlayers().slice(0, 4);
+
+            await ScoreDetailsModel.create(scoreDetailsData);
+
+            const result =
+                await ScoreDetailsModel.isScoreCalculationsEnabled(4);
+
+            expect(result).toBe(false);
+        });
+
+        test('Should return true if 6 documents exist and all players have heats and setPlay filled in', async () => {
+            await ScoreDetailsModel.create([
+                createCompleteScoreDetails(3),
+                createCompleteScoreDetails(3),
+                createCompleteScoreDetails(3),
+                createCompleteScoreDetails(3),
+                createCompleteScoreDetails(3),
+                createCompleteScoreDetails(3)
+            ]);
+
+            const result =
+                await ScoreDetailsModel.isScoreCalculationsEnabled(3);
+
+            expect(result).toBe(true);
+        });
+    });
 });

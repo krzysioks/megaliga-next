@@ -147,6 +147,7 @@ interface ScoreDetailsModelType extends Model<ScoreDetailsType> {
         roundNumber: number,
         playerScore: PlayerScoreDetailsType
     ) => Promise<SavePlayerScoreDetailsReturnType>;
+    isScoreCalculationsEnabled: (roundNumber: number) => Promise<boolean>;
     deleteAll: () => Promise<void>;
 }
 
@@ -522,6 +523,58 @@ scoreDetailsSchema.static(
             return { success: true };
         } catch (error) {
             console.error('Error saving player score details:', error);
+            throw error;
+        }
+    }
+);
+
+scoreDetailsSchema.static(
+    'isScoreCalculationsEnabled',
+    async function isScoreCalculationsEnabled(roundNumber: number) {
+        try {
+            if (roundNumber < 1 || roundNumber > 14) {
+                throw new Error(
+                    `Invalid roundNumber: ${roundNumber}. Must be between 1 and 14`
+                );
+            }
+
+            const documents = await this.find({ roundNumber }).exec();
+
+            if (documents.length < 6) {
+                return false;
+            }
+
+            const isTeamComplete = (
+                team: ScoreDetailsType['teamOne']
+            ): boolean => {
+                const players = team.players ?? [];
+
+                if (players.length !== 5) {
+                    return false;
+                }
+
+                return players.every(player => {
+                    return (
+                        player.heatOne != null &&
+                        player.heatTwo != null &&
+                        player.heatThree != null &&
+                        player.heatFour != null &&
+                        player.heatFive != null &&
+                        player.heatSix != null &&
+                        player.heatSeven != null &&
+                        player.setPlay != null
+                    );
+                });
+            };
+
+            return documents.every(document => {
+                return (
+                    isTeamComplete(document.teamOne) &&
+                    isTeamComplete(document.teamTwo)
+                );
+            });
+        } catch (error) {
+            console.error('Error checking score calculations status:', error);
             throw error;
         }
     }

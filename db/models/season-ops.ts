@@ -56,6 +56,7 @@ interface SeasonOpsModelType extends Model<
     getHistorySeasons: () => Promise<SeasonOpsReturnType[] | []>;
     getCurrentSeason: () => Promise<SeasonOpsReturnType>;
     setNewSeason: () => Promise<void>;
+    getScoreCalculationStatusByRound: (roundNumber: number) => Promise<boolean>;
 }
 
 const seasonOpsSchema = new Schema<
@@ -186,6 +187,34 @@ seasonOpsSchema.static('setNewSeason', async function setNewSeason() {
         throw error;
     }
 });
+
+seasonOpsSchema.static(
+    'getScoreCalculationStatusByRound',
+    async function getScoreCalculationStatusByRound(roundNumber: number) {
+        try {
+            if (roundNumber < 1 || roundNumber > 14) {
+                throw new Error(
+                    `Invalid roundNumber: ${roundNumber}. Must be between 1 and 14`
+                );
+            }
+
+            const document = await this.findOne({
+                isCurrentSeason: true
+            }).exec();
+
+            if (!document) {
+                throw new Error('Current season not found');
+            }
+
+            return document.isScoreCalculatded[
+                roundNumber as keyof SeasonOpsType['isScoreCalculatded']
+            ];
+        } catch (error) {
+            console.error('Error fetching score calculation status:', error);
+            throw error;
+        }
+    }
+);
 
 const SeasonOpsModel = model<SeasonOpsType, SeasonOpsModelType>(
     'SeasonOps',

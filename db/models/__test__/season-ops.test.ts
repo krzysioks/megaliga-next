@@ -214,4 +214,52 @@ describe('Test SeasonOpsModel methods and static functions', () => {
             findByIdSpy.mockRestore();
         });
     });
+
+    describe('getScoreCalculationStatusByRound', () => {
+        test('Should throw error if roundNumber not in range 1 - 14', async () => {
+            await expect(
+                SeasonOpsModel.getScoreCalculationStatusByRound(15)
+            ).rejects.toThrow(
+                'Invalid roundNumber: 15. Must be between 1 and 14'
+            );
+        });
+
+        test('Should throw error if current season not found', async () => {
+            await expect(
+                SeasonOpsModel.getScoreCalculationStatusByRound(1)
+            ).rejects.toThrow('Current season not found');
+        });
+
+        test('Should return score calculation status for given roundNumber of current season', async () => {
+            await SeasonOpsModel.create(
+                createSeasonData('2025', {
+                    isCurrentSeason: true,
+                    isScoreCalculatded: {
+                        1: true,
+                        2: false,
+                        3: false,
+                        4: false,
+                        5: false,
+                        6: false,
+                        7: false,
+                        8: false,
+                        9: false,
+                        10: false,
+                        11: false,
+                        12: false,
+                        13: false,
+                        14: false
+                    }
+                })
+            );
+
+            const resultForRoundOne =
+                await SeasonOpsModel.getScoreCalculationStatusByRound(1);
+            const resultForRoundTwo =
+                await SeasonOpsModel.getScoreCalculationStatusByRound(2);
+
+            expect(resultForRoundOne).toBe(true);
+            expect(resultForRoundTwo).toBe(false);
+        });
+    });
 });
