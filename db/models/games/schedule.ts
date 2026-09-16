@@ -70,12 +70,22 @@ type PopulatedScheduleForHistoryType = Omit<
     userTwoId?: PopulatedUserIdForHistoryType;
 };
 
+export type ScheduleIdByUserAndRoundNumberReturnType = {
+    scheduleId: string;
+    userOneId: string;
+    userTwoId: string;
+} | null;
+
 interface ScheduleModelType extends Model<ScheduleType> {
     getScheduleByRound: (
         roundNumber: number,
         ligueGroupsId: string
     ) => Promise<ScheduleByRoundDtoType[]>;
     getScheduleForHistory: () => Promise<ScheduleForHistoryReturnType[]>;
+    getScheduleIdByUserAndRoundNumber: (
+        userId: string,
+        roundNumber: number
+    ) => Promise<ScheduleIdByUserAndRoundNumberReturnType>;
     deleteAll: () => Promise<void>;
     getScheduleStatus: () => Promise<ScheduleStatus>;
     generateSchedule: () => Promise<void>;
@@ -191,6 +201,45 @@ scheduleSchema.static(
             });
         } catch (error) {
             console.error('Error fetching schedule data for history:', error);
+            throw error;
+        }
+    }
+);
+
+scheduleSchema.static(
+    'getScheduleIdByUserAndRoundNumber',
+    async function getScheduleIdByUserAndRoundNumber(
+        userId: string,
+        roundNumber: number
+    ) {
+        try {
+            if (roundNumber < 1 || roundNumber > 14) {
+                throw new Error(
+                    `Invalid roundNumber: ${roundNumber}. Must be between 1 and 14`
+                );
+            }
+
+            const isValidUserId = await UserModel.exists({ _id: userId });
+            if (!isValidUserId) {
+                throw new Error(`Invalid userId: ${userId}`);
+            }
+
+            const document = await this.findOne({
+                roundNumber,
+                $or: [{ userOneId: userId }, { userTwoId: userId }]
+            }).exec();
+
+            if (!document) {
+                return null;
+            }
+
+            return {
+                scheduleId: document._id.toString(),
+                userOneId: document.userOneId?.toString() ?? '',
+                userTwoId: document.userTwoId?.toString() ?? ''
+            };
+        } catch (error) {
+            console.error('Error fetching schedule id:', error);
             throw error;
         }
     }

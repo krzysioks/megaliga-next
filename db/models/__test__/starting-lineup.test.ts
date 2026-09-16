@@ -315,11 +315,89 @@ describe('Test StartingLineupModel methods and static functions', () => {
             );
         });
 
-        test('Should properly return array of objects with player id and playerName if all starting lineups provided', async () => {
+        test('Should properly return array of objects with player id, userId, startingLineupId and playerName if all starting lineups provided', async () => {
             const roundNumber = 6;
             const numberOfUsers = 12;
+            const userIds: string[] = [];
+            const startingLineupIdByUserId: Record<string, string> = {};
 
             for (let i = 0; i < numberOfUsers; i++) {
+                const user = await new UserModel(
+                    createUserData({
+                        username: `user-${i}`,
+                        email: `user-${i}@example.com`
+                    })
+                ).save();
+                const userId = user._id.toString();
+                userIds.push(userId);
+                const positions = await createPlayerPositions();
+
+                const lineup = await new StartingLineupModel({
+                    userId,
+                    roundNumber,
+                    ...positions
+                }).save();
+                startingLineupIdByUserId[userId] = lineup._id.toString();
+            }
+
+            const result =
+                await StartingLineupModel.getStartingLineupPlayersByRound(
+                    roundNumber
+                );
+
+            expect(result).toHaveLength(numberOfUsers * 5);
+            result.forEach(player => {
+                expect(player).toEqual(
+                    expect.objectContaining({
+                        userId: expect.any(Array),
+                        startingLineupId: expect.any(Array),
+                        playerId: expect.any(String),
+                        playerName: expect.any(String)
+                    })
+                );
+                expect(player.userId).toHaveLength(1);
+                expect(player.startingLineupId).toHaveLength(1);
+                expect(userIds).toContain(player.userId[0]);
+                expect(player.startingLineupId[0]).toBe(
+                    startingLineupIdByUserId[player.userId[0]]
+                );
+            });
+        });
+
+        test('Should aggregate userId and startingLineupId for a player assigned to more than one starting lineup', async () => {
+            const roundNumber = 7;
+            const numberOfUsers = 12;
+
+            const userOne = await new UserModel(
+                createUserData({
+                    username: 'user-0',
+                    email: 'user-0@example.com'
+                })
+            ).save();
+            const positionsOne = await createPlayerPositions();
+            const lineupOne = await new StartingLineupModel({
+                userId: userOne._id.toString(),
+                roundNumber,
+                ...positionsOne
+            }).save();
+
+            const userTwo = await new UserModel(
+                createUserData({
+                    username: 'user-1',
+                    email: 'user-1@example.com'
+                })
+            ).save();
+            const positionsTwo = {
+                ...(await createPlayerPositions()),
+                playerOne: positionsOne.playerOne
+            };
+            const lineupTwo = await new StartingLineupModel({
+                userId: userTwo._id.toString(),
+                roundNumber,
+                ...positionsTwo
+            }).save();
+
+            for (let i = 2; i < numberOfUsers; i++) {
                 const user = await new UserModel(
                     createUserData({
                         username: `user-${i}`,
@@ -340,15 +418,24 @@ describe('Test StartingLineupModel methods and static functions', () => {
                     roundNumber
                 );
 
-            expect(result).toHaveLength(numberOfUsers * 5);
-            result.forEach(player => {
-                expect(player).toEqual(
-                    expect.objectContaining({
-                        playerId: expect.any(String),
-                        playerName: expect.any(String)
-                    })
-                );
-            });
+            expect(result).toHaveLength(numberOfUsers * 5 - 1);
+
+            const sharedPlayer = result.find(
+                player => player.playerId === positionsOne.playerOne
+            );
+
+            expect(sharedPlayer?.userId).toEqual(
+                expect.arrayContaining([
+                    userOne._id.toString(),
+                    userTwo._id.toString()
+                ])
+            );
+            expect(sharedPlayer?.startingLineupId).toEqual(
+                expect.arrayContaining([
+                    lineupOne._id.toString(),
+                    lineupTwo._id.toString()
+                ])
+            );
         });
     });
 });

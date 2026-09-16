@@ -42,6 +42,8 @@ const PLAYER_POSITION_KEYS = [
 type StartingLineupDocumentType = Promise<HydratedDocument<StartingLineupType>>;
 
 export interface StartingLineupPlayersByRoundReturnType {
+    userId: string[];
+    startingLineupId: string[];
     playerId: string;
     playerName: string;
 }
@@ -218,33 +220,41 @@ startingLineupSchema.static(
                 );
             }
 
-            return startingLineups.reduce<
-                StartingLineupPlayersByRoundReturnType[]
-            >((startingPlayersList, lineup) => {
-                return [
-                    ...startingPlayersList,
-                    {
-                        playerId: lineup.playerOne._id.toString(),
-                        playerName: lineup.playerOne.extraligaPlayerName
-                    },
-                    {
-                        playerId: lineup.playerTwo._id.toString(),
-                        playerName: lineup.playerTwo.extraligaPlayerName
-                    },
-                    {
-                        playerId: lineup.playerThree._id.toString(),
-                        playerName: lineup.playerThree.extraligaPlayerName
-                    },
-                    {
-                        playerId: lineup.playerFour._id.toString(),
-                        playerName: lineup.playerFour.extraligaPlayerName
-                    },
-                    {
-                        playerId: lineup.playerFive._id.toString(),
-                        playerName: lineup.playerFive.extraligaPlayerName
-                    }
+            const playersByPlayerId = startingLineups.reduce<
+                Map<string, StartingLineupPlayersByRoundReturnType>
+            >((accumulator, lineup) => {
+                const userId = lineup.userId?.toString() ?? '';
+                const startingLineupId = lineup._id.toString();
+                const players = [
+                    lineup.playerOne,
+                    lineup.playerTwo,
+                    lineup.playerThree,
+                    lineup.playerFour,
+                    lineup.playerFive
                 ];
-            }, []);
+
+                players.forEach(player => {
+                    const playerId = player._id.toString();
+                    const existingEntry = accumulator.get(playerId);
+
+                    if (existingEntry) {
+                        existingEntry.userId.push(userId);
+                        existingEntry.startingLineupId.push(startingLineupId);
+                        return;
+                    }
+
+                    accumulator.set(playerId, {
+                        userId: [userId],
+                        startingLineupId: [startingLineupId],
+                        playerId,
+                        playerName: player.extraligaPlayerName
+                    });
+                });
+
+                return accumulator;
+            }, new Map());
+
+            return Array.from(playersByPlayerId.values());
         } catch (error) {
             console.error(
                 `Error while getting starting lineup players by round: ${roundNumber}`,

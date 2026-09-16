@@ -521,6 +521,67 @@ describe('Test ScheduleModel methods and static functions', () => {
         });
     });
 
+    describe('getScheduleIdByUserAndRoundNumber', () => {
+        test('Should throw error if roundNumber not in range 1 - 14', async () => {
+            const userOne = usersToCreate[0];
+
+            await expect(
+                ScheduleModel.getScheduleIdByUserAndRoundNumber(
+                    userOne?._id ?? '',
+                    15
+                )
+            ).rejects.toThrow(
+                'Invalid roundNumber: 15. Must be between 1 and 14'
+            );
+        });
+
+        test('Should throw error if userId does not exist in user collection', async () => {
+            const invalidUserId = new mongoose.Types.ObjectId().toString();
+
+            await expect(
+                ScheduleModel.getScheduleIdByUserAndRoundNumber(
+                    invalidUserId,
+                    1
+                )
+            ).rejects.toThrow(`Invalid userId: ${invalidUserId}`);
+        });
+
+        test('Should return schedule id, userOneId and userTwoId for given userId and roundNumber when schedule exists', async () => {
+            const userOne = usersToCreate[0];
+            const expectedSchedule = scheduleData.find(schedule => {
+                return (
+                    schedule.roundNumber === 1 &&
+                    schedule.userOneId === userOne?._id
+                );
+            });
+            const expectedIndex = scheduleData.indexOf(expectedSchedule!);
+
+            const result =
+                await ScheduleModel.getScheduleIdByUserAndRoundNumber(
+                    userOne?._id ?? '',
+                    1
+                );
+
+            expect(result?.scheduleId).toBe(
+                createdSchedules[expectedIndex]?._id.toString()
+            );
+            expect(result?.userOneId).toBe(expectedSchedule?.userOneId);
+            expect(result?.userTwoId).toBe(expectedSchedule?.userTwoId);
+        });
+
+        test('Should return null when schedule does not exist for given userId and roundNumber', async () => {
+            const userOne = usersToCreate[0];
+
+            const result =
+                await ScheduleModel.getScheduleIdByUserAndRoundNumber(
+                    userOne?._id ?? '',
+                    14
+                );
+
+            expect(result).toBeNull();
+        });
+    });
+
     describe('generateSchedule', () => {
         test('Should throw error when a group does not have exactly 6 teams', async () => {
             await ScheduleModel.deleteMany();
