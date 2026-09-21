@@ -9,6 +9,7 @@ import SchedulePlayoffModel, {
     SchedulePlayoffType
 } from '@/db/models/games/schedule-playoff';
 import { ScheduleStatus } from '@/db/models/schema.types';
+import StandingsModel from '@/db/models/standings';
 import UserModel, { UserType } from '@/db/models/user';
 
 type SeededUser = UserType & { _id: mongoose.Types.ObjectId };
@@ -583,6 +584,130 @@ describe('Test SchedulePlayoffModel methods and static functions', () => {
                 await SchedulePlayoffModel.getPlayoffScheduleStatus();
 
             expect(status).toBe(ScheduleStatus.Generated);
+        });
+    });
+
+    describe('generateSemifinalPlayoffSchedule', () => {
+        beforeEach(async () => {
+            await StandingsModel.deleteMany();
+
+            await StandingsModel.create(
+                seededUsers.map((user, index) => ({
+                    place: index + 1,
+                    userId: user._id.toString(),
+                    played: 22,
+                    wins: 12 - index,
+                    draw: index % 3,
+                    defeat: 10 + index,
+                    balance: 120 - index,
+                    points: 36 - index
+                }))
+            );
+        });
+
+        afterEach(async () => {
+            await StandingsModel.deleteMany();
+        });
+
+        test('Should generate 4 semifinal documents seeded from standings places 1-4', async () => {
+            await SchedulePlayoffModel.generateSemifinalPlayoffSchedule();
+
+            const documents = await SchedulePlayoffModel.find({
+                stage: 'semifinal'
+            })
+                .sort({ roundNumber: 1, userOneSeed: 1 })
+                .exec();
+
+            expect(documents).toHaveLength(4);
+
+            const pairOneGames = documents.filter(
+                document => document.userOneSeed === 1
+            );
+            const pairTwoGames = documents.filter(
+                document => document.userOneSeed === 2
+            );
+
+            expect(pairOneGames).toHaveLength(2);
+            expect(pairTwoGames).toHaveLength(2);
+
+            pairOneGames.forEach(document => {
+                expect(document.userOneId?.toString()).toBe(
+                    seededUsers[0]._id.toString()
+                );
+                expect(document.userTwoId?.toString()).toBe(
+                    seededUsers[3]._id.toString()
+                );
+                expect(document.userTwoSeed).toBe(4);
+            });
+
+            pairTwoGames.forEach(document => {
+                expect(document.userOneId?.toString()).toBe(
+                    seededUsers[1]._id.toString()
+                );
+                expect(document.userTwoId?.toString()).toBe(
+                    seededUsers[2]._id.toString()
+                );
+                expect(document.userTwoSeed).toBe(3);
+            });
+
+            expect(
+                pairOneGames.map(document => document.roundNumber).sort()
+            ).toEqual([1, 2]);
+            expect(
+                pairTwoGames.map(document => document.roundNumber).sort()
+            ).toEqual([1, 2]);
+        });
+
+        test('should set user.reachedPlayoff  = 1 for teams, that have advanced to playoff and 0 for the remaining ones', async () => {
+            await SchedulePlayoffModel.generateSemifinalPlayoffSchedule();
+
+            const updatedUsers = await UserModel.find({
+                _id: { $in: seededUsers.map(user => user._id) }
+            }).exec();
+
+            seededUsers.slice(0, 4).forEach(seededUser => {
+                const updatedUser = updatedUsers.find(
+                    user => user._id.toString() === seededUser._id.toString()
+                );
+                expect(updatedUser?.reachedPlayoff).toBe(true);
+            });
+
+            seededUsers.slice(4).forEach(seededUser => {
+                const updatedUser = updatedUsers.find(
+                    user => user._id.toString() === seededUser._id.toString()
+                );
+                expect(updatedUser?.reachedPlayoff).toBe(false);
+            });
+        });
+
+        test('Should throw error if semifinal schedule has already been generated', async () => {
+            await SchedulePlayoffModel.generateSemifinalPlayoffSchedule();
+
+            await expect(
+                SchedulePlayoffModel.generateSemifinalPlayoffSchedule()
+            ).rejects.toThrow(
+                'Semifinal playoff schedule has already been generated'
+            );
+        });
+
+        test('Should throw error if fewer than 4 standings entries exist', async () => {
+            await StandingsModel.deleteMany();
+            await StandingsModel.create({
+                place: 1,
+                userId: seededUsers[0]._id.toString(),
+                played: 22,
+                wins: 12,
+                draw: 0,
+                defeat: 10,
+                balance: 120,
+                points: 36
+            });
+
+            await expect(
+                SchedulePlayoffModel.generateSemifinalPlayoffSchedule()
+            ).rejects.toThrow(
+                'At least 4 standings entries are required to generate semifinal playoff schedule'
+            );
         });
     });
 });

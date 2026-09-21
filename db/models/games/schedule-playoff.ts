@@ -6,7 +6,8 @@ import {
     roundNumberSchema,
     ScheduleStatus
 } from '@/db/models/schema.types';
-import { UserType } from '@/db/models/user';
+import StandingsModel from '@/db/models/standings';
+import UserModel, { UserType } from '@/db/models/user';
 
 //SchedulePlayoff is representation of megaliga_schedule_playoff of old megaliga database. Will be used for displaying playoff standings view and in wyniki view.
 
@@ -87,6 +88,7 @@ interface SchedulePlayoffModelType extends Model<SchedulePlayoffType> {
         SchedulePlayoffScheduleForHistoryReturnType[]
     >;
     getPlayoffScheduleStatus: () => Promise<ScheduleStatus>;
+    generateSemifinalPlayoffSchedule: () => Promise<void>;
     deleteAll: () => Promise<void>;
 }
 
@@ -396,6 +398,92 @@ schedulePlayoffSchema.static(
             return ScheduleStatus.ReadyForGeneration;
         } catch (error) {
             console.error('Error checking playoff schedule status:', error);
+            throw error;
+        }
+    }
+);
+
+schedulePlayoffSchema.static(
+    'generateSemifinalPlayoffSchedule',
+    async function generateSemifinalPlayoffSchedule(): Promise<void> {
+        try {
+            const existingSemifinalCount = await this.countDocuments({
+                stage: 'semifinal'
+            });
+            if (existingSemifinalCount > 0) {
+                throw new Error(
+                    'Semifinal playoff schedule has already been generated'
+                );
+            }
+
+            const standings = await StandingsModel.getStandings();
+
+            if (standings.length < 4) {
+                throw new Error(
+                    'At least 4 standings entries are required to generate semifinal playoff schedule'
+                );
+            }
+
+            const qualifiedUserIds = standings
+                .slice(0, 4)
+                .map(standing => standing.userId);
+            const nonQualifiedUserIds = standings
+                .slice(4)
+                .map(standing => standing.userId);
+
+            await UserModel.updateMany(
+                { _id: { $in: qualifiedUserIds } },
+                { $set: { reachedPlayoff: true } }
+            );
+            await UserModel.updateMany(
+                { _id: { $in: nonQualifiedUserIds } },
+                { $set: { reachedPlayoff: false } }
+            );
+
+            const pairs = [
+                {
+                    userOneId: standings[0].userId,
+                    userTwoId: standings[3].userId,
+                    userOneSeed: 1,
+                    userTwoSeed: 4
+                },
+                {
+                    userOneId: standings[1].userId,
+                    userTwoId: standings[2].userId,
+                    userOneSeed: 2,
+                    userTwoSeed: 3
+                }
+            ];
+
+            const scheduleDocuments: SchedulePlayoffType[] = pairs.flatMap(
+                pair => {
+                    return [
+                        {
+                            userOneId: pair.userOneId,
+                            userTwoId: pair.userTwoId,
+                            roundNumber: 1,
+                            userOneSeed: pair.userOneSeed,
+                            userTwoSeed: pair.userTwoSeed,
+                            stage: 'semifinal' as const
+                        },
+                        {
+                            userOneId: pair.userOneId,
+                            userTwoId: pair.userTwoId,
+                            roundNumber: 2,
+                            userOneSeed: pair.userOneSeed,
+                            userTwoSeed: pair.userTwoSeed,
+                            stage: 'semifinal' as const
+                        }
+                    ];
+                }
+            );
+
+            await this.create(scheduleDocuments);
+        } catch (error) {
+            console.error(
+                'Error generating semifinal playoff schedule:',
+                error
+            );
             throw error;
         }
     }
