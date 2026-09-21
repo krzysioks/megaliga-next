@@ -1,7 +1,11 @@
 import { model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
-import { objectIdSchema, roundNumberSchema } from '@/db/models/schema.types';
+import {
+    objectIdSchema,
+    roundNumberSchema,
+    ScheduleStatus
+} from '@/db/models/schema.types';
 import { UserType } from '@/db/models/user';
 
 //SchedulePlayoff is representation of megaliga_schedule_playoff of old megaliga database. Will be used for displaying playoff standings view and in wyniki view.
@@ -82,6 +86,7 @@ interface SchedulePlayoffModelType extends Model<SchedulePlayoffType> {
     getScheduleForHistory: () => Promise<
         SchedulePlayoffScheduleForHistoryReturnType[]
     >;
+    getPlayoffScheduleStatus: () => Promise<ScheduleStatus>;
     deleteAll: () => Promise<void>;
 }
 
@@ -378,6 +383,23 @@ schedulePlayoffSchema.static('deleteAll', async function deleteAll() {
         throw error;
     }
 });
+
+schedulePlayoffSchema.static(
+    'getPlayoffScheduleStatus',
+    async function getPlayoffScheduleStatus(): Promise<ScheduleStatus> {
+        try {
+            const count = await this.countDocuments({ stage: 'semifinal' });
+            if (count > 0) {
+                return ScheduleStatus.Generated;
+            }
+
+            return ScheduleStatus.ReadyForGeneration;
+        } catch (error) {
+            console.error('Error checking playoff schedule status:', error);
+            throw error;
+        }
+    }
+);
 
 const SchedulePlayoffModel = model<
     SchedulePlayoffType,

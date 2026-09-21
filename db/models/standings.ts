@@ -11,7 +11,9 @@ export const StandingsZodSchema = standingSchema;
 export type StandingsType = z.infer<typeof StandingsZodSchema>;
 
 export type StandingsReturnType = Omit<StandingsType, 'userId'> &
-    Pick<UserType, 'teamName' | 'logoUrl'>;
+    Pick<UserType, 'teamName' | 'logoUrl'> & {
+        userId: StandingsType['userId'];
+    };
 
 type PopulatedUserIdForHistoryType = Pick<UserType, 'teamName' | 'coachName'>;
 
@@ -28,7 +30,9 @@ interface StandingsModelType extends Model<StandingsType> {
     getStandingsForHistory: () => Promise<StandingsForHistoryReturnType[]>;
 }
 
-type PopulatedUserIdType = Pick<UserType, 'teamName' | 'logoUrl'>;
+type PopulatedUserIdType = Pick<UserType, 'teamName' | 'logoUrl'> & {
+    _id: Types.ObjectId;
+};
 type PopulatedStandingsType = Omit<StandingsType, 'userId'> & {
     userId?: PopulatedUserIdType;
 };
@@ -65,6 +69,7 @@ const StandingsSchema = new Schema<StandingsType, StandingsModelType>({
 StandingsSchema.static('getStandings', async function getStandings() {
     try {
         const documents: PopulatedFindType[] = await this.find()
+            .sort({ place: 1 })
             .populate<{ userId: PopulatedUserIdType }>({
                 path: 'userId',
                 select: 'teamName logoUrl'
@@ -78,6 +83,7 @@ StandingsSchema.static('getStandings', async function getStandings() {
         return documents.map(item => {
             return {
                 place: item.place,
+                userId: item.userId?._id?.toString() ?? '',
                 teamName: item.userId?.teamName ?? '',
                 logoUrl: item.userId?.logoUrl ?? '',
                 played: item.played,
@@ -100,6 +106,7 @@ StandingsSchema.static(
     async function getStandingsForHistory() {
         try {
             const documents: PopulatedFindForHistoryType[] = await this.find()
+                .sort({ place: 1 })
                 .populate<{
                     userId: PopulatedUserIdForHistoryType;
                 }>({

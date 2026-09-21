@@ -6,14 +6,12 @@ import {
     generateInterGroupRounds
 } from '@/db/db.utils';
 import LigueGroupsModel from '@/db/models/ligue-groups';
-import { objectIdSchema, roundNumberSchema } from '@/db/models/schema.types';
+import {
+    objectIdSchema,
+    roundNumberSchema,
+    ScheduleStatus
+} from '@/db/models/schema.types';
 import UserModel, { UserType } from '@/db/models/user';
-
-export enum ScheduleStatus {
-    Generated = 'schedule generated',
-    ReadyForGeneration = 'schedule ready for generation',
-    NotReadyForGeneration = 'schedule not ready for generation'
-}
 
 const CROSS_GROUP_NAME = 'dolce&gabbana';
 

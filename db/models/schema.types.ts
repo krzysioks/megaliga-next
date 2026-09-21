@@ -1,5 +1,11 @@
 import { z } from 'zod';
 
+export enum ScheduleStatus {
+    Generated = 'schedule generated',
+    ReadyForGeneration = 'schedule ready for generation',
+    NotReadyForGeneration = 'schedule not ready for generation'
+}
+
 // Shared Zod schemas for reusable types across models
 const heatSchema = z.number().min(0).max(100).optional();
 export const standardStringSchema = z.string().max(255);

@@ -3,10 +3,10 @@ import mongoose from 'mongoose';
 import { DBClient } from '@/db/db-client';
 import ScheduleModel, {
     ScheduleByRoundDtoType,
-    ScheduleStatus,
     ScheduleType
 } from '@/db/models/games/schedule';
 import LigueGroupsModel from '@/db/models/ligue-groups';
+import { ScheduleStatus } from '@/db/models/schema.types';
 import UserModel from '@/db/models/user';
 
 let dolceId: string;

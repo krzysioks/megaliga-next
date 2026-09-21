@@ -98,6 +98,7 @@ describe('Test StandingsModel methods and static functions', () => {
                 expect(fetchedStanding?.ligueGroupsId).toBe(
                     expectedStanding.ligueGroupsId
                 );
+                expect(fetchedStanding?.userId).toBe(expectedStanding.userId);
                 expect(fetchedStanding?.teamName).toBe(seededUser?.teamName);
                 expect(fetchedStanding?.logoUrl).toBe(seededUser?.logoUrl);
             });
@@ -106,6 +107,16 @@ describe('Test StandingsModel methods and static functions', () => {
         test('Should throw error if no standings fetched from db', async () => {
             await expect(StandingsModel.getStandings()).rejects.toThrow(
                 'Standings not found'
+            );
+        });
+
+        test('Should return standings sorted by place ascending regardless of insertion order', async () => {
+            await StandingsModel.create([...standingsToCreate].reverse());
+
+            const standings = await StandingsModel.getStandings();
+
+            expect(standings.map(standing => standing.place)).toEqual(
+                Array.from({ length: 12 }, (_, index) => index + 1)
             );
         });
     });
@@ -138,6 +149,7 @@ describe('Test StandingsModel methods and static functions', () => {
             expect(fetchedStanding?.ligueGroupsId).toBe(
                 expectedStanding.ligueGroupsId
             );
+            expect(fetchedStanding?.userId).toBe(expectedStanding.userId);
             expect(fetchedStanding?.teamName).toBe(seededUser?.teamName);
             expect(fetchedStanding?.logoUrl).toBe(seededUser?.logoUrl);
         });
@@ -185,6 +197,16 @@ describe('Test StandingsModel methods and static functions', () => {
             await expect(
                 StandingsModel.getStandingsForHistory()
             ).rejects.toThrow('Standings not found');
+        });
+
+        test('Should return standings sorted by place ascending regardless of insertion order', async () => {
+            await StandingsModel.create([...standingsToCreate].reverse());
+
+            const standings = await StandingsModel.getStandingsForHistory();
+
+            expect(standings.map(standing => standing.place)).toEqual(
+                Array.from({ length: 12 }, (_, index) => index + 1)
+            );
         });
     });
 });

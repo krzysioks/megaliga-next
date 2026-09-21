@@ -8,6 +8,7 @@ import SchedulePlayoffModel, {
     SchedulePlayoffStandingsForHistoryReturnType,
     SchedulePlayoffType
 } from '@/db/models/games/schedule-playoff';
+import { ScheduleStatus } from '@/db/models/schema.types';
 import UserModel, { UserType } from '@/db/models/user';
 
 type SeededUser = UserType & { _id: mongoose.Types.ObjectId };
@@ -557,6 +558,31 @@ describe('Test SchedulePlayoffModel methods and static functions', () => {
             const remainingDocuments = await SchedulePlayoffModel.find().exec();
 
             expect(remainingDocuments).toHaveLength(0);
+        });
+    });
+
+    describe('getPlayoffScheduleStatus', () => {
+        test('Should return ReadyForGeneration when no semifinal documents exist', async () => {
+            const status =
+                await SchedulePlayoffModel.getPlayoffScheduleStatus();
+
+            expect(status).toBe(ScheduleStatus.ReadyForGeneration);
+        });
+
+        test('Should return Generated when semifinal documents exist', async () => {
+            await SchedulePlayoffModel.create({
+                userOneId: seededUsers[0]._id.toString(),
+                userTwoId: seededUsers[1]._id.toString(),
+                roundNumber: 1,
+                userOneSeed: 1,
+                userTwoSeed: 4,
+                stage: 'semifinal'
+            });
+
+            const status =
+                await SchedulePlayoffModel.getPlayoffScheduleStatus();
+
+            expect(status).toBe(ScheduleStatus.Generated);
         });
     });
 });
