@@ -587,6 +587,129 @@ describe('Test SchedulePlayoffModel methods and static functions', () => {
         });
     });
 
+    describe('getPlayoffScheduleFinalAnd3rdPlaceStatus', () => {
+        test('Should return NotReadyForGeneration when no semifinal documents exist', async () => {
+            const status =
+                await SchedulePlayoffModel.getPlayoffScheduleFinalAnd3rdPlaceStatus();
+
+            expect(status).toBe(ScheduleStatus.NotReadyForGeneration);
+        });
+
+        test('Should return NotReadyForGeneration when semifinal scores are not fully filled in', async () => {
+            await SchedulePlayoffModel.create([
+                {
+                    stage: 'semifinal',
+                    roundNumber: 1,
+                    userOneId: seededUsers[0]._id.toString(),
+                    userTwoId: seededUsers[1]._id.toString(),
+                    userOneSeed: 1,
+                    userTwoSeed: 4,
+                    userOneScore: 45,
+                    userTwoScore: 40
+                },
+                {
+                    stage: 'semifinal',
+                    roundNumber: 2,
+                    userOneId: seededUsers[0]._id.toString(),
+                    userTwoId: seededUsers[1]._id.toString(),
+                    userOneSeed: 1,
+                    userTwoSeed: 4
+                },
+                {
+                    stage: 'semifinal',
+                    roundNumber: 1,
+                    userOneId: seededUsers[2]._id.toString(),
+                    userTwoId: seededUsers[3]._id.toString(),
+                    userOneSeed: 2,
+                    userTwoSeed: 3,
+                    userOneScore: 35,
+                    userTwoScore: 40
+                },
+                {
+                    stage: 'semifinal',
+                    roundNumber: 2,
+                    userOneId: seededUsers[2]._id.toString(),
+                    userTwoId: seededUsers[3]._id.toString(),
+                    userOneSeed: 2,
+                    userTwoSeed: 3,
+                    userOneScore: 35,
+                    userTwoScore: 45
+                }
+            ]);
+
+            const status =
+                await SchedulePlayoffModel.getPlayoffScheduleFinalAnd3rdPlaceStatus();
+
+            expect(status).toBe(ScheduleStatus.NotReadyForGeneration);
+        });
+
+        test('Should return ReadyForGeneration when semifinal schedule is fully completed', async () => {
+            await SchedulePlayoffModel.create([
+                {
+                    stage: 'semifinal',
+                    roundNumber: 1,
+                    userOneId: seededUsers[0]._id.toString(),
+                    userTwoId: seededUsers[1]._id.toString(),
+                    userOneSeed: 1,
+                    userTwoSeed: 4,
+                    userOneScore: 45,
+                    userTwoScore: 40
+                },
+                {
+                    stage: 'semifinal',
+                    roundNumber: 2,
+                    userOneId: seededUsers[0]._id.toString(),
+                    userTwoId: seededUsers[1]._id.toString(),
+                    userOneSeed: 1,
+                    userTwoSeed: 4,
+                    userOneScore: 45,
+                    userTwoScore: 40
+                },
+                {
+                    stage: 'semifinal',
+                    roundNumber: 1,
+                    userOneId: seededUsers[2]._id.toString(),
+                    userTwoId: seededUsers[3]._id.toString(),
+                    userOneSeed: 2,
+                    userTwoSeed: 3,
+                    userOneScore: 35,
+                    userTwoScore: 40
+                },
+                {
+                    stage: 'semifinal',
+                    roundNumber: 2,
+                    userOneId: seededUsers[2]._id.toString(),
+                    userTwoId: seededUsers[3]._id.toString(),
+                    userOneSeed: 2,
+                    userTwoSeed: 3,
+                    userOneScore: 35,
+                    userTwoScore: 45
+                }
+            ]);
+
+            const status =
+                await SchedulePlayoffModel.getPlayoffScheduleFinalAnd3rdPlaceStatus();
+
+            expect(status).toBe(ScheduleStatus.ReadyForGeneration);
+        });
+
+        test('Should return Generated when final and 3rdplace documents already exist', async () => {
+            await SchedulePlayoffModel.create({
+                stage: 'final',
+                roundNumber: 3,
+                userOneId: seededUsers[0]._id.toString(),
+                userTwoId: seededUsers[3]._id.toString(),
+                userOneSeed: 1,
+                userTwoSeed: 3
+            });
+
+            const status =
+                await SchedulePlayoffModel.getPlayoffScheduleFinalAnd3rdPlaceStatus();
+
+            expect(status).toBe(ScheduleStatus.Generated);
+        });
+    });
+
     describe('generateSemifinalPlayoffSchedule', () => {
         beforeEach(async () => {
             await StandingsModel.deleteMany();
@@ -707,6 +830,216 @@ describe('Test SchedulePlayoffModel methods and static functions', () => {
                 SchedulePlayoffModel.generateSemifinalPlayoffSchedule()
             ).rejects.toThrow(
                 'At least 4 standings entries are required to generate semifinal playoff schedule'
+            );
+        });
+    });
+
+    describe('generateFinalAnd3rdPlacePlayoffSchedule', () => {
+        const seedSemifinalDocs = async () => {
+            await SchedulePlayoffModel.create([
+                {
+                    stage: 'semifinal',
+                    roundNumber: 1,
+                    userOneId: seededUsers[0]._id.toString(),
+                    userTwoId: seededUsers[1]._id.toString(),
+                    userOneSeed: 1,
+                    userTwoSeed: 4,
+                    userOneScore: 45,
+                    userTwoScore: 40
+                },
+                {
+                    stage: 'semifinal',
+                    roundNumber: 2,
+                    userOneId: seededUsers[0]._id.toString(),
+                    userTwoId: seededUsers[1]._id.toString(),
+                    userOneSeed: 1,
+                    userTwoSeed: 4,
+                    userOneScore: 45,
+                    userTwoScore: 40
+                },
+                {
+                    stage: 'semifinal',
+                    roundNumber: 1,
+                    userOneId: seededUsers[2]._id.toString(),
+                    userTwoId: seededUsers[3]._id.toString(),
+                    userOneSeed: 2,
+                    userTwoSeed: 3,
+                    userOneScore: 35,
+                    userTwoScore: 40
+                },
+                {
+                    stage: 'semifinal',
+                    roundNumber: 2,
+                    userOneId: seededUsers[2]._id.toString(),
+                    userTwoId: seededUsers[3]._id.toString(),
+                    userOneSeed: 2,
+                    userTwoSeed: 3,
+                    userOneScore: 35,
+                    userTwoScore: 45
+                }
+            ]);
+        };
+
+        test('Should generate final and 3rdplace matchups based on total semifinal scores', async () => {
+            await seedSemifinalDocs();
+
+            await SchedulePlayoffModel.generateFinalAnd3rdPlacePlayoffSchedule();
+
+            const finalDocuments = await SchedulePlayoffModel.find({
+                stage: 'final'
+            })
+                .sort({ roundNumber: 1 })
+                .exec();
+            const thirdPlaceDocuments = await SchedulePlayoffModel.find({
+                stage: '3rdplace'
+            })
+                .sort({ roundNumber: 1 })
+                .exec();
+
+            expect(finalDocuments).toHaveLength(2);
+            expect(thirdPlaceDocuments).toHaveLength(2);
+
+            finalDocuments.forEach(document => {
+                expect(document.userOneId?.toString()).toBe(
+                    seededUsers[0]._id.toString()
+                );
+                expect(document.userTwoId?.toString()).toBe(
+                    seededUsers[3]._id.toString()
+                );
+                expect(document.userOneSeed).toBe(1);
+                expect(document.userTwoSeed).toBe(3);
+            });
+            expect(
+                finalDocuments.map(document => document.roundNumber)
+            ).toEqual([3, 4]);
+
+            thirdPlaceDocuments.forEach(document => {
+                expect(document.userOneId?.toString()).toBe(
+                    seededUsers[2]._id.toString()
+                );
+                expect(document.userTwoId?.toString()).toBe(
+                    seededUsers[1]._id.toString()
+                );
+                expect(document.userOneSeed).toBe(2);
+                expect(document.userTwoSeed).toBe(4);
+            });
+            expect(
+                thirdPlaceDocuments.map(document => document.roundNumber)
+            ).toEqual([3, 4]);
+        });
+
+        test('Should throw error if final and 3rdplace schedule has already been generated', async () => {
+            await seedSemifinalDocs();
+
+            await SchedulePlayoffModel.generateFinalAnd3rdPlacePlayoffSchedule();
+
+            await expect(
+                SchedulePlayoffModel.generateFinalAnd3rdPlacePlayoffSchedule()
+            ).rejects.toThrow(
+                'Final and 3rdplace playoff schedule has already been generated'
+            );
+        });
+
+        test('Should throw error if semifinal schedule does not exist', async () => {
+            await expect(
+                SchedulePlayoffModel.generateFinalAnd3rdPlacePlayoffSchedule()
+            ).rejects.toThrow('Semifinal playoff schedule not found');
+        });
+
+        test('Should throw error if a semifinal round is missing', async () => {
+            await SchedulePlayoffModel.create([
+                {
+                    stage: 'semifinal',
+                    roundNumber: 1,
+                    userOneId: seededUsers[0]._id.toString(),
+                    userTwoId: seededUsers[1]._id.toString(),
+                    userOneSeed: 1,
+                    userTwoSeed: 4,
+                    userOneScore: 45,
+                    userTwoScore: 40
+                },
+                {
+                    stage: 'semifinal',
+                    roundNumber: 1,
+                    userOneId: seededUsers[2]._id.toString(),
+                    userTwoId: seededUsers[3]._id.toString(),
+                    userOneSeed: 2,
+                    userTwoSeed: 3,
+                    userOneScore: 35,
+                    userTwoScore: 40
+                }
+            ]);
+
+            await expect(
+                SchedulePlayoffModel.generateFinalAnd3rdPlacePlayoffSchedule()
+            ).rejects.toThrow('Semifinal playoff schedule not found');
+        });
+
+        test('Should throw error if semifinal scores are not fully filled in', async () => {
+            await SchedulePlayoffModel.create([
+                {
+                    stage: 'semifinal',
+                    roundNumber: 1,
+                    userOneId: seededUsers[0]._id.toString(),
+                    userTwoId: seededUsers[1]._id.toString(),
+                    userOneSeed: 1,
+                    userTwoSeed: 4,
+                    userOneScore: 45,
+                    userTwoScore: 40
+                },
+                {
+                    stage: 'semifinal',
+                    roundNumber: 2,
+                    userOneId: seededUsers[0]._id.toString(),
+                    userTwoId: seededUsers[1]._id.toString(),
+                    userOneSeed: 1,
+                    userTwoSeed: 4
+                },
+                {
+                    stage: 'semifinal',
+                    roundNumber: 1,
+                    userOneId: seededUsers[2]._id.toString(),
+                    userTwoId: seededUsers[3]._id.toString(),
+                    userOneSeed: 2,
+                    userTwoSeed: 3,
+                    userOneScore: 35,
+                    userTwoScore: 40
+                },
+                {
+                    stage: 'semifinal',
+                    roundNumber: 2,
+                    userOneId: seededUsers[2]._id.toString(),
+                    userTwoId: seededUsers[3]._id.toString(),
+                    userOneSeed: 2,
+                    userTwoSeed: 3,
+                    userOneScore: 35,
+                    userTwoScore: 45
+                }
+            ]);
+
+            await expect(
+                SchedulePlayoffModel.generateFinalAnd3rdPlacePlayoffSchedule()
+            ).rejects.toThrow(
+                'Semifinal playoff schedule scores are not fully filled in'
+            );
+        });
+
+        test('Should throw error if 3rdplace schedule already exists without final', async () => {
+            await seedSemifinalDocs();
+
+            await SchedulePlayoffModel.create({
+                stage: '3rdplace',
+                roundNumber: 3,
+                userOneId: seededUsers[2]._id.toString(),
+                userTwoId: seededUsers[1]._id.toString(),
+                userOneSeed: 2,
+                userTwoSeed: 4
+            });
+
+            await expect(
+                SchedulePlayoffModel.generateFinalAnd3rdPlacePlayoffSchedule()
+            ).rejects.toThrow(
+                'Final and 3rdplace playoff schedule has already been generated'
             );
         });
     });

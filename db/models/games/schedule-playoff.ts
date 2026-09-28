@@ -1,4 +1,4 @@
-import { model, Model, Schema, Types } from 'mongoose';
+import { HydratedDocument, model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
 import {
@@ -88,7 +88,9 @@ interface SchedulePlayoffModelType extends Model<SchedulePlayoffType> {
         SchedulePlayoffScheduleForHistoryReturnType[]
     >;
     getPlayoffScheduleStatus: () => Promise<ScheduleStatus>;
+    getPlayoffScheduleFinalAnd3rdPlaceStatus: () => Promise<ScheduleStatus>;
     generateSemifinalPlayoffSchedule: () => Promise<void>;
+    generateFinalAnd3rdPlacePlayoffSchedule: () => Promise<void>;
     deleteAll: () => Promise<void>;
 }
 
@@ -112,6 +114,11 @@ type PopulatedSchedulePlayoffForHistoryType = Omit<
     _id: Types.ObjectId;
     userOneId: PopulatedUserIdForHistoryType;
     userTwoId: PopulatedUserIdForHistoryType;
+};
+
+type SemifinalPairTeamType = {
+    userId: string;
+    seed: SchedulePlayoffType['userOneSeed'];
 };
 
 // sums scores across both legs, then ranks the pair based on who scored more in total
@@ -146,6 +153,51 @@ const buildStagePlaces = (
             coachName: runnerUp.coachName
         }
     ];
+};
+
+// sums scores across both legs, then decides which team of the pair wins and which loses
+const resolveSemifinalPairOutcome = (
+    documents: HydratedDocument<SchedulePlayoffType>[]
+) => {
+    const userOneTotalScore = documents.reduce(
+        (total, document) => total + (document.userOneScore ?? 0),
+        0
+    );
+    const userTwoTotalScore = documents.reduce(
+        (total, document) => total + (document.userTwoScore ?? 0),
+        0
+    );
+
+    const userOneTeam: SemifinalPairTeamType = {
+        userId: documents[0].userOneId?.toString() ?? '',
+        seed: documents[0].userOneSeed
+    };
+    const userTwoTeam: SemifinalPairTeamType = {
+        userId: documents[0].userTwoId?.toString() ?? '',
+        seed: documents[0].userTwoSeed
+    };
+
+    return userOneTotalScore >= userTwoTotalScore
+        ? { winner: userOneTeam, loser: userTwoTeam }
+        : { winner: userTwoTeam, loser: userOneTeam };
+};
+
+// userOne is always the team with the better (lower) seed
+const buildMatchup = (
+    teamOne: SemifinalPairTeamType,
+    teamTwo: SemifinalPairTeamType,
+    stage: 'final' | '3rdplace'
+) => {
+    const [userOneTeam, userTwoTeam] =
+        teamOne.seed <= teamTwo.seed ? [teamOne, teamTwo] : [teamTwo, teamOne];
+
+    return {
+        userOneId: userOneTeam.userId,
+        userTwoId: userTwoTeam.userId,
+        userOneSeed: userOneTeam.seed,
+        userTwoSeed: userTwoTeam.seed,
+        stage
+    };
 };
 
 const schedulePlayoffSchema = new Schema<
@@ -404,6 +456,50 @@ schedulePlayoffSchema.static(
 );
 
 schedulePlayoffSchema.static(
+    'getPlayoffScheduleFinalAnd3rdPlaceStatus',
+    async function getPlayoffScheduleFinalAnd3rdPlaceStatus(): Promise<ScheduleStatus> {
+        try {
+            const existingFinalOrThirdPlaceCount = await this.countDocuments({
+                stage: { $in: ['final', '3rdplace'] }
+            });
+            if (existingFinalOrThirdPlaceCount > 0) {
+                return ScheduleStatus.Generated;
+            }
+
+            const pairOneDocuments = await this.find({
+                stage: 'semifinal',
+                userOneSeed: 1,
+                userTwoSeed: 4
+            }).exec();
+            const pairTwoDocuments = await this.find({
+                stage: 'semifinal',
+                userOneSeed: 2,
+                userTwoSeed: 3
+            }).exec();
+
+            const hasCompleteSemifinalSchedule =
+                pairOneDocuments.length === 2 &&
+                pairTwoDocuments.length === 2 &&
+                [...pairOneDocuments, ...pairTwoDocuments].every(
+                    document =>
+                        document.userOneScore !== undefined &&
+                        document.userTwoScore !== undefined
+                );
+
+            return hasCompleteSemifinalSchedule
+                ? ScheduleStatus.ReadyForGeneration
+                : ScheduleStatus.NotReadyForGeneration;
+        } catch (error) {
+            console.error(
+                'Error checking final and 3rdplace playoff schedule status:',
+                error
+            );
+            throw error;
+        }
+    }
+);
+
+schedulePlayoffSchema.static(
     'generateSemifinalPlayoffSchedule',
     async function generateSemifinalPlayoffSchedule(): Promise<void> {
         try {
@@ -482,6 +578,88 @@ schedulePlayoffSchema.static(
         } catch (error) {
             console.error(
                 'Error generating semifinal playoff schedule:',
+                error
+            );
+            throw error;
+        }
+    }
+);
+
+schedulePlayoffSchema.static(
+    'generateFinalAnd3rdPlacePlayoffSchedule',
+    async function generateFinalAnd3rdPlacePlayoffSchedule(): Promise<void> {
+        try {
+            const existingFinalOrThirdPlaceCount = await this.countDocuments({
+                stage: { $in: ['final', '3rdplace'] }
+            });
+            if (existingFinalOrThirdPlaceCount > 0) {
+                throw new Error(
+                    'Final and 3rdplace playoff schedule has already been generated'
+                );
+            }
+
+            const pairOneDocuments = await this.find({
+                stage: 'semifinal',
+                userOneSeed: 1,
+                userTwoSeed: 4
+            }).exec();
+            const pairTwoDocuments = await this.find({
+                stage: 'semifinal',
+                userOneSeed: 2,
+                userTwoSeed: 3
+            }).exec();
+
+            if (
+                pairOneDocuments.length !== 2 ||
+                pairTwoDocuments.length !== 2
+            ) {
+                throw new Error('Semifinal playoff schedule not found');
+            }
+
+            const hasIncompleteScores = [
+                ...pairOneDocuments,
+                ...pairTwoDocuments
+            ].some(
+                document =>
+                    document.userOneScore === undefined ||
+                    document.userTwoScore === undefined
+            );
+            if (hasIncompleteScores) {
+                throw new Error(
+                    'Semifinal playoff schedule scores are not fully filled in'
+                );
+            }
+
+            const pairOneOutcome =
+                resolveSemifinalPairOutcome(pairOneDocuments);
+            const pairTwoOutcome =
+                resolveSemifinalPairOutcome(pairTwoDocuments);
+
+            const finalMatchup = buildMatchup(
+                pairOneOutcome.winner,
+                pairTwoOutcome.winner,
+                'final'
+            );
+            const thirdPlaceMatchup = buildMatchup(
+                pairOneOutcome.loser,
+                pairTwoOutcome.loser,
+                '3rdplace'
+            );
+
+            const scheduleDocuments: SchedulePlayoffType[] = [
+                finalMatchup,
+                thirdPlaceMatchup
+            ].flatMap(matchup => {
+                return [
+                    { ...matchup, roundNumber: 3 },
+                    { ...matchup, roundNumber: 4 }
+                ];
+            });
+
+            await this.create(scheduleDocuments);
+        } catch (error) {
+            console.error(
+                'Error generating final and 3rdplace playoff schedule:',
                 error
             );
             throw error;
