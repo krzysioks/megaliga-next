@@ -1,6 +1,10 @@
 import { HydratedDocument, model, Model, Schema } from 'mongoose';
 import { z } from 'zod';
 
+import {
+    DEFAULT_PLAYER_SCORE_DETAILS,
+    PlayerScoreDetailsType
+} from '@/db/db.types';
 import ScheduleModel, { ScheduleType } from '@/db/models/games/schedule';
 import {
     StartingLineupPlayersByRoundReturnType,
@@ -13,6 +17,8 @@ import {
     teamSchema
 } from '@/db/models/schema.types';
 import UserModel, { UserType } from '@/db/models/user';
+
+export type { PlayerScoreDetailsType };
 
 //ScoreDetails is representation of megaliga_scores of old megaliga database. Will be used for displaying detailed scores of given match.
 
@@ -103,21 +109,6 @@ type PopulatedScoreDetailsForHistoryType = Omit<
 };
 
 type ScoreDetailsTeamType = 'teamOne' | 'teamTwo';
-
-export type PlayerScoreDetailsType = Omit<
-    NonNullable<ScoreDetailsType['teamOne']['players']>[number],
-    'playerId' | 'comment' | 'setPlay'
->;
-
-const DEFAULT_PLAYER_SCORE_DETAILS: PlayerScoreDetailsType = {
-    heatOne: undefined,
-    heatTwo: undefined,
-    heatThree: undefined,
-    heatFour: undefined,
-    heatFive: undefined,
-    heatSix: undefined,
-    heatSeven: undefined
-};
 
 export type PlayerScoreDetailsReturnType = {
     scoreDetailsId: string | null;

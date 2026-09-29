@@ -74,6 +74,12 @@ export type SchedulePlayoffByRoundDtoType = {
     userTwoScore?: SchedulePlayoffType['userTwoScore'];
 };
 
+export type SchedulePlayoffIdByUserAndRoundNumberReturnType = {
+    scheduleId: string;
+    userOneId: string;
+    userTwoId: string;
+} | null;
+
 interface SchedulePlayoffModelType extends Model<SchedulePlayoffType> {
     getScheduleByStage: (
         stage: (typeof STAGE_ENUM)[number]
@@ -87,6 +93,10 @@ interface SchedulePlayoffModelType extends Model<SchedulePlayoffType> {
     getScheduleForHistory: () => Promise<
         SchedulePlayoffScheduleForHistoryReturnType[]
     >;
+    getScheduleIdByUserAndRoundNumber: (
+        userId: string,
+        roundNumber: number
+    ) => Promise<SchedulePlayoffIdByUserAndRoundNumberReturnType>;
     getPlayoffScheduleStatus: () => Promise<ScheduleStatus>;
     getPlayoffScheduleFinalAnd3rdPlaceStatus: () => Promise<ScheduleStatus>;
     generateSemifinalPlayoffSchedule: () => Promise<void>;
@@ -437,6 +447,45 @@ schedulePlayoffSchema.static('deleteAll', async function deleteAll() {
         throw error;
     }
 });
+
+schedulePlayoffSchema.static(
+    'getScheduleIdByUserAndRoundNumber',
+    async function getScheduleIdByUserAndRoundNumber(
+        userId: string,
+        roundNumber: number
+    ) {
+        try {
+            if (roundNumber < 1 || roundNumber > 4) {
+                throw new Error(
+                    `Invalid roundNumber: ${roundNumber}. Must be between 1 and 4`
+                );
+            }
+
+            const isValidUserId = await UserModel.exists({ _id: userId });
+            if (!isValidUserId) {
+                throw new Error(`Invalid userId: ${userId}`);
+            }
+
+            const document = await this.findOne({
+                roundNumber,
+                $or: [{ userOneId: userId }, { userTwoId: userId }]
+            }).exec();
+
+            if (!document) {
+                return null;
+            }
+
+            return {
+                scheduleId: document._id.toString(),
+                userOneId: document.userOneId?.toString() ?? '',
+                userTwoId: document.userTwoId?.toString() ?? ''
+            };
+        } catch (error) {
+            console.error('Error fetching schedule playoff id:', error);
+            throw error;
+        }
+    }
+);
 
 schedulePlayoffSchema.static(
     'getPlayoffScheduleStatus',

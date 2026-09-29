@@ -1043,4 +1043,59 @@ describe('Test SchedulePlayoffModel methods and static functions', () => {
             );
         });
     });
+
+    describe('getScheduleIdByUserAndRoundNumber', () => {
+        test('Should throw error if roundNumber not in range 1 - 4', async () => {
+            await expect(
+                SchedulePlayoffModel.getScheduleIdByUserAndRoundNumber(
+                    seededUsers[0]._id.toString(),
+                    5
+                )
+            ).rejects.toThrow(
+                'Invalid roundNumber: 5. Must be between 1 and 4'
+            );
+        });
+
+        test('Should throw error if userId does not exist in user collection', async () => {
+            const invalidUserId = new mongoose.Types.ObjectId().toString();
+
+            await expect(
+                SchedulePlayoffModel.getScheduleIdByUserAndRoundNumber(
+                    invalidUserId,
+                    1
+                )
+            ).rejects.toThrow(`Invalid userId: ${invalidUserId}`);
+        });
+
+        test('Should return schedule id, userOneId and userTwoId for given userId and roundNumber when schedule exists', async () => {
+            const document = await SchedulePlayoffModel.create({
+                stage: 'semifinal',
+                roundNumber: 1,
+                userOneId: seededUsers[0]._id.toString(),
+                userTwoId: seededUsers[1]._id.toString(),
+                userOneSeed: 1,
+                userTwoSeed: 4
+            });
+
+            const result =
+                await SchedulePlayoffModel.getScheduleIdByUserAndRoundNumber(
+                    seededUsers[1]._id.toString(),
+                    1
+                );
+
+            expect(result?.scheduleId).toBe(document._id.toString());
+            expect(result?.userOneId).toBe(seededUsers[0]._id.toString());
+            expect(result?.userTwoId).toBe(seededUsers[1]._id.toString());
+        });
+
+        test('Should return null when schedule does not exist for given userId and roundNumber', async () => {
+            const result =
+                await SchedulePlayoffModel.getScheduleIdByUserAndRoundNumber(
+                    seededUsers[0]._id.toString(),
+                    2
+                );
+
+            expect(result).toBeNull();
+        });
+    });
 });

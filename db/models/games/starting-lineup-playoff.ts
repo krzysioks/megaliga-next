@@ -1,4 +1,4 @@
-import { HydratedDocument, model, Model, Schema } from 'mongoose';
+import { HydratedDocument, model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
 import {
@@ -47,6 +47,32 @@ type StartingLineupPlayoffDocumentType = Promise<
     HydratedDocument<StartingLineupPlayoffType>
 >;
 
+export interface StartingLineupPlayoffPlayersByRoundReturnType {
+    userId: string[];
+    startingLineupId: string[];
+    playerId: string;
+    playerName: string;
+}
+
+type PopulatedPlayerType = {
+    _id: Types.ObjectId;
+    extraligaPlayerName: string;
+};
+
+type PopulatedStartingLineupPlayoffType = Omit<
+    StartingLineupPlayoffType,
+    'playerOne' | 'playerTwo' | 'playerThree' | 'playerFour' | 'playerFive'
+> & {
+    playerOne: PopulatedPlayerType;
+    playerTwo: PopulatedPlayerType;
+    playerThree: PopulatedPlayerType;
+    playerFour: PopulatedPlayerType;
+    playerFive: PopulatedPlayerType;
+};
+
+export type PopulatedFindType =
+    HydratedDocument<PopulatedStartingLineupPlayoffType>;
+
 interface StartingLineupPlayoffModelType extends Model<
     StartingLineupPlayoffType,
     '',
@@ -62,6 +88,9 @@ interface StartingLineupPlayoffModelType extends Model<
         roundNumber: number
     ) => Promise<void>;
     deleteAll: () => Promise<void>;
+    getStartingLineupPlayersByRound: (
+        roundNumber: number
+    ) => Promise<StartingLineupPlayoffPlayersByRoundReturnType[]>;
 }
 
 const startingLineupPlayoffSchema = new Schema<
@@ -180,6 +209,68 @@ startingLineupPlayoffSchema.static('deleteAll', async function deleteAll() {
         throw error;
     }
 });
+
+startingLineupPlayoffSchema.static(
+    'getStartingLineupPlayersByRound',
+    async function getStartingLineupPlayersByRound(roundNumber: number) {
+        try {
+            const startingLineups = await this.find({ roundNumber })
+                .populate<PopulatedFindType>({
+                    path: 'playerOne playerTwo playerThree playerFour playerFive',
+                    select: '_id extraligaPlayerName'
+                })
+                .exec();
+
+            if (startingLineups.length < 4) {
+                throw new Error(
+                    `Expected 4 starting lineups for round ${roundNumber}, but found ${startingLineups.length}.`
+                );
+            }
+
+            const playersByPlayerId = startingLineups.reduce<
+                Map<string, StartingLineupPlayoffPlayersByRoundReturnType>
+            >((accumulator, lineup) => {
+                const userId = lineup.userId?.toString() ?? '';
+                const startingLineupId = lineup._id.toString();
+                const players = [
+                    lineup.playerOne,
+                    lineup.playerTwo,
+                    lineup.playerThree,
+                    lineup.playerFour,
+                    lineup.playerFive
+                ];
+
+                players.forEach(player => {
+                    const playerId = player._id.toString();
+                    const existingEntry = accumulator.get(playerId);
+
+                    if (existingEntry) {
+                        existingEntry.userId.push(userId);
+                        existingEntry.startingLineupId.push(startingLineupId);
+                        return;
+                    }
+
+                    accumulator.set(playerId, {
+                        userId: [userId],
+                        startingLineupId: [startingLineupId],
+                        playerId,
+                        playerName: player.extraligaPlayerName
+                    });
+                });
+
+                return accumulator;
+            }, new Map());
+
+            return Array.from(playersByPlayerId.values());
+        } catch (error) {
+            console.error(
+                `Error while getting playoff starting lineup players by round: ${roundNumber}`,
+                error
+            );
+            throw error;
+        }
+    }
+);
 
 const StartingLineupPlayoffModel = model<
     StartingLineupPlayoffType,

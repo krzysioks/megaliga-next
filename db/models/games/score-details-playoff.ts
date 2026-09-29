@@ -1,17 +1,24 @@
 import { HydratedDocument, model, Model, Schema } from 'mongoose';
 import { z } from 'zod';
 
+import {
+    DEFAULT_PLAYER_SCORE_DETAILS,
+    PlayerScoreDetailsType
+} from '@/db/db.types';
 import SchedulePlayoffModel, {
     SchedulePlayoffType
 } from '@/db/models/games/schedule-playoff';
-import { StartingLineupPlayoffType } from '@/db/models/games/starting-lineup-playoff';
-import { PlayersType } from '@/db/models/players';
+import {
+    StartingLineupPlayoffPlayersByRoundReturnType,
+    StartingLineupPlayoffType
+} from '@/db/models/games/starting-lineup-playoff';
+import PlayersModel, { PlayersType } from '@/db/models/players';
 import {
     objectIdSchema,
     roundNumberSchema,
     teamSchema
 } from '@/db/models/schema.types';
-import { UserType } from '@/db/models/user';
+import UserModel, { UserType } from '@/db/models/user';
 
 //ScoreDetailsPLayoff is representation of megaliga_scores_playoff of old megaliga database. Will be used for displaying detailed scores of given match in plaoffs.
 
@@ -105,6 +112,20 @@ type PopulatedScoreDetailsPlayoffForHistoryType = Omit<
     };
 };
 
+type ScoreDetailsPlayoffTeamType = 'teamOne' | 'teamTwo';
+
+export type PlayerScoreDetailsPlayoffType = PlayerScoreDetailsType;
+
+export type PlayerScoreDetailsPlayoffReturnType = {
+    scoreDetailsId: string | null;
+    teamType: ScoreDetailsPlayoffTeamType | null;
+    playerScoreDetails: PlayerScoreDetailsPlayoffType;
+};
+
+export type SavePlayerScoreDetailsPlayoffReturnType = {
+    success: boolean;
+};
+
 interface ScoreDetailsPlayoffModelType extends Model<ScoreDetailsPlayoffType> {
     getScoreDetailsByScheduleAndRoundId: (
         scheduleId: string,
@@ -113,6 +134,16 @@ interface ScoreDetailsPlayoffModelType extends Model<ScoreDetailsPlayoffType> {
     getScoreDetailsForHistory: () => Promise<
         ScoreDetailsPlayoffForHistoryReturnType[]
     >;
+    getPlayerScoreDetailsByRoundAndUserId: (
+        roundNumber: number,
+        userId: string,
+        playerId: string
+    ) => Promise<PlayerScoreDetailsPlayoffReturnType>;
+    savePlayerScoreDetails: (
+        playerData: StartingLineupPlayoffPlayersByRoundReturnType,
+        roundNumber: number,
+        playerScore: PlayerScoreDetailsPlayoffType
+    ) => Promise<SavePlayerScoreDetailsPlayoffReturnType>;
     deleteAll: () => Promise<void>;
 }
 
@@ -345,6 +376,166 @@ scoreDetailsPlayoffSchema.static('deleteAll', async function deleteAll() {
         throw error;
     }
 });
+
+scoreDetailsPlayoffSchema.static(
+    'getPlayerScoreDetailsByRoundAndUserId',
+    async function getPlayerScoreDetailsByRoundAndUserId(
+        roundNumber: number,
+        userId: string,
+        playerId: string
+    ) {
+        try {
+            if (roundNumber < 1 || roundNumber > 4) {
+                throw new Error(
+                    `Invalid roundNumber: ${roundNumber}. Must be between 1 and 4`
+                );
+            }
+
+            const isValidUserId = await UserModel.exists({ _id: userId });
+            if (!isValidUserId) {
+                throw new Error(`Invalid userId: ${userId}`);
+            }
+
+            const isValidPlayerId = await PlayersModel.exists({
+                _id: playerId
+            });
+            if (!isValidPlayerId) {
+                throw new Error(`Invalid playerId: ${playerId}`);
+            }
+
+            const document = await this.findOne({
+                roundNumber,
+                $or: [
+                    { 'teamOne.userId': userId },
+                    { 'teamTwo.userId': userId }
+                ]
+            }).exec();
+
+            if (!document) {
+                return {
+                    scoreDetailsId: null,
+                    teamType: null,
+                    playerScoreDetails: DEFAULT_PLAYER_SCORE_DETAILS
+                };
+            }
+
+            const teamType: ScoreDetailsPlayoffTeamType =
+                document.teamOne.userId?.toString() === userId
+                    ? 'teamOne'
+                    : 'teamTwo';
+
+            const playerEntry = document[teamType].players?.find(
+                player => player.playerId?.toString() === playerId
+            );
+
+            const playerScoreDetails: PlayerScoreDetailsPlayoffType =
+                playerEntry
+                    ? {
+                          heatOne: playerEntry.heatOne,
+                          heatTwo: playerEntry.heatTwo,
+                          heatThree: playerEntry.heatThree,
+                          heatFour: playerEntry.heatFour,
+                          heatFive: playerEntry.heatFive,
+                          heatSix: playerEntry.heatSix,
+                          heatSeven: playerEntry.heatSeven
+                      }
+                    : DEFAULT_PLAYER_SCORE_DETAILS;
+
+            return {
+                scoreDetailsId: document._id.toString(),
+                teamType,
+                playerScoreDetails
+            };
+        } catch (error) {
+            console.error(
+                'Error fetching playoff player score details:',
+                error
+            );
+            throw error;
+        }
+    }
+);
+
+scoreDetailsPlayoffSchema.static(
+    'savePlayerScoreDetails',
+    async function savePlayerScoreDetails(
+        playerData: StartingLineupPlayoffPlayersByRoundReturnType,
+        roundNumber: number,
+        playerScore: PlayerScoreDetailsPlayoffType
+    ) {
+        try {
+            const normalizedPlayerScore: PlayerScoreDetailsPlayoffType = {
+                heatOne: playerScore.heatOne ?? 0,
+                heatTwo: playerScore.heatTwo ?? 0,
+                heatThree: playerScore.heatThree ?? 0,
+                heatFour: playerScore.heatFour ?? 0,
+                heatFive: playerScore.heatFive ?? 0,
+                heatSix: playerScore.heatSix ?? 0,
+                heatSeven: playerScore.heatSeven ?? 0
+            };
+
+            for (let index = 0; index < playerData.userId.length; index++) {
+                const userId = playerData.userId[index];
+                const startingLineupId = playerData.startingLineupId[index];
+
+                const schedule =
+                    await SchedulePlayoffModel.getScheduleIdByUserAndRoundNumber(
+                        userId ?? '',
+                        roundNumber
+                    );
+
+                if (!schedule) {
+                    throw new Error(
+                        `Schedule not found for userId: ${userId} and roundNumber: ${roundNumber}`
+                    );
+                }
+
+                const teamKey: ScoreDetailsPlayoffTeamType =
+                    schedule.userOneId === userId ? 'teamOne' : 'teamTwo';
+
+                const document = await this.findOne({
+                    scheduleId: schedule.scheduleId,
+                    roundNumber
+                }).exec();
+
+                const players = document?.[teamKey].players ?? [];
+                const existingPlayerIndex = players.findIndex(player => {
+                    return player.playerId?.toString() === playerData.playerId;
+                });
+
+                if (existingPlayerIndex >= 0) {
+                    players[existingPlayerIndex] = {
+                        ...players[existingPlayerIndex],
+                        playerId: playerData.playerId,
+                        ...normalizedPlayerScore
+                    };
+                } else {
+                    players.push({
+                        playerId: playerData.playerId,
+                        ...normalizedPlayerScore
+                    });
+                }
+
+                await this.updateOne(
+                    { scheduleId: schedule.scheduleId, roundNumber },
+                    {
+                        $set: {
+                            [`${teamKey}.userId`]: userId,
+                            [`${teamKey}.startingLineupId`]: startingLineupId,
+                            [`${teamKey}.players`]: players
+                        }
+                    },
+                    { upsert: true }
+                );
+            }
+
+            return { success: true };
+        } catch (error) {
+            console.error('Error saving playoff player score details:', error);
+            throw error;
+        }
+    }
+);
 
 const ScoreDetailsPlayoffModel = model<
     ScoreDetailsPlayoffType,

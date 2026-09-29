@@ -4,6 +4,7 @@ import { DBClient } from '@/db/db-client';
 import StartingLineupPlayoffModel, {
     PlayerPostions
 } from '@/db/models/games/starting-lineup-playoff';
+import PlayersModel from '@/db/models/players';
 import UserModel, { UserType } from '@/db/models/user';
 
 const createUserData = (overrides: Partial<UserType> = {}) => ({
@@ -33,6 +34,24 @@ const createPositions = (
     ...overrides
 });
 
+const createPlayerPositions = async (): Promise<PlayerPostions> => {
+    const players = await PlayersModel.create([
+        { extraligaPlayerName: 'Player One' },
+        { extraligaPlayerName: 'Player Two' },
+        { extraligaPlayerName: 'Player Three' },
+        { extraligaPlayerName: 'Player Four' },
+        { extraligaPlayerName: 'Player Five' }
+    ]);
+
+    return {
+        playerOne: players[0]._id.toString(),
+        playerTwo: players[1]._id.toString(),
+        playerThree: players[2]._id.toString(),
+        playerFour: players[3]._id.toString(),
+        playerFive: players[4]._id.toString()
+    };
+};
+
 // connect to test db before running tests
 beforeAll(async () => {
     // Mock console.error to silence logs during testing
@@ -45,12 +64,14 @@ beforeAll(async () => {
 beforeEach(async () => {
     await StartingLineupPlayoffModel.deleteMany();
     await UserModel.deleteMany();
+    await PlayersModel.deleteMany();
 });
 
 // close connection to server so that test suite will close
 afterAll(async () => {
     await StartingLineupPlayoffModel.deleteMany();
     await UserModel.deleteMany();
+    await PlayersModel.deleteMany();
     await mongoose.disconnect();
 });
 
@@ -289,5 +310,150 @@ describe('Test StartingLineupPlayoffModel methods and static functions', () => {
             await StartingLineupPlayoffModel.find().exec();
 
         expect(remainingDocuments).toHaveLength(0);
+    });
+
+    describe('getStartingLineupPlayersByRound', () => {
+        test('Should throw error if number of documents for given round < 4 - not all users entered starting lineup', async () => {
+            const roundNumber = 1;
+            const user = await new UserModel(createUserData()).save();
+            const positions = await createPlayerPositions();
+
+            await new StartingLineupPlayoffModel({
+                userId: user._id.toString(),
+                roundNumber,
+                ...positions
+            }).save();
+
+            await expect(
+                StartingLineupPlayoffModel.getStartingLineupPlayersByRound(
+                    roundNumber
+                )
+            ).rejects.toThrow(
+                `Expected 4 starting lineups for round ${roundNumber}, but found 1.`
+            );
+        });
+
+        test('Should properly return array of objects with player id, userId, startingLineupId and playerName if all starting lineups provided', async () => {
+            const roundNumber = 2;
+            const numberOfUsers = 4;
+            const userIds: string[] = [];
+            const startingLineupIdByUserId: Record<string, string> = {};
+
+            for (let i = 0; i < numberOfUsers; i++) {
+                const user = await new UserModel(
+                    createUserData({
+                        username: `user-${i}`,
+                        email: `user-${i}@example.com`
+                    })
+                ).save();
+                const userId = user._id.toString();
+                userIds.push(userId);
+                const positions = await createPlayerPositions();
+
+                const lineup = await new StartingLineupPlayoffModel({
+                    userId,
+                    roundNumber,
+                    ...positions
+                }).save();
+                startingLineupIdByUserId[userId] = lineup._id.toString();
+            }
+
+            const result =
+                await StartingLineupPlayoffModel.getStartingLineupPlayersByRound(
+                    roundNumber
+                );
+
+            expect(result).toHaveLength(numberOfUsers * 5);
+            result.forEach(player => {
+                expect(player).toEqual(
+                    expect.objectContaining({
+                        userId: expect.any(Array),
+                        startingLineupId: expect.any(Array),
+                        playerId: expect.any(String),
+                        playerName: expect.any(String)
+                    })
+                );
+                expect(player.userId).toHaveLength(1);
+                expect(player.startingLineupId).toHaveLength(1);
+                expect(userIds).toContain(player.userId[0]);
+                expect(player.startingLineupId[0]).toBe(
+                    startingLineupIdByUserId[player.userId[0]]
+                );
+            });
+        });
+
+        test('Should aggregate userId and startingLineupId for a player assigned to more than one starting lineup', async () => {
+            const roundNumber = 3;
+            const numberOfUsers = 4;
+
+            const userOne = await new UserModel(
+                createUserData({
+                    username: 'user-0',
+                    email: 'user-0@example.com'
+                })
+            ).save();
+            const positionsOne = await createPlayerPositions();
+            const lineupOne = await new StartingLineupPlayoffModel({
+                userId: userOne._id.toString(),
+                roundNumber,
+                ...positionsOne
+            }).save();
+
+            const userTwo = await new UserModel(
+                createUserData({
+                    username: 'user-1',
+                    email: 'user-1@example.com'
+                })
+            ).save();
+            const positionsTwo = {
+                ...(await createPlayerPositions()),
+                playerOne: positionsOne.playerOne
+            };
+            const lineupTwo = await new StartingLineupPlayoffModel({
+                userId: userTwo._id.toString(),
+                roundNumber,
+                ...positionsTwo
+            }).save();
+
+            for (let i = 2; i < numberOfUsers; i++) {
+                const user = await new UserModel(
+                    createUserData({
+                        username: `user-${i}`,
+                        email: `user-${i}@example.com`
+                    })
+                ).save();
+                const positions = await createPlayerPositions();
+
+                await new StartingLineupPlayoffModel({
+                    userId: user._id.toString(),
+                    roundNumber,
+                    ...positions
+                }).save();
+            }
+
+            const result =
+                await StartingLineupPlayoffModel.getStartingLineupPlayersByRound(
+                    roundNumber
+                );
+
+            expect(result).toHaveLength(numberOfUsers * 5 - 1);
+
+            const sharedPlayer = result.find(
+                player => player.playerId === positionsOne.playerOne
+            );
+
+            expect(sharedPlayer?.userId).toEqual(
+                expect.arrayContaining([
+                    userOne._id.toString(),
+                    userTwo._id.toString()
+                ])
+            );
+            expect(sharedPlayer?.startingLineupId).toEqual(
+                expect.arrayContaining([
+                    lineupOne._id.toString(),
+                    lineupTwo._id.toString()
+                ])
+            );
+        });
     });
 });
