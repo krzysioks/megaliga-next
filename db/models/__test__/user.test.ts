@@ -605,6 +605,50 @@ describe('Test UserModel methods and static functions', () => {
         });
     }); // getAllUsers
 
+    describe('getReachedPlayoffUsers', () => {
+        test('Should return only users with reachedPlayoff = true', async () => {
+            const userOne = await new UserModel(
+                createUserData({
+                    username: 'playoff-users-one',
+                    email: 'playoff-users-one@example.com',
+                    reachedPlayoff: true
+                })
+            ).save();
+            await new UserModel(
+                createUserData({
+                    username: 'playoff-users-two',
+                    email: 'playoff-users-two@example.com',
+                    reachedPlayoff: false
+                })
+            ).save();
+
+            const result = await UserModel.getReachedPlayoffUsers();
+
+            expect(result).toHaveLength(1);
+            expect(result).toEqual([
+                expect.objectContaining({
+                    userId: userOne._id.toString(),
+                    username: userOne.username,
+                    reachedPlayoff: true
+                })
+            ]);
+        });
+
+        test('Should throw error if no users with reachedPlayoff = true found', async () => {
+            await new UserModel(
+                createUserData({
+                    username: 'playoff-users-three',
+                    email: 'playoff-users-three@example.com',
+                    reachedPlayoff: false
+                })
+            ).save();
+
+            await expect(UserModel.getReachedPlayoffUsers()).rejects.toThrow(
+                'Users not found'
+            );
+        });
+    }); // getReachedPlayoffUsers
+
     describe('resetUsers', () => {
         test('Should clear reachedPlayoff, isFirstRoundDraftOrderDraw and groupName for all users', async () => {
             const groupId = new mongoose.Types.ObjectId().toString();

@@ -1,4 +1,4 @@
-import { model, HydratedDocument, Model, Schema, Types } from 'mongoose';
+import { model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
 import {
@@ -30,6 +30,8 @@ export const playersZodSchema = z.object({
 
 export type PlayersType = z.infer<typeof playersZodSchema>;
 
+export type PlayersReturnType = PlayersType & { playerId: string };
+
 interface PlayersMethodsType {
     draftPlayer: (userId: string, type: PlayerAssignmentType) => Promise<void>;
 }
@@ -38,10 +40,10 @@ interface PlayersModelType extends Model<PlayersType, '', PlayersMethodsType> {
     getPlayersByUserId: (
         userId: string,
         type: PlayerAssignmentType
-    ) => Promise<HydratedDocument<PlayersType>[]>;
+    ) => Promise<PlayersReturnType[]>;
     getAvailablePlayersByAssignmentType: (
         type: PlayerAssignmentType
-    ) => Promise<HydratedDocument<PlayersType>[]>;
+    ) => Promise<PlayersReturnType[]>;
     resetPlayersAssignment: () => Promise<void>;
     importPlayers: (newPlayers: string) => Promise<void>;
 }
@@ -88,8 +90,26 @@ playersSchema.static(
         }
 
         try {
-            return await this.find({
+            const playerDocuments = await this.find({
                 [idFieldName]: userId
+            }).exec();
+
+            return playerDocuments.map(playerDocument => {
+                return {
+                    playerId: playerDocument._id.toString(),
+                    extraligaPlayerName: playerDocument.extraligaPlayerName,
+                    dolceUserId: playerDocument.dolceUserId,
+                    gabbanaUserId: playerDocument.gabbanaUserId,
+                    playoffUserId: playerDocument.playoffUserId,
+                    draftedWithNumberDolce:
+                        playerDocument.draftedWithNumberDolce,
+                    draftedWithNumberGabbana:
+                        playerDocument.draftedWithNumberGabbana,
+                    draftedWithNumberPlayoff:
+                        playerDocument.draftedWithNumberPlayoff,
+                    playerStatus: playerDocument.playerStatus,
+                    statistics: playerDocument.statistics
+                };
             });
         } catch (error) {
             console.error('Error fetching players:', error);
@@ -120,8 +140,26 @@ playersSchema.static(
         }
 
         try {
-            return await this.find({
+            const playerDocuments = await this.find({
                 [idFieldName]: { $type: 'null' }
+            }).exec();
+
+            return playerDocuments.map(playerDocument => {
+                return {
+                    playerId: playerDocument._id.toString(),
+                    extraligaPlayerName: playerDocument.extraligaPlayerName,
+                    dolceUserId: playerDocument.dolceUserId,
+                    gabbanaUserId: playerDocument.gabbanaUserId,
+                    playoffUserId: playerDocument.playoffUserId,
+                    draftedWithNumberDolce:
+                        playerDocument.draftedWithNumberDolce,
+                    draftedWithNumberGabbana:
+                        playerDocument.draftedWithNumberGabbana,
+                    draftedWithNumberPlayoff:
+                        playerDocument.draftedWithNumberPlayoff,
+                    playerStatus: playerDocument.playerStatus,
+                    statistics: playerDocument.statistics
+                };
             });
         } catch (error) {
             console.error('Error fetching players:', error);

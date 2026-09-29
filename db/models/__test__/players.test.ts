@@ -143,6 +143,12 @@ describe('Test PlayersModel methods and static functions', () => {
             expect(gabbanaUserTwoPlayers).toHaveLength(5);
             expect(playoffUserOnePlayers).toHaveLength(8);
             expect(playoffUserTwoPlayers).toHaveLength(7);
+
+            expect(
+                dolceUserOnePlayers.every(
+                    player => typeof player.playerId === 'string'
+                )
+            ).toBe(true);
         });
     }); // getPlayersByUserId
 
@@ -220,6 +226,12 @@ describe('Test PlayersModel methods and static functions', () => {
             ).toBe(true);
             expect(
                 playoffAvailable.every(player => player.playoffUserId === null)
+            ).toBe(true);
+
+            expect(
+                dolceAvailable.every(
+                    player => typeof player.playerId === 'string'
+                )
             ).toBe(true);
         });
     }); // getAvailablePlayersByAssignmentType
