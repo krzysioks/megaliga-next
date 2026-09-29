@@ -216,21 +216,44 @@ describe('Test SeasonOpsModel methods and static functions', () => {
     });
 
     describe('getScoreCalculationStatusByRound', () => {
-        test('Should throw error if roundNumber not in range 1 - 14', async () => {
+        test('Should throw error if roundNumber not in range 1 - 14 for regularSeason stage', async () => {
             await expect(
-                SeasonOpsModel.getScoreCalculationStatusByRound(15)
+                SeasonOpsModel.getScoreCalculationStatusByRound(
+                    15,
+                    'regularSeason'
+                )
             ).rejects.toThrow(
                 'Invalid roundNumber: 15. Must be between 1 and 14'
             );
         });
 
+        test('Should throw error if roundNumber not in range 1 - 4 for playoff stage', async () => {
+            await expect(
+                SeasonOpsModel.getScoreCalculationStatusByRound(5, 'playoff')
+            ).rejects.toThrow(
+                'Invalid roundNumber: 5. Must be between 1 and 4'
+            );
+        });
+
+        test('Should throw error if stage is not regularSeason or playoff', async () => {
+            await expect(
+                SeasonOpsModel.getScoreCalculationStatusByRound(
+                    1,
+                    'playIn' as never
+                )
+            ).rejects.toThrow('Invalid stage: playIn');
+        });
+
         test('Should throw error if current season not found', async () => {
             await expect(
-                SeasonOpsModel.getScoreCalculationStatusByRound(1)
+                SeasonOpsModel.getScoreCalculationStatusByRound(
+                    1,
+                    'regularSeason'
+                )
             ).rejects.toThrow('Current season not found');
         });
 
-        test('Should return score calculation status for given roundNumber of current season', async () => {
+        test('Should return score calculation status for given roundNumber of current season for regularSeason stage', async () => {
             await SeasonOpsModel.create(
                 createSeasonData('2025', {
                     isCurrentSeason: true,
@@ -254,9 +277,43 @@ describe('Test SeasonOpsModel methods and static functions', () => {
             );
 
             const resultForRoundOne =
-                await SeasonOpsModel.getScoreCalculationStatusByRound(1);
+                await SeasonOpsModel.getScoreCalculationStatusByRound(
+                    1,
+                    'regularSeason'
+                );
             const resultForRoundTwo =
-                await SeasonOpsModel.getScoreCalculationStatusByRound(2);
+                await SeasonOpsModel.getScoreCalculationStatusByRound(
+                    2,
+                    'regularSeason'
+                );
+
+            expect(resultForRoundOne).toBe(true);
+            expect(resultForRoundTwo).toBe(false);
+        });
+
+        test('Should return score calculation status for given roundNumber of current season for playoff stage', async () => {
+            await SeasonOpsModel.create(
+                createSeasonData('2025', {
+                    isCurrentSeason: true,
+                    isScoreCalculatdedPlayoff: {
+                        1: true,
+                        2: false,
+                        3: false,
+                        4: false
+                    }
+                })
+            );
+
+            const resultForRoundOne =
+                await SeasonOpsModel.getScoreCalculationStatusByRound(
+                    1,
+                    'playoff'
+                );
+            const resultForRoundTwo =
+                await SeasonOpsModel.getScoreCalculationStatusByRound(
+                    2,
+                    'playoff'
+                );
 
             expect(resultForRoundOne).toBe(true);
             expect(resultForRoundTwo).toBe(false);

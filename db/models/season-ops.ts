@@ -1,7 +1,10 @@
 import { model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
-import { booleanDefaultFalseSchema } from '@/db/models/schema.types';
+import {
+    booleanDefaultFalseSchema,
+    stageEnumSchema
+} from '@/db/models/schema.types';
 
 //SeasonOps is representation of megaliga_season of old megaliga database
 
@@ -56,7 +59,10 @@ interface SeasonOpsModelType extends Model<
     getHistorySeasons: () => Promise<SeasonOpsReturnType[] | []>;
     getCurrentSeason: () => Promise<SeasonOpsReturnType>;
     setNewSeason: () => Promise<void>;
-    getScoreCalculationStatusByRound: (roundNumber: number) => Promise<boolean>;
+    getScoreCalculationStatusByRound: (
+        roundNumber: number,
+        stage: z.infer<typeof stageEnumSchema>
+    ) => Promise<boolean>;
 }
 
 const seasonOpsSchema = new Schema<
@@ -190,12 +196,25 @@ seasonOpsSchema.static('setNewSeason', async function setNewSeason() {
 
 seasonOpsSchema.static(
     'getScoreCalculationStatusByRound',
-    async function getScoreCalculationStatusByRound(roundNumber: number) {
+    async function getScoreCalculationStatusByRound(
+        roundNumber: number,
+        stage: z.infer<typeof stageEnumSchema>
+    ) {
         try {
-            if (roundNumber < 1 || roundNumber > 14) {
-                throw new Error(
-                    `Invalid roundNumber: ${roundNumber}. Must be between 1 and 14`
-                );
+            if (stage === 'regularSeason') {
+                if (roundNumber < 1 || roundNumber > 14) {
+                    throw new Error(
+                        `Invalid roundNumber: ${roundNumber}. Must be between 1 and 14`
+                    );
+                }
+            } else if (stage === 'playoff') {
+                if (roundNumber < 1 || roundNumber > 4) {
+                    throw new Error(
+                        `Invalid roundNumber: ${roundNumber}. Must be between 1 and 4`
+                    );
+                }
+            } else {
+                throw new Error(`Invalid stage: ${stage}`);
             }
 
             const document = await this.findOne({
@@ -206,8 +225,14 @@ seasonOpsSchema.static(
                 throw new Error('Current season not found');
             }
 
-            return document.isScoreCalculatded[
-                roundNumber as keyof SeasonOpsType['isScoreCalculatded']
+            if (stage === 'regularSeason') {
+                return document.isScoreCalculatded[
+                    roundNumber as keyof SeasonOpsType['isScoreCalculatded']
+                ];
+            }
+
+            return document.isScoreCalculatdedPlayoff[
+                roundNumber as keyof SeasonOpsType['isScoreCalculatdedPlayoff']
             ];
         } catch (error) {
             console.error('Error fetching score calculation status:', error);
