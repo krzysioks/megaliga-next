@@ -4,7 +4,7 @@ import { DBClient } from '@/db/db-client';
 import SchedulePlayoffModel from '@/db/models/games/schedule-playoff';
 import ScoreDetailsPlayoffModel, {
     ScoreDetailsPlayoffDtoType,
-    ScoreDetailsPlayoffType
+    ScoreDetailsPlayoffInputType
 } from '@/db/models/games/score-details-playoff';
 import StartingLineupPlayoffModel from '@/db/models/games/starting-lineup-playoff';
 import PlayersModel from '@/db/models/players';
@@ -99,7 +99,7 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
             stage: 'semifinal'
         }).save();
 
-        const scoreDetailsToCreate: ScoreDetailsPlayoffType = {
+        const scoreDetailsToCreate: ScoreDetailsPlayoffInputType = {
             scheduleId: schedule._id.toString(),
             roundNumber: 1,
             teamOne: {
@@ -292,7 +292,7 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
                 stage: 'semifinal'
             }).save();
 
-            const scoreDetailsToCreate: ScoreDetailsPlayoffType = {
+            const scoreDetailsToCreate: ScoreDetailsPlayoffInputType = {
                 scheduleId: schedule._id.toString(),
                 roundNumber: 1,
                 teamOne: {
@@ -521,7 +521,7 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
             ).toBeUndefined();
         });
 
-        test('Should return object with default (undefined) values if for given playerId score details have not been saved yet', async () => {
+        test('Should return object with default zero values if for given playerId score details have not been saved yet', async () => {
             const userOne = await new UserModel(createUserData(44)).save();
             const [player] = await PlayersModel.create([
                 { extraligaPlayerName: 'Player One' }
@@ -536,13 +536,13 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
 
             expect(result.scoreDetailsId).toBeNull();
             expect(result.teamType).toBeNull();
-            expect(result.playerScoreDetails.heatOne).toBeUndefined();
-            expect(result.playerScoreDetails.heatTwo).toBeUndefined();
-            expect(result.playerScoreDetails.heatThree).toBeUndefined();
-            expect(result.playerScoreDetails.heatFour).toBeUndefined();
-            expect(result.playerScoreDetails.heatFive).toBeUndefined();
-            expect(result.playerScoreDetails.heatSix).toBeUndefined();
-            expect(result.playerScoreDetails.heatSeven).toBeUndefined();
+            expect(result.playerScoreDetails.heatOne).toBe(0);
+            expect(result.playerScoreDetails.heatTwo).toBe(0);
+            expect(result.playerScoreDetails.heatThree).toBe(0);
+            expect(result.playerScoreDetails.heatFour).toBe(0);
+            expect(result.playerScoreDetails.heatFive).toBe(0);
+            expect(result.playerScoreDetails.heatSix).toBe(0);
+            expect(result.playerScoreDetails.heatSeven).toBe(0);
         });
     });
 

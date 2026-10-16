@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import { DBClient } from '@/db/db-client';
 import HistoryGamesScoreDetailsModel, {
     HistoryGamesScoreDetailsByIdReturnType,
-    HistoryGamesScoreDetailsType
+    HistoryGamesScoreDetailsInputType
 } from '@/db/models/history/history-games-score-details';
 import HistoryTeamModel, {
     HistoryTeamType
@@ -70,7 +70,7 @@ describe('Test HistoryGamesScoreDetailsModel methods and static functions', () =
             { extraligaPlayerName: 'Player Four' }
         ]);
 
-        const scoreDetailsToCreate: HistoryGamesScoreDetailsType = {
+        const scoreDetailsToCreate: HistoryGamesScoreDetailsInputType = {
             teamOne: {
                 teamId: teamOne._id.toString(),
                 score: 46,
@@ -193,7 +193,7 @@ describe('Test HistoryGamesScoreDetailsModel methods and static functions', () =
                 { extraligaPlayerName: 'Player Two' }
             ]);
 
-            const scoreDetail: HistoryGamesScoreDetailsType = {
+            const scoreDetail: HistoryGamesScoreDetailsInputType = {
                 teamOne: {
                     teamId: teamOne._id.toString(),
                     score: 46,

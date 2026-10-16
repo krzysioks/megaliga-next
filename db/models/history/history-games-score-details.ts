@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { HistoryTeamType } from '@/db/models/history/history-team';
 import { PlayersType } from '@/db/models/players';
-import { historyTeamSchema } from '@/db/models/schema.types';
+import { trainerSchema, historyTeamSchema } from '@/db/models/schema.types';
 
 //HistoryGames collection represent in each document game played in megaliga
 // We will identify all games for given team in given season by finding all documents by teamId and season in historyGames collection
@@ -14,6 +14,10 @@ export const historyGamesScoreDetailsZodSchema = z.object({
 });
 
 export type HistoryGamesScoreDetailsType = z.infer<
+    typeof historyGamesScoreDetailsZodSchema
+>;
+
+export type HistoryGamesScoreDetailsInputType = z.input<
     typeof historyGamesScoreDetailsZodSchema
 >;
 
@@ -71,7 +75,7 @@ interface HistoryGamesScoreDetailsModelType extends Model<HistoryGamesScoreDetai
         id: string
     ) => Promise<HistoryGamesScoreDetailsByIdReturnType>;
     saveScoreDetailToHistory: (
-        scoreDetail: HistoryGamesScoreDetailsType
+        scoreDetail: HistoryGamesScoreDetailsInputType
     ) => Promise<string>;
 }
 
@@ -193,20 +197,14 @@ historyGamesScoreDetails.static(
                     score: team.score,
                     players: (team.players ?? []).map(player => {
                         return {
-                            heatOne: player.heatOne,
-                            heatTwo: player.heatTwo,
-                            heatThree: player.heatThree,
-                            heatFour: player.heatFour,
-                            heatFive: player.heatFive,
-                            heatSix: player.heatSix,
-                            heatSeven: player.heatSeven,
-                            setPlay: player.setPlay,
-                            comment: player.comment,
+                            ...trainerSchema.parse(player),
                             extraligaPlayerName:
                                 player.playerId?.extraligaPlayerName ?? ''
                         };
                     }),
-                    trainer: team.trainer,
+                    trainer: team.trainer
+                        ? trainerSchema.parse(team.trainer)
+                        : undefined,
                     setPlays: team?.setPlays
                 };
             };
@@ -225,7 +223,7 @@ historyGamesScoreDetails.static(
 historyGamesScoreDetails.static(
     'saveScoreDetailToHistory',
     async function saveScoreDetailToHistory(
-        scoreDetail: HistoryGamesScoreDetailsType
+        scoreDetail: HistoryGamesScoreDetailsInputType
     ) {
         try {
             const newDocument = await this.create(scoreDetail);

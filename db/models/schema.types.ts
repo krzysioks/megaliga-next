@@ -6,8 +6,28 @@ export enum ScheduleStatus {
     NotReadyForGeneration = 'schedule not ready for generation'
 }
 
+export enum SetPlayEnumType {
+    GwarancjaStartow = 'gwarancjaStartow',
+    Remis = 'remis',
+    Rezerwa = 'rezerwa',
+    RezerwaGielda = 'rezerwaGielda',
+    MortalKombatCombo = 'mortalKombatCombo',
+    Muchomor = 'muchomor',
+    Ncd = 'ncd',
+    Ncd6 = 'ncd6',
+    Spartacus = 'spartacus',
+    PijanyCieslak = 'pijanyCieslak',
+    BrudnaPala = 'brudnaPala',
+    PauloSousa = 'pauloSousa',
+    RyszardKowalski = 'ryszardKowalski',
+    Typer = 'typer',
+    Taktyczna = 'taktyczna',
+    Awatar = 'awatar',
+    KoloFortunyNorbiego = 'koloFortunyNorbiego'
+}
+
 // Shared Zod schemas for reusable types across models
-const heatSchema = z.number().min(0).max(100).optional();
+export const heatSchema = z.number().min(0).max(100).default(0);
 export const standardStringSchema = z.string().max(255);
 export const draftNumberSchema = z.number().max(20).optional();
 export const objectIdSchema = z
@@ -15,33 +35,43 @@ export const objectIdSchema = z
     .regex(/^[0-9a-f]{24}$/i, 'Invalid ObjectId format')
     .optional();
 
-// Player schema for individual player stats in a game
-export const playerSchema = z.object({
-    playerId: objectIdSchema, // Reference to player's document in Players collection
-    // TODOKP Idea is to keep players in Players collection even if they are no more active in megaliga. We will add new field status to indicate if should be shown in draft for current season or not. Keeping players in Players collection will help to collect and keep statistics
+export const uniquePlayerIdList = z
+    .array(objectIdSchema)
+    .refine((ids): ids is string[] => {
+        return (
+            ids.every(id => id !== undefined) &&
+            new Set(ids.map(id => id?.toLowerCase())).size === ids.length
+        );
+    }, 'Player IDs must be present and distinct');
+
+// Seven heat results, with unreported heats defaulting to zero.
+export const heatScoresSchema = z.object({
     heatOne: heatSchema,
     heatTwo: heatSchema,
     heatThree: heatSchema,
     heatFour: heatSchema,
     heatFive: heatSchema,
     heatSix: heatSchema,
-    heatSeven: heatSchema,
+    heatSeven: heatSchema
+});
+
+export const attemptZodSchema = heatScoresSchema.pick({
+    heatOne: true,
+    heatTwo: true,
+    heatThree: true,
+    heatFour: true
+});
+
+// Player schema for individual player stats in a game.
+export const playerSchema = heatScoresSchema.extend({
+    playerId: objectIdSchema, // Reference to player's document in Players collection
+    // TODOKP Idea is to keep players in Players collection even if they are no more active in megaliga. We will add new field status to indicate if should be shown in draft for current season or not. Keeping players in Players collection will help to collect and keep statistics
     setPlay: heatSchema,
     comment: standardStringSchema.optional()
 });
 
 // Trainer schema for trainer stats in a game
-export const trainerSchema = playerSchema.pick({
-    heatOne: true,
-    heatTwo: true,
-    heatThree: true,
-    heatFour: true,
-    heatFive: true,
-    heatSix: true,
-    heatSeven: true,
-    setPlay: true,
-    comment: true
-});
+export const trainerSchema = playerSchema.omit({ playerId: true });
 
 // Team schema for team details in a game (used for both teamOne and teamTwo)
 export const historyTeamSchema = z.object({
@@ -113,6 +143,7 @@ export const standingsGrandPrixSchema = z.object({
 
 export const booleanDefaultFalseSchema = z.boolean().default(false);
 export const numberDefaultZeroSchema = z.number().min(0).default(0);
+export const numberSchema = z.number().min(0);
 export const optionalStringSchema = z.string().optional();
 export const stageEnumSchema = z.enum(['regularSeason', 'playoff', 'playIn']);
 export const statusEnumSchema = z.enum(['active', 'inactive']);

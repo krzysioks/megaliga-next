@@ -3,7 +3,8 @@ import { z } from 'zod';
 
 import {
     DEFAULT_PLAYER_SCORE_DETAILS,
-    PlayerScoreDetailsType
+    PlayerScoreDetailsType,
+    PlayerScoreDetailsInputType
 } from '@/db/db.types';
 import SchedulePlayoffModel, {
     SchedulePlayoffType
@@ -14,6 +15,9 @@ import {
 } from '@/db/models/games/starting-lineup-playoff';
 import PlayersModel, { PlayersType } from '@/db/models/players';
 import {
+    heatScoresSchema,
+    playerSchema,
+    trainerSchema,
     objectIdSchema,
     roundNumberSchema,
     teamSchema
@@ -30,6 +34,10 @@ export const scoreDetailsPLayoffZodSchema = z.object({
 });
 
 export type ScoreDetailsPlayoffType = z.infer<
+    typeof scoreDetailsPLayoffZodSchema
+>;
+
+export type ScoreDetailsPlayoffInputType = z.input<
     typeof scoreDetailsPLayoffZodSchema
 >;
 
@@ -142,7 +150,7 @@ interface ScoreDetailsPlayoffModelType extends Model<ScoreDetailsPlayoffType> {
     savePlayerScoreDetails: (
         playerData: StartingLineupPlayoffPlayersByRoundReturnType,
         roundNumber: number,
-        playerScore: PlayerScoreDetailsPlayoffType
+        playerScore: PlayerScoreDetailsInputType
     ) => Promise<SavePlayerScoreDetailsPlayoffReturnType>;
     deleteAll: () => Promise<void>;
 }
@@ -287,19 +295,13 @@ scoreDetailsPlayoffSchema.static(
             ): ScoreDetailsPlayoffTeamDtoType => ({
                 teamName: team.userId?.teamName ?? '',
                 players: (team.players ?? []).map(player => ({
-                    heatOne: player.heatOne,
-                    heatTwo: player.heatTwo,
-                    heatThree: player.heatThree,
-                    heatFour: player.heatFour,
-                    heatFive: player.heatFive,
-                    heatSix: player.heatSix,
-                    heatSeven: player.heatSeven,
-                    setPlay: player.setPlay,
-                    comment: player.comment,
+                    ...trainerSchema.parse(player),
                     extraligaPlayerName:
                         player.playerId?.extraligaPlayerName ?? ''
                 })),
-                trainer: team.trainer,
+                trainer: team.trainer
+                    ? trainerSchema.parse(team.trainer)
+                    : undefined,
                 setPlays: team.startingLineupId?.setPlays
             });
 
@@ -345,8 +347,13 @@ scoreDetailsPlayoffSchema.static(
                 team: PopulatedScoreDetailsPlayoffForHistoryType['teamOne']
             ): ScoreDetailsPlayoffForHistoryTeamDtoType => {
                 return {
-                    players: team.players ?? [],
-                    trainer: team.trainer,
+                    players: (team.players ?? []).map(player => ({
+                        ...trainerSchema.parse(player),
+                        playerId: player.playerId?.toString()
+                    })),
+                    trainer: team.trainer
+                        ? trainerSchema.parse(team.trainer)
+                        : undefined,
                     setPlays: team.startingLineupId?.setPlays
                 };
             };
@@ -430,15 +437,7 @@ scoreDetailsPlayoffSchema.static(
 
             const playerScoreDetails: PlayerScoreDetailsPlayoffType =
                 playerEntry
-                    ? {
-                          heatOne: playerEntry.heatOne,
-                          heatTwo: playerEntry.heatTwo,
-                          heatThree: playerEntry.heatThree,
-                          heatFour: playerEntry.heatFour,
-                          heatFive: playerEntry.heatFive,
-                          heatSix: playerEntry.heatSix,
-                          heatSeven: playerEntry.heatSeven
-                      }
+                    ? heatScoresSchema.parse(playerEntry)
                     : DEFAULT_PLAYER_SCORE_DETAILS;
 
             return {
@@ -461,18 +460,10 @@ scoreDetailsPlayoffSchema.static(
     async function savePlayerScoreDetails(
         playerData: StartingLineupPlayoffPlayersByRoundReturnType,
         roundNumber: number,
-        playerScore: PlayerScoreDetailsPlayoffType
+        playerScore: PlayerScoreDetailsInputType
     ) {
         try {
-            const normalizedPlayerScore: PlayerScoreDetailsPlayoffType = {
-                heatOne: playerScore.heatOne ?? 0,
-                heatTwo: playerScore.heatTwo ?? 0,
-                heatThree: playerScore.heatThree ?? 0,
-                heatFour: playerScore.heatFour ?? 0,
-                heatFive: playerScore.heatFive ?? 0,
-                heatSix: playerScore.heatSix ?? 0,
-                heatSeven: playerScore.heatSeven ?? 0
-            };
+            const normalizedPlayerScore = heatScoresSchema.parse(playerScore);
 
             for (let index = 0; index < playerData.userId.length; index++) {
                 const userId = playerData.userId[index];
@@ -510,10 +501,12 @@ scoreDetailsPlayoffSchema.static(
                         ...normalizedPlayerScore
                     };
                 } else {
-                    players.push({
-                        playerId: playerData.playerId,
-                        ...normalizedPlayerScore
-                    });
+                    players.push(
+                        playerSchema.parse({
+                            playerId: playerData.playerId,
+                            ...normalizedPlayerScore
+                        })
+                    );
                 }
 
                 await this.updateOne(

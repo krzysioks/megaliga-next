@@ -5,7 +5,7 @@ import ScheduleModel from '@/db/models/games/schedule';
 import ScoreDetailsModel, {
     PlayerScoreDetailsType,
     ScoreDetailsReturnType,
-    ScoreDetailsType
+    ScoreDetailsInputType
 } from '@/db/models/games/score-details';
 import StartingLineupModel from '@/db/models/games/starting-lineup';
 import PlayersModel from '@/db/models/players';
@@ -101,7 +101,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             userTwoScore: 44
         }).save();
 
-        const scoreDetailsToCreate: ScoreDetailsType = {
+        const scoreDetailsToCreate: ScoreDetailsInputType = {
             scheduleId: schedule._id.toString(),
             roundNumber: 3,
             teamOne: {
@@ -290,7 +290,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 userTwoScore: 44
             }).save();
 
-            const scoreDetailsToCreate: ScoreDetailsType = {
+            const scoreDetailsToCreate: ScoreDetailsInputType = {
                 scheduleId: schedule._id.toString(),
                 roundNumber: 3,
                 teamOne: {
@@ -532,13 +532,13 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             const playerScoreDetails: PlayerScoreDetailsType =
                 result.playerScoreDetails;
 
-            expect(playerScoreDetails.heatOne).toBeUndefined();
-            expect(playerScoreDetails.heatTwo).toBeUndefined();
-            expect(playerScoreDetails.heatThree).toBeUndefined();
-            expect(playerScoreDetails.heatFour).toBeUndefined();
-            expect(playerScoreDetails.heatFive).toBeUndefined();
-            expect(playerScoreDetails.heatSix).toBeUndefined();
-            expect(playerScoreDetails.heatSeven).toBeUndefined();
+            expect(playerScoreDetails.heatOne).toBe(0);
+            expect(playerScoreDetails.heatTwo).toBe(0);
+            expect(playerScoreDetails.heatThree).toBe(0);
+            expect(playerScoreDetails.heatFour).toBe(0);
+            expect(playerScoreDetails.heatFive).toBe(0);
+            expect(playerScoreDetails.heatSix).toBe(0);
+            expect(playerScoreDetails.heatSeven).toBe(0);
         });
     });
 
