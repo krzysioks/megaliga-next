@@ -228,8 +228,11 @@ interface SetPlaysDataMethodsType {
     ) => Promise<SelectedSetPlayType[]>;
 }
 
-interface SetPlaysDataModelType
-    extends Model<SetPlaysDataDocumentType, '', SetPlaysDataMethodsType> {
+interface SetPlaysDataModelType extends Model<
+    SetPlaysDataDocumentType,
+    '',
+    SetPlaysDataMethodsType
+> {
     getSetPlaysForUser: (
         startingLineupId: string
     ) => Promise<SetPlayForUserReturnType[]>;
@@ -634,5 +637,5 @@ setPlaysDataSchema.static(
 const SetPlaysDataModel = model<
     SetPlaysDataDocumentType,
     SetPlaysDataModelType
->('SetPlaysData', setPlaysDataSchema, 'setplays');
+>('SetPlaysData', setPlaysDataSchema);
 export default SetPlaysDataModel;

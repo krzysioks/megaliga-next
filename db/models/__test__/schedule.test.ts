@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 
 import { DBClient } from '@/db/db-client';
 import ScheduleModel, {
-    ScheduleByRoundDtoType,
+    ScheduleByRoundReturnType,
     ScheduleType
 } from '@/db/models/games/schedule';
 import LigueGroupsModel from '@/db/models/ligue-groups';
@@ -211,7 +211,7 @@ describe('Test ScheduleModel methods and static functions', () => {
         });
 
     const findFetchedSchedule = (
-        fetchedSchedules: ScheduleByRoundDtoType[],
+        fetchedSchedules: ScheduleByRoundReturnType[],
         expectedSchedule: ScheduleType
     ) =>
         fetchedSchedules.find(schedule => {
@@ -234,7 +234,7 @@ describe('Test ScheduleModel methods and static functions', () => {
         usersToCreate.find(user => user._id?.toString() === userId);
 
     const assertFetchedSchedule = (
-        fetchedSchedule: ScheduleByRoundDtoType | undefined,
+        fetchedSchedule: ScheduleByRoundReturnType | undefined,
         expectedSchedule: ScheduleType
     ) => {
         expect(fetchedSchedule).toBeDefined();

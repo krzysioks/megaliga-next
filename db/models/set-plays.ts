@@ -1,4 +1,4 @@
-import { model, Schema } from 'mongoose';
+import { model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
 import {
@@ -13,19 +13,42 @@ export const setPlaysZodSchema = z.object({
 
 export type SetPlaysType = z.infer<typeof setPlaysZodSchema>;
 
-const setPlaysSchema = new Schema<SetPlaysType>({
+export type SetPlaysReturnType = SetPlaysType & {
+    id: Types.ObjectId;
+};
+
+interface SetPlaysModelType extends Model<SetPlaysType> {
+    getSetPlays: () => Promise<SetPlaysReturnType[]>;
+}
+
+const setPlaysSchema = new Schema<SetPlaysType, SetPlaysModelType>({
     name: { type: String, required: true, maxlength: 255 },
     type: { type: String, required: true, enum: Object.values(SetPlayEnumType) }
 });
 
-setPlaysSchema.pre('validate', function validateSetPlays() {
-    setPlaysZodSchema.parse(this.toObject());
+setPlaysSchema.static('getSetPlays', async function getSetPlays() {
+    try {
+        const documents = await this.find().exec();
+
+        if (!documents.length) {
+            throw new Error('No set plays found');
+        }
+
+        return documents.map(document => {
+            return {
+                id: document._id,
+                name: document.name,
+                type: document.type
+            };
+        });
+    } catch (error) {
+        console.error('Error fetching set plays:', error);
+        throw error;
+    }
 });
 
-// The existing selections already occupy Mongoose's default "setplays" collection.
-const SetPlaysModel = model<SetPlaysType>(
+const SetPlaysModel = model<SetPlaysType, SetPlaysModelType>(
     'SetPlays',
-    setPlaysSchema,
-    'setplayscatalog'
+    setPlaysSchema
 );
 export default SetPlaysModel;

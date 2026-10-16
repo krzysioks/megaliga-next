@@ -1,0 +1,3 @@
+[mcp_servers.codegraph]
+command = "/Users/krzysztofpielak/.local/bin/codegraph"
+args = ["serve", "--mcp", "--path", "/Users/krzysztofpielak/Sandbox/megaliga-next"]

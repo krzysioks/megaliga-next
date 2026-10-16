@@ -37,7 +37,7 @@ export type PopulatedFindType = HydratedDocument<PopulatedScheduleType>;
 
 export type ScheduleUserDtoType = Pick<UserType, 'teamName' | 'logoUrl'>;
 
-export type ScheduleByRoundDtoType = {
+export type ScheduleByRoundReturnType = {
     id: Types.ObjectId;
     roundNumber: number;
     ligueGroupsId: string;
@@ -78,7 +78,7 @@ interface ScheduleModelType extends Model<ScheduleType> {
     getScheduleByRound: (
         roundNumber: number,
         ligueGroupsId: string
-    ) => Promise<ScheduleByRoundDtoType[]>;
+    ) => Promise<ScheduleByRoundReturnType[]>;
     getScheduleForHistory: () => Promise<ScheduleForHistoryReturnType[]>;
     getScheduleIdByUserAndRoundNumber: (
         userId: string,
