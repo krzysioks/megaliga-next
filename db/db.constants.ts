@@ -1,0 +1,6 @@
+export const MIN_REGULAR_SEASON_ROUND = 1;
+export const MAX_REGULAR_SEASON_ROUND = 14;
+
+export const MAX_SET_PLAYS_PER_ROUND = 6;
+export const MAX_SELECTIONS_PER_SET_PLAY = 2;
+export const MAX_SELECTIONS_PER_RESERVE_SET_PLAY = 1;

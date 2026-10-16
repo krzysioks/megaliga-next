@@ -2,9 +2,17 @@ import { model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
 import {
+    MIN_REGULAR_SEASON_ROUND,
+    MAX_REGULAR_SEASON_ROUND
+} from '@/db/db.constants';
+import SetPlaysDataModel from '@/db/models/games/set-plays-data';
+import StartingLineupModel from '@/db/models/games/starting-lineup';
+import {
     SetPlayEnumType,
     standardStringSchema
 } from '@/db/models/schema.types';
+import UserModel from '@/db/models/user';
+import { validateSetPlayConstraints } from '@/db/models/validation.utils';
 
 export const setPlaysZodSchema = z.object({
     name: standardStringSchema,
@@ -18,7 +26,10 @@ export type SetPlaysReturnType = SetPlaysType & {
 };
 
 interface SetPlaysModelType extends Model<SetPlaysType> {
-    getSetPlays: () => Promise<SetPlaysReturnType[]>;
+    getAvailableSetPlays: (
+        userId: string,
+        roundNumber: number
+    ) => Promise<SetPlaysReturnType[]>;
 }
 
 const setPlaysSchema = new Schema<SetPlaysType, SetPlaysModelType>({
@@ -26,26 +37,59 @@ const setPlaysSchema = new Schema<SetPlaysType, SetPlaysModelType>({
     type: { type: String, required: true, enum: Object.values(SetPlayEnumType) }
 });
 
-setPlaysSchema.static('getSetPlays', async function getSetPlays() {
-    try {
-        const documents = await this.find().exec();
+setPlaysSchema.static(
+    'getAvailableSetPlays',
+    async function getAvailableSetPlays(userId: string, roundNumber: number) {
+        try {
+            if (
+                roundNumber < MIN_REGULAR_SEASON_ROUND ||
+                roundNumber > MAX_REGULAR_SEASON_ROUND
+            ) {
+                throw new Error(
+                    `Invalid roundNumber: ${roundNumber}. Must be between ${MIN_REGULAR_SEASON_ROUND} and ${MAX_REGULAR_SEASON_ROUND}`
+                );
+            }
 
-        if (!documents.length) {
-            throw new Error('No set plays found');
+            const isValidUserId = await UserModel.exists({ _id: userId });
+            if (!isValidUserId) {
+                throw new Error(`Invalid userId: ${userId}`);
+            }
+
+            const startingLineupDocument =
+                await StartingLineupModel.getUserStartingLineupByRound(
+                    userId,
+                    roundNumber
+                );
+            if (!startingLineupDocument) {
+                throw new Error('Starting lineup not found');
+            }
+
+            const { setPlayList } =
+                await SetPlaysDataModel.getSetPlayListByStartingLineupId(
+                    startingLineupDocument._id.toString()
+                );
+            const availableTypes = validateSetPlayConstraints(setPlayList);
+            const documents = await this.find().exec();
+
+            if (!documents.length) {
+                throw new Error('No set plays found');
+            }
+
+            return documents
+                .filter(document => availableTypes.includes(document.type))
+                .map(document => {
+                    return {
+                        id: document._id,
+                        name: document.name,
+                        type: document.type
+                    };
+                });
+        } catch (error) {
+            console.error('Error fetching set plays:', error);
+            throw error;
         }
-
-        return documents.map(document => {
-            return {
-                id: document._id,
-                name: document.name,
-                type: document.type
-            };
-        });
-    } catch (error) {
-        console.error('Error fetching set plays:', error);
-        throw error;
     }
-});
+);
 
 const SetPlaysModel = model<SetPlaysType, SetPlaysModelType>(
     'SetPlays',

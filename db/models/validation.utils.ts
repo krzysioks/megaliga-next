@@ -1,15 +1,18 @@
-import type { PlaysType } from '@/db/db.types';
 import type {
-    SelectedSetPlayType,
+    SetPlaysDataSelectionReturnType,
     SetPlayAdminDataType,
     SetPlaySelectionType,
-    ResolvedSetPlayType
+    SetPlayPayloadType
 } from '@/db/models/games/set-plays-data';
 import type { StartingLineupType } from '@/db/models/games/starting-lineup';
 
 import { z } from 'zod';
 
-import { getStartingLineupPlayerIds } from '@/db/db.utils';
+import { MAX_SET_PLAYS_PER_ROUND } from '@/db/db.constants';
+import {
+    getSetPlaySelectionLimit,
+    getStartingLineupPlayerIds
+} from '@/db/db.utils';
 import ScheduleModel from '@/db/models/games/schedule';
 import StartingLineupModel from '@/db/models/games/starting-lineup';
 import LigueGroupsModel from '@/db/models/ligue-groups';
@@ -63,7 +66,7 @@ async function getAssignmentField(userId: string) {
 
 export async function validateSetPlaySelections(
     lineup: StartingLineupType,
-    plays: ResolvedSetPlayType[]
+    plays: SetPlayPayloadType[]
 ) {
     const userId = lineup.userId?.toString();
     if (!userId) {
@@ -240,7 +243,7 @@ export async function validateSetPlaySelections(
 }
 
 export async function validateSetPlayResults(
-    play: SelectedSetPlayType,
+    play: SetPlaysDataSelectionReturnType,
     results: SetPlayAdminDataType,
     lineup: StartingLineupType
 ) {
@@ -282,7 +285,10 @@ export async function validateSetPlayResults(
     return results;
 }
 
-export function getSetPlayIndex(plays: SelectedSetPlayType[], playId: string) {
+export function getSetPlayIndex(
+    plays: SetPlaysDataSelectionReturnType[],
+    playId: string
+) {
     const id = objectIdSchema.unwrap().parse(playId).toLowerCase();
     const index = plays.findIndex(play => play.playId === id);
     if (index === -1) {
@@ -291,18 +297,28 @@ export function getSetPlayIndex(plays: SelectedSetPlayType[], playId: string) {
     return index;
 }
 
-export function validateSetPlays(plays: PlaysType, context: z.RefinementCtx) {
+export function validateSetPlayConstraints(
+    setPlayList: Pick<SetPlayPayloadType, 'type'>[]
+): SetPlayEnumType[] {
+    if (setPlayList.length >= MAX_SET_PLAYS_PER_ROUND) {
+        return [];
+    }
+
+    return Object.values(SetPlayEnumType).filter(type => {
+        const count = setPlayList.filter(play => play.type === type).length;
+        return count < getSetPlaySelectionLimit(type);
+    });
+}
+
+export function validateSetPlays(
+    plays: Pick<SetPlayPayloadType, 'type'>[],
+    context: z.RefinementCtx
+) {
     const counts = new Map<SetPlayEnumType, number>();
     plays.forEach((play, index) => {
         const count = (counts.get(play.type) ?? 0) + 1;
         counts.set(play.type, count);
-        // if setPlay is Rezerwa || RezerwaGielda -> max 1 set play
-        // can be added per round. Other setplays can be used max 2 times
-        const maximum =
-            play.type === SetPlayEnumType.Rezerwa ||
-            play.type === SetPlayEnumType.RezerwaGielda
-                ? 1
-                : 2;
+        const maximum = getSetPlaySelectionLimit(play.type);
         if (count > maximum) {
             context.addIssue({
                 code: z.ZodIssueCode.custom,

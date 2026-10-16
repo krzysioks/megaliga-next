@@ -1,15 +1,17 @@
+import type { MatchPairType } from '@/db/db.types';
 import type {
-    SelectedSetPlayType,
+    SetPlaysDataSelectionReturnType,
     SetPlayAdminDataType,
     SetPlaySelectionType,
-    SetPlayUserDataType,
-    SetPlaysDataDocumentType,
-    PopulatedSetPlaysDataType
+    SetPlayUserDataType
 } from '@/db/models/games/set-plays-data';
 import type { StartingLineupType } from '@/db/models/games/starting-lineup';
-import type { HydratedDocument } from 'mongoose';
 
-export type MatchPairType = [userOneId: string, userTwoId: string];
+import {
+    MAX_SELECTIONS_PER_SET_PLAY,
+    MAX_SELECTIONS_PER_RESERVE_SET_PLAY
+} from '@/db/db.constants';
+import { SetPlayEnumType } from '@/db/models/schema.types';
 
 // single round-robin schedule for a group of teams, using the berger table algorithm
 export function generateBergerTableRounds(
@@ -70,31 +72,16 @@ export function generateInterGroupRounds(
     return rounds;
 }
 
-export async function getSelectedSetPlays(
-    document: HydratedDocument<SetPlaysDataDocumentType>
-): Promise<SelectedSetPlayType[]> {
-    const populated = await document.populate<
-        Pick<PopulatedSetPlaysDataType, 'setPlayList'>
-    >({ path: 'setPlayList.setPlayId', select: 'name type' });
-    // flattenObjectIds makes all nested references suitable for the public string-ID contract.
-    return populated
-        .toObject<PopulatedSetPlaysDataType>({ flattenObjectIds: true })
-        .setPlayList.map(({ _id, setPlayId, ...play }) => {
-            if (!setPlayId) {
-                throw new Error('Missing catalog entry for selected set play');
-            }
-            return {
-                ...play,
-                setPlayId: setPlayId._id.toString(),
-                name: setPlayId.name,
-                type: setPlayId.type,
-                playId: _id.toString()
-            } as SelectedSetPlayType;
-        });
+export function getSetPlaySelectionLimit(type: SetPlayEnumType) {
+    return [SetPlayEnumType.Rezerwa, SetPlayEnumType.RezerwaGielda].includes(
+        type
+    )
+        ? MAX_SELECTIONS_PER_RESERVE_SET_PLAY
+        : MAX_SELECTIONS_PER_SET_PLAY;
 }
 
 export function getSetPlaySelections(
-    plays: SelectedSetPlayType[]
+    plays: SetPlaysDataSelectionReturnType[]
 ): SetPlaySelectionType[] {
     return plays.map(({ playId, setPlayId, ...play }) => {
         return {

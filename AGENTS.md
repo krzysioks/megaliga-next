@@ -32,3 +32,34 @@ Apply these before any of the pattern rules below. They decide _whether_ and _ho
   - Comments explain _why_ (a workaround, a backend quirk, a ticket), never _what_ the code already says. Delete commented-out code; git remembers it.
   - Keep the diff minimal: touch only what the task needs, do not reformat or "improve" neighbouring code, do not rename things in passing.
   - Deletion beats addition. Removing dead code, an unused prop or an unnecessary layer is a valid and welcome change.
+
+## Mongoose model naming
+
+When adding or changing a Mongoose model, follow [starting-lineup.ts](db/models/games/starting-lineup.ts). Use the entity name consistently, with these conventions:
+
+| Definition | Naming pattern | Example |
+| --- | --- | --- |
+| Model file | kebab-case entity name | `starting-lineup.ts` |
+| Zod schema | camelCase entity + `ZodSchema` | `startingLineupZodSchema` |
+| Inferred document fields | PascalCase entity + `Type` | `StartingLineupType = z.infer<typeof startingLineupZodSchema>` |
+| Instance-method interface | Entity + `MethodsType` | `StartingLineupMethodsType` |
+| Model interface containing statics | Entity + `ModelType` | `StartingLineupModelType` |
+| Mongoose schema | camelCase entity + `Schema` | `startingLineupSchema` |
+| Compiled model constant | PascalCase entity + `Model` | `StartingLineupModel` |
+| Registered model name and matching `ref` | PascalCase entity, without the `Model` suffix | `'StartingLineup'` |
+| Operation return type | Entity + operation + `ReturnType` | `StartingLineupPlayersByRoundReturnType` |
+| Populated document fields | `Populated` + entity + `Type` | `PopulatedStartingLineupType` |
+| Document return alias | Entity + `DocumentType` | `StartingLineupDocumentType` |
+| Hydrated populated query alias | `PopulatedFindType` within the model module | `HydratedDocument<PopulatedStartingLineupType>` |
+
+Default-export the compiled model. Pass the corresponding types to `Schema<EntityType, EntityModelType, EntityMethodsType>` and `model<EntityType, EntityModelType>`, including method types only when the model defines them. Declare return and population aliases only when needed.
+
+Use camelCase for static and instance methods. Keep the `.static()` or `.method()` registration key identical to the named implementation function, such as `'getUserStartingLineupByRound'` and `async function getUserStartingLineupByRound(...)`.
+
+## Mongoose population and return mapping
+
+Define named types for populated references and containing documents, then define `PopulatedFindType = HydratedDocument<PopulatedEntityType>`. Pass `.populate<PopulatedFindType>()` directly at call sites. Keep nullable lookup results as `PopulatedFindType | null` on the query result variable.
+
+When a model function fetches referenced data, chain `.populate<...>()` directly on its `find`/`findOne`/`findById` query, with explicit paths and selected fields. Map the documents into the declared return objects, including ID conversion, inside that same function. Keep population and return mapping visible at the call site instead of hiding them in utilities. Follow `getStartingLineupPlayersByRound` in [starting-lineup.ts](db/models/games/starting-lineup.ts).
+
+For hooks and methods operating on an existing or newly saved document, call `document.populate<...>()` explicitly in that function before reading referenced fields.

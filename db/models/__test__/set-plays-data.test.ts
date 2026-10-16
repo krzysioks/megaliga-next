@@ -17,6 +17,7 @@ import PlayersModel from '@/db/models/players';
 import { SetPlayEnumType } from '@/db/models/schema.types';
 import SetPlaysModel from '@/db/models/set-plays';
 import UserModel from '@/db/models/user';
+import { validateSetPlayConstraints } from '@/db/models/validation.utils';
 
 const catalogNames: Record<SetPlayEnumType, string> = {
     [SetPlayEnumType.Remis]: 'Remis',
@@ -214,6 +215,144 @@ afterAll(async () => {
     await clearFixtures();
     await mongoose.disconnect();
     jest.restoreAllMocks();
+});
+
+describe('validateSetPlayConstraints', () => {
+    test('returns every type when no set plays have been selected', () => {
+        const document = { setPlayList: [] };
+
+        expect(validateSetPlayConstraints(document.setPlayList)).toEqual(
+            Object.values(SetPlayEnumType)
+        );
+    });
+
+    test.each([6, 7])('returns no available types at %i selections', count => {
+        const document = {
+            setPlayList: Array.from({ length: count }, () => {
+                return { type: SetPlayEnumType.Remis };
+            })
+        };
+
+        expect(validateSetPlayConstraints(document.setPlayList)).toEqual([]);
+    });
+
+    test.each(Object.values(SetPlayEnumType))(
+        'keeps %s available below its limit and excludes it at its limit',
+        type => {
+            const maximum =
+                type === SetPlayEnumType.Rezerwa ||
+                type === SetPlayEnumType.RezerwaGielda
+                    ? 1
+                    : 2;
+            const document = {
+                setPlayList: Array.from({ length: maximum - 1 }, () => {
+                    return { type };
+                })
+            };
+
+            expect(validateSetPlayConstraints(document.setPlayList)).toEqual(
+                Object.values(SetPlayEnumType)
+            );
+
+            document.setPlayList.push({ type });
+
+            expect(validateSetPlayConstraints(document.setPlayList)).toEqual(
+                Object.values(SetPlayEnumType).filter(availableType => {
+                    return availableType !== type;
+                })
+            );
+        }
+    );
+
+    test('filters each exhausted type independently with one total selection remaining', () => {
+        const document = {
+            setPlayList: [
+                SetPlayEnumType.Remis,
+                SetPlayEnumType.Remis,
+                SetPlayEnumType.Rezerwa,
+                SetPlayEnumType.RezerwaGielda,
+                SetPlayEnumType.Muchomor
+            ].map(type => {
+                return { type };
+            })
+        };
+
+        expect(validateSetPlayConstraints(document.setPlayList)).toEqual(
+            Object.values(SetPlayEnumType).filter(type => {
+                return (
+                    type !== SetPlayEnumType.Remis &&
+                    type !== SetPlayEnumType.Rezerwa &&
+                    type !== SetPlayEnumType.RezerwaGielda
+                );
+            })
+        );
+    });
+
+    test('counts different catalog entries of the same type together', async () => {
+        const anotherDraw = await SetPlaysModel.create({
+            name: 'Remis – drugi wpis',
+            type: SetPlayEnumType.Remis
+        });
+        const document = {
+            setPlayList: [
+                {
+                    setPlayId: catalogId(SetPlayEnumType.Remis),
+                    type: SetPlayEnumType.Remis
+                },
+                { setPlayId: anotherDraw._id, type: anotherDraw.type }
+            ]
+        };
+
+        expect(validateSetPlayConstraints(document.setPlayList)).not.toContain(
+            SetPlayEnumType.Remis
+        );
+    });
+});
+
+describe('getSetPlayListByStartingLineupId', () => {
+    test('returns an empty list when no selections document exists', async () => {
+        expect(
+            await SetPlaysDataModel.getSetPlayListByStartingLineupId(lineupId)
+        ).toEqual({ setPlayList: [] });
+    });
+
+    test('returns only the requested lineup’s populated selections as plain objects', async () => {
+        const saved = await SetPlaysDataModel.saveSetPlays(lineupId, [
+            { setPlayId: catalogId(SetPlayEnumType.Remis) },
+            {
+                setPlayId: catalogId(SetPlayEnumType.Rezerwa),
+                userData: { playerId: ownPlayerIds[5] }
+            }
+        ]);
+        await SetPlaysDataModel.saveSetPlayResults(lineupId, saved[0].playId, {
+            playerIdList: [ownPlayerIds[0]]
+        });
+        await SetPlaysDataModel.saveSetPlays(opponentLineupId, [
+            { setPlayId: catalogId(SetPlayEnumType.Muchomor) }
+        ]);
+        await SetPlaysModel.updateOne(
+            { _id: catalogId(SetPlayEnumType.Remis) },
+            { name: 'Remis – zmieniona nazwa' }
+        ).exec();
+
+        const result =
+            await SetPlaysDataModel.getSetPlayListByStartingLineupId(lineupId);
+
+        expect(result).toEqual({
+            setPlayList: [
+                {
+                    ...saved[0],
+                    name: 'Remis – zmieniona nazwa',
+                    adminData: { playerIdList: [ownPlayerIds[0]] }
+                },
+                saved[1]
+            ]
+        });
+        expect(result.setPlayList[0]).not.toBeInstanceOf(mongoose.Document);
+        expect(validateSetPlayConstraints(result.setPlayList)).not.toContain(
+            SetPlayEnumType.Rezerwa
+        );
+    });
 });
 
 test.each([
