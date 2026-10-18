@@ -4,7 +4,7 @@ import { HydratedDocument, model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
 import { MAX_SET_PLAYS_PER_ROUND } from '@/db/db.constants';
-import { getSetPlaySelections, normalizeSetPlayData } from '@/db/db.utils';
+import { getSetPlayStartingLineup, normalizeSetPlayData } from '@/db/db.utils';
 import StartingLineupModel, {
     type StartingLineupType
 } from '@/db/models/games/starting-lineup';
@@ -19,12 +19,11 @@ import {
 } from '@/db/models/schema.types';
 import SetPlaysModel, { type SetPlaysType } from '@/db/models/set-plays';
 import {
-    getSetPlayIndex,
-    getSetPlayLineup,
+    getSelectedSetPlayIndex,
     validateSetPlays,
     validateSetPlayResults,
-    validateSetPlaySelections,
-    validateSetPlaySelectionFields
+    validateSelectedSetPlay,
+    validateSelectedSetPlayFields
 } from '@/db/models/validation.utils';
 
 const setPlayPayloadZodSchema = z.discriminatedUnion('type', [
@@ -208,23 +207,21 @@ export type PopulatedSetPlaysDataType = Omit<
 
 export type PopulatedFindType = HydratedDocument<PopulatedSetPlaysDataType>;
 
-export type SetPlaySelectionType = {
+export type SetPlayDataType = {
     setPlayId: string;
-    playId?: string;
-    userData?: SetPlayUserInputType | Record<string, never>;
+    userData?: SetPlayUserInputType | null;
 };
-export type SetPlayUpdateType = Omit<SetPlaySelectionType, 'playId'>;
 
 export type SetPlaysDataSelectionReturnType = SetPlayPayloadType & {
     name: string;
     setPlayId: string;
-    playId: string;
+    selectedSetPlayId: string;
 };
 export type SetPlaysDataForUserReturnType = Pick<SetPlaysType, 'name'> & {
-    userData: SetPlayUserDataType | Record<string, never>;
+    userData: SetPlayUserDataType | null;
 };
 export type SetPlaysDataForAdminReturnType = Pick<SetPlaysType, 'name'> & {
-    adminData: SetPlayAdminDataType | Record<string, never>;
+    adminData: SetPlayAdminDataType | null;
 };
 
 export type SetPlaysDataListByStartingLineupIdReturnType = {
@@ -232,14 +229,18 @@ export type SetPlaysDataListByStartingLineupIdReturnType = {
 };
 
 interface SetPlaysDataMethodsType {
-    saveSelections: (
-        lineup: StartingLineupType,
-        selections: SetPlaySelectionType[]
+    saveSelectedSetPlay: (
+        startingLineupDocument: StartingLineupType,
+        setPlayData: SetPlayDataType,
+        selectedSetPlayId?: string
     ) => Promise<SetPlaysDataSelectionReturnType[]>;
 }
 
-interface SetPlaysDataModelType
-    extends Model<SetPlaysDataType, '', SetPlaysDataMethodsType> {
+interface SetPlaysDataModelType extends Model<
+    SetPlaysDataType,
+    '',
+    SetPlaysDataMethodsType
+> {
     getSetPlayListByStartingLineupId: (
         startingLineupId: string
     ) => Promise<SetPlaysDataListByStartingLineupIdReturnType>;
@@ -252,20 +253,20 @@ interface SetPlaysDataModelType
     ) => Promise<SetPlaysDataForAdminReturnType[]>;
     saveSetPlays: (
         startingLineupId: string,
-        selections: SetPlaySelectionType[]
+        setPlayData: SetPlayDataType
     ) => Promise<SetPlaysDataSelectionReturnType[]>;
     updateSetPlay: (
         startingLineupId: string,
-        playId: string,
-        selection: SetPlayUpdateType
+        selectedSetPlayId: string,
+        setPlayData: SetPlayDataType
     ) => Promise<SetPlaysDataSelectionReturnType[]>;
     removeSetPlay: (
         startingLineupId: string,
-        playId: string
+        selectedSetPlayId: string
     ) => Promise<SetPlaysDataSelectionReturnType[]>;
     saveSetPlayResults: (
         startingLineupId: string,
-        playId: string,
+        selectedSetPlayId: string,
         adminData: SetPlayAdminInputType
     ) => Promise<SetPlaysDataSelectionReturnType[]>;
 }
@@ -318,7 +319,7 @@ setPlaysDataSchema.pre('validate', async function validateSetPlayDocument() {
                 setPlayId: setPlayId._id.toString(),
                 name: setPlayId.name,
                 type: setPlayId.type,
-                playId: _id.toString()
+                selectedSetPlayId: _id.toString()
             } as SetPlaysDataSelectionReturnType;
         });
     const entries = setPlayPayloadListZodSchema.parse(plays);
@@ -327,7 +328,7 @@ setPlaysDataSchema.pre('validate', async function validateSetPlayDocument() {
         'setPlayList',
         entries.map((entry, index) => {
             return {
-                _id: plays[index].playId,
+                _id: plays[index].selectedSetPlayId,
                 setPlayId: plays[index].setPlayId,
                 ...('userData' in entry
                     ? { userData: normalizeSetPlayData(entry.userData) }
@@ -341,61 +342,36 @@ setPlaysDataSchema.pre('validate', async function validateSetPlayDocument() {
 });
 
 setPlaysDataSchema.method(
-    'saveSelections',
-    async function saveSelections(
-        lineup: StartingLineupType,
-        input: SetPlaySelectionType[]
+    'saveSelectedSetPlay',
+    async function saveSelectedSetPlay(
+        startingLineupDocument: StartingLineupType,
+        setPlayData: SetPlayDataType,
+        selectedSetPlayId?: string
     ) {
-        input.forEach(selection => {
-            validateSetPlaySelectionFields(selection);
-        });
-        const setPlayIdList = input.map(selection => {
-            return objectIdSchema
-                .unwrap()
-                .parse(selection.setPlayId)
-                .toLowerCase();
-        });
-        const catalog = await SetPlaysModel.find({
-            _id: { $in: setPlayIdList }
-        })
+        validateSelectedSetPlayFields(setPlayData);
+        const setPlayId = objectIdSchema
+            .unwrap()
+            .parse(setPlayData.setPlayId)
+            .toLowerCase();
+        const setPlay = await SetPlaysModel.findById(setPlayId)
             .select('name type')
             .exec();
-        const catalogById = new Map(
-            catalog.map(play => [play._id.toString(), play])
-        );
-        const entries = setPlayPayloadListZodSchema.parse(
-            input.map((selection, index) => {
-                const catalogPlay = catalogById.get(setPlayIdList[index]);
-                if (!catalogPlay) {
-                    throw new Error(
-                        `Invalid setPlayId: ${setPlayIdList[index]}`
-                    );
-                }
-                return { type: catalogPlay.type, userData: selection.userData };
-            })
-        );
-        const selections = entries.map((entry, index) => {
-            if ('userData' in entry) {
-                entry.userData = normalizeSetPlayData(entry.userData);
-            }
-            return {
-                ...entry,
-                setPlayId: setPlayIdList[index],
-                ...(input[index].playId !== undefined
-                    ? {
-                          playId: objectIdSchema
-                              .unwrap()
-                              .parse(input[index].playId)
-                              .toLowerCase()
-                      }
-                    : {})
-            };
+        if (!setPlay) {
+            throw new Error(`Invalid setPlayId: ${setPlayId}`);
+        }
+        const entry = setPlayPayloadZodSchema.parse({
+            type: setPlay.type,
+            userData: setPlayData.userData
         });
+        if ('userData' in entry) {
+            entry.userData = normalizeSetPlayData(entry.userData);
+        }
+
         const populated = await this.populate<PopulatedFindType>({
             path: 'setPlayList.setPlayId',
             select: 'name type'
         });
-        const existingPlays = populated
+        const selectedSetPlayList = populated
             .toObject<PopulatedSetPlaysDataType>({ flattenObjectIds: true })
             .setPlayList.map(({ _id, setPlayId, ...play }) => {
                 if (!setPlayId) {
@@ -408,53 +384,54 @@ setPlaysDataSchema.method(
                     setPlayId: setPlayId._id.toString(),
                     name: setPlayId.name,
                     type: setPlayId.type,
-                    playId: _id.toString()
+                    selectedSetPlayId: _id.toString()
                 } as SetPlaysDataSelectionReturnType;
             });
-        const existing = new Map(
-            existingPlays.map(play => [play.playId, play])
-        );
-        const identities = new Set<string>();
-        for (const selection of selections) {
-            if (selection.playId && identities.has(selection.playId)) {
-                throw new Error('Duplicate playId');
-            }
-            if (selection.playId) {
-                identities.add(selection.playId);
-            }
-            if (selection.playId && !existing.has(selection.playId)) {
-                throw new Error(
-                    `Invalid playId for starting lineup: ${selection.playId}`
-                );
-            }
-        }
-        await validateSetPlaySelections(lineup, selections);
-        const plays = selections.map(selection => {
-            const previous = selection.playId
-                ? existing.get(selection.playId)
-                : undefined;
-            const samePlay = previous?.setPlayId === selection.setPlayId;
-            const unchanged =
-                samePlay &&
-                isDeepStrictEqual(
-                    'userData' in previous ? previous.userData : undefined,
-                    'userData' in selection ? selection.userData : undefined
-                );
-            return {
-                setPlayId: selection.setPlayId,
-                ...('userData' in selection
-                    ? { userData: selection.userData }
-                    : {}),
-                ...(samePlay ? { _id: previous.playId } : {}),
-                ...(unchanged &&
-                'adminData' in previous &&
-                previous.adminData !== undefined
-                    ? { adminData: previous.adminData }
-                    : {})
-            };
-        });
+        const index =
+            selectedSetPlayId === undefined
+                ? selectedSetPlayList.length
+                : getSelectedSetPlayIndex(
+                      selectedSetPlayList,
+                      selectedSetPlayId
+                  );
+        const previous = selectedSetPlayList[index];
+        const samePlay = previous?.setPlayId === setPlayId;
+        const unchanged =
+            samePlay &&
+            isDeepStrictEqual(
+                'userData' in previous ? previous.userData : undefined,
+                'userData' in entry ? entry.userData : undefined
+            );
+        selectedSetPlayList[index] = {
+            ...entry,
+            name: setPlay.name,
+            setPlayId,
+            selectedSetPlayId: samePlay
+                ? previous.selectedSetPlayId
+                : new Types.ObjectId().toString(),
+            ...(unchanged &&
+            'adminData' in previous &&
+            previous.adminData !== undefined
+                ? { adminData: previous.adminData }
+                : {})
+        } as SetPlaysDataSelectionReturnType;
+        setPlayPayloadListZodSchema.parse(selectedSetPlayList);
+        await validateSelectedSetPlay(startingLineupDocument, [entry]);
+
         this.depopulate('setPlayList.setPlayId');
-        this.set('setPlayList', plays);
+        this.set(
+            'setPlayList',
+            selectedSetPlayList.map(play => {
+                return {
+                    _id: play.selectedSetPlayId,
+                    setPlayId: play.setPlayId,
+                    ...('userData' in play ? { userData: play.userData } : {}),
+                    ...('adminData' in play && play.adminData !== undefined
+                        ? { adminData: play.adminData }
+                        : {})
+                };
+            })
+        );
         await this.save();
         const savedDocument = await this.populate<PopulatedFindType>({
             path: 'setPlayList.setPlayId',
@@ -473,7 +450,7 @@ setPlaysDataSchema.method(
                     setPlayId: setPlayId._id.toString(),
                     name: setPlayId.name,
                     type: setPlayId.type,
-                    playId: _id.toString()
+                    selectedSetPlayId: _id.toString()
                 } as SetPlaysDataSelectionReturnType;
             });
     }
@@ -510,7 +487,7 @@ setPlaysDataSchema.static(
                             setPlayId: setPlayId._id.toString(),
                             name: setPlayId.name,
                             type: setPlayId.type,
-                            playId: _id.toString()
+                            selectedSetPlayId: _id.toString()
                         } as SetPlaysDataSelectionReturnType;
                     })
             };
@@ -524,7 +501,7 @@ setPlaysDataSchema.static(
     }
 );
 
-// on dashboard view we will know userId and roundNumber, so we will be able to get startingLineupId, that should be passed to this function. During implementation of UI we can decide to change attributes of this function
+// on dashboard view we will know userId and roundNumber, so we will be able to get startingLineupId, that should be passed to this function. User will be able to add set plays only after saving staring lineup. This will assure, startingLineupId will be found
 setPlaysDataSchema.static(
     'getSetPlaysForUser',
     async function getSetPlaysForUser(
@@ -556,7 +533,7 @@ setPlaysDataSchema.static(
                     }
                     return {
                         name: setPlay.setPlayId.name,
-                        userData: setPlay.userData ?? {}
+                        userData: setPlay.userData ?? null
                     };
                 });
         } catch (error) {
@@ -607,7 +584,7 @@ setPlaysDataSchema.static(
                     }
                     return {
                         name: setPlay.setPlayId.name,
-                        adminData: setPlay.adminData ?? {}
+                        adminData: setPlay.adminData ?? null
                     };
                 });
         } catch (error) {
@@ -621,14 +598,20 @@ setPlaysDataSchema.static(
     'saveSetPlays',
     async function saveSetPlays(
         startingLineupId: string,
-        selections: SetPlaySelectionType[]
+        setPlayData: SetPlayDataType
     ) {
         try {
-            const lineup = await getSetPlayLineup(startingLineupId);
+            const startingLineupDocument =
+                await getSetPlayStartingLineup(startingLineupId);
             const document =
-                (await this.findOne({ startingLineupId: lineup._id }).exec()) ??
-                new this({ startingLineupId: lineup._id });
-            return await document.saveSelections(lineup, selections);
+                (await this.findOne({
+                    startingLineupId: startingLineupDocument._id
+                }).exec()) ??
+                new this({ startingLineupId: startingLineupDocument._id });
+            return await document.saveSelectedSetPlay(
+                startingLineupDocument,
+                setPlayData
+            );
         } catch (error) {
             console.error('Error saving set plays:', error);
             throw error;
@@ -640,43 +623,22 @@ setPlaysDataSchema.static(
     'updateSetPlay',
     async function updateSetPlay(
         startingLineupId: string,
-        playId: string,
-        input: SetPlayUpdateType
+        selectedSetPlayId: string,
+        setPlayData: SetPlayDataType
     ) {
         try {
-            const lineup = await getSetPlayLineup(startingLineupId);
+            const lineup = await getSetPlayStartingLineup(startingLineupId);
             const document = await this.findOne({
                 startingLineupId: lineup._id
-            })
-                .populate<PopulatedFindType>({
-                    path: 'setPlayList.setPlayId',
-                    select: 'name type'
-                })
-                .exec();
+            }).exec();
             if (!document) {
                 throw new Error('No set plays for starting lineup');
             }
-            const plays = document
-                .toObject<PopulatedSetPlaysDataType>({ flattenObjectIds: true })
-                .setPlayList.map(({ _id, setPlayId, ...play }) => {
-                    if (!setPlayId) {
-                        throw new Error(
-                            'Missing catalog entry for selected set play'
-                        );
-                    }
-                    return {
-                        ...play,
-                        setPlayId: setPlayId._id.toString(),
-                        name: setPlayId.name,
-                        type: setPlayId.type,
-                        playId: _id.toString()
-                    } as SetPlaysDataSelectionReturnType;
-                });
-            const index = getSetPlayIndex(plays, playId);
-            validateSetPlaySelectionFields(input, false);
-            const selections = getSetPlaySelections(plays);
-            selections[index] = { ...input, playId: plays[index].playId };
-            return await document.saveSelections(lineup, selections);
+            return await document.saveSelectedSetPlay(
+                lineup,
+                setPlayData,
+                objectIdSchema.unwrap().parse(selectedSetPlayId)
+            );
         } catch (error) {
             console.error('Error updating set play:', error);
             throw error;
@@ -686,9 +648,12 @@ setPlaysDataSchema.static(
 
 setPlaysDataSchema.static(
     'removeSetPlay',
-    async function removeSetPlay(startingLineupId: string, playId: string) {
+    async function removeSetPlay(
+        startingLineupId: string,
+        selectedSetPlayId: string
+    ) {
         try {
-            const lineup = await getSetPlayLineup(startingLineupId);
+            const lineup = await getSetPlayStartingLineup(startingLineupId);
             const document = await this.findOne({
                 startingLineupId: lineup._id
             })
@@ -713,10 +678,10 @@ setPlaysDataSchema.static(
                         setPlayId: setPlayId._id.toString(),
                         name: setPlayId.name,
                         type: setPlayId.type,
-                        playId: _id.toString()
+                        selectedSetPlayId: _id.toString()
                     } as SetPlaysDataSelectionReturnType;
                 });
-            const index = getSetPlayIndex(plays, playId);
+            const index = getSelectedSetPlayIndex(plays, selectedSetPlayId);
             document.depopulate('setPlayList.setPlayId');
             document.set(
                 'setPlayList',
@@ -742,7 +707,7 @@ setPlaysDataSchema.static(
                         setPlayId: setPlayId._id.toString(),
                         name: setPlayId.name,
                         type: setPlayId.type,
-                        playId: _id.toString()
+                        selectedSetPlayId: _id.toString()
                     } as SetPlaysDataSelectionReturnType;
                 });
         } catch (error) {
@@ -756,11 +721,11 @@ setPlaysDataSchema.static(
     'saveSetPlayResults',
     async function saveSetPlayResults(
         startingLineupId: string,
-        playId: string,
+        selectedSetPlayId: string,
         adminData: SetPlayAdminInputType
     ) {
         try {
-            const lineup = await getSetPlayLineup(startingLineupId);
+            const lineup = await getSetPlayStartingLineup(startingLineupId);
             const document = await this.findOne({
                 startingLineupId: lineup._id
             })
@@ -785,10 +750,10 @@ setPlaysDataSchema.static(
                         setPlayId: setPlayId._id.toString(),
                         name: setPlayId.name,
                         type: setPlayId.type,
-                        playId: _id.toString()
+                        selectedSetPlayId: _id.toString()
                     } as SetPlaysDataSelectionReturnType;
                 });
-            const index = getSetPlayIndex(plays, playId);
+            const index = getSelectedSetPlayIndex(plays, selectedSetPlayId);
             const schema = setPlayPayloadZodSchema.options.find(
                 option => option.shape.type.value === plays[index].type
             );
@@ -800,9 +765,13 @@ setPlaysDataSchema.static(
             }
             if (
                 adminData &&
-                ['setPlayId', 'playId', 'name', 'type', 'userData'].some(
-                    field => field in adminData
-                )
+                [
+                    'setPlayId',
+                    'selectedSetPlayId',
+                    'name',
+                    'type',
+                    'userData'
+                ].some(field => field in adminData)
             ) {
                 throw new Error(
                     'Admin results cannot change the selected play'
@@ -833,7 +802,7 @@ setPlaysDataSchema.static(
                         setPlayId: setPlayId._id.toString(),
                         name: setPlayId.name,
                         type: setPlayId.type,
-                        playId: _id.toString()
+                        selectedSetPlayId: _id.toString()
                     } as SetPlaysDataSelectionReturnType;
                 });
         } catch (error) {

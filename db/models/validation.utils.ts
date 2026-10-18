@@ -1,7 +1,7 @@
 import type {
     SetPlaysDataSelectionReturnType,
     SetPlayAdminDataType,
-    SetPlaySelectionType,
+    SetPlayDataType,
     SetPlayPayloadType
 } from '@/db/models/games/set-plays-data';
 import type { StartingLineupType } from '@/db/models/games/starting-lineup';
@@ -41,15 +41,6 @@ export const validateDate = (value: string) => {
     return false;
 };
 
-export async function getSetPlayLineup(startingLineupId: string) {
-    const id = objectIdSchema.unwrap().parse(startingLineupId).toLowerCase();
-    const lineup = await StartingLineupModel.findById(id).exec();
-    if (!lineup) {
-        throw new Error(`Invalid startingLineupId: ${id}`);
-    }
-    return lineup;
-}
-
 async function getAssignmentField(userId: string) {
     const user = await UserModel.findById(userId).exec();
     const group = user?.groupName
@@ -64,11 +55,11 @@ async function getAssignmentField(userId: string) {
     throw new Error(`No regular-season draft group for userId: ${userId}`);
 }
 
-export async function validateSetPlaySelections(
-    lineup: StartingLineupType,
+export async function validateSelectedSetPlay(
+    startingLineupDocument: StartingLineupType,
     plays: SetPlayPayloadType[]
 ) {
-    const userId = lineup.userId?.toString();
+    const userId = startingLineupDocument.userId?.toString();
     if (!userId) {
         throw new Error('Starting lineup has no owner');
     }
@@ -120,7 +111,7 @@ export async function validateSetPlaySelections(
     if (needsOpponent) {
         const schedule = await ScheduleModel.getScheduleIdByUserAndRoundNumber(
             userId,
-            lineup.roundNumber
+            startingLineupDocument.roundNumber
         );
         if (!schedule) {
             throw new Error('Scheduled opponent not found');
@@ -147,7 +138,7 @@ export async function validateSetPlaySelections(
     )
         ? await StartingLineupModel.findOne({
               userId: opponentId,
-              roundNumber: lineup.roundNumber
+              roundNumber: startingLineupDocument.roundNumber
           }).exec()
         : null;
     if (
@@ -156,7 +147,7 @@ export async function validateSetPlaySelections(
     ) {
         throw new Error('Opponent starting lineup not found');
     }
-    const ownLineupPlayers = getStartingLineupPlayerIds(lineup);
+    const ownLineupPlayers = getStartingLineupPlayerIds(startingLineupDocument);
     const combinedLineupPlayers = [
         ...ownLineupPlayers,
         ...(opponentLineup ? getStartingLineupPlayerIds(opponentLineup) : [])
@@ -203,7 +194,7 @@ export async function validateSetPlaySelections(
                 }
                 break;
             case SetPlayEnumType.Spartacus:
-                if (lineup.roundNumber < 2) {
+                if (startingLineupDocument.roundNumber < 2) {
                     throw new Error('Spartacus is available from round two');
                 }
                 if (
@@ -245,7 +236,7 @@ export async function validateSetPlaySelections(
 export async function validateSetPlayResults(
     play: SetPlaysDataSelectionReturnType,
     results: SetPlayAdminDataType,
-    lineup: StartingLineupType
+    startingLineupDocument: StartingLineupType
 ) {
     if ('playerIdList' in results) {
         const existing = await PlayersModel.countDocuments({
@@ -257,7 +248,10 @@ export async function validateSetPlayResults(
         if (
             play.type === SetPlayEnumType.Remis &&
             results.playerIdList.some(
-                id => !getStartingLineupPlayerIds(lineup).includes(id)
+                id =>
+                    !getStartingLineupPlayerIds(
+                        startingLineupDocument
+                    ).includes(id)
             )
         ) {
             throw new Error(
@@ -285,14 +279,16 @@ export async function validateSetPlayResults(
     return results;
 }
 
-export function getSetPlayIndex(
-    plays: SetPlaysDataSelectionReturnType[],
-    playId: string
+export function getSelectedSetPlayIndex(
+    selectedSetPlayList: SetPlaysDataSelectionReturnType[],
+    selectedSetPlayId: string
 ) {
-    const id = objectIdSchema.unwrap().parse(playId).toLowerCase();
-    const index = plays.findIndex(play => play.playId === id);
+    const id = objectIdSchema.unwrap().parse(selectedSetPlayId).toLowerCase();
+    const index = selectedSetPlayList.findIndex(
+        setPlay => setPlay.selectedSetPlayId === id
+    );
     if (index === -1) {
-        throw new Error(`Invalid playId for starting lineup: ${id}`);
+        throw new Error(`Invalid selectedSetPlayId for starting lineup: ${id}`);
     }
     return index;
 }
@@ -329,26 +325,23 @@ export function validateSetPlays(
     });
 }
 
-export function validateSetPlaySelectionFields(
-    selection: SetPlaySelectionType,
-    allowPlayId = true
-) {
+export function validateSelectedSetPlayFields(setPlayData: SetPlayDataType) {
     if (
-        !selection ||
-        typeof selection !== 'object' ||
-        Array.isArray(selection)
+        !setPlayData ||
+        typeof setPlayData !== 'object' ||
+        Array.isArray(setPlayData)
     ) {
         throw new Error('Invalid set play selection');
     }
-    if (!allowPlayId && 'playId' in selection) {
+    if ('selectedSetPlayId' in setPlayData) {
         throw new Error(
-            'Supply playId as the edit target, not in the user payload'
+            'Supply selectedSetPlayId as the edit target, not in the user payload'
         );
     }
-    if ('adminData' in selection) {
+    if ('adminData' in setPlayData) {
         throw new Error('Use the result operation to submit admin data');
     }
-    if ('name' in selection || 'type' in selection) {
+    if ('name' in setPlayData || 'type' in setPlayData) {
         throw new Error('Select a catalog entry using setPlayId');
     }
 }

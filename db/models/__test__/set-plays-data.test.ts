@@ -1,7 +1,7 @@
 import type {
     SetPlayAdminInputType,
-    SetPlaySelectionType,
-    SetPlayUpdateType,
+    SetPlayDataType,
+    SetPlaysDataSelectionReturnType,
     PopulatedSetPlaysDataType
 } from '@/db/models/games/set-plays-data';
 
@@ -58,6 +58,20 @@ let otherPoolPlayerId: string;
 let ownUserId: string;
 let opponentUserId: string;
 
+async function addSelectedSetPlays(
+    startingLineupId: string,
+    setPlayData: SetPlayDataType[]
+): Promise<SetPlaysDataSelectionReturnType[]> {
+    let selectedSetPlays: SetPlaysDataSelectionReturnType[] = [];
+    for (const play of setPlayData) {
+        selectedSetPlays = await SetPlaysDataModel.saveSetPlays(
+            startingLineupId,
+            play
+        );
+    }
+    return selectedSetPlays;
+}
+
 async function getStoredSetPlays(startingLineupId: string) {
     const document = await SetPlaysDataModel.findOne({ startingLineupId })
         .populate({ path: 'setPlayList.setPlayId', select: 'name type' })
@@ -76,7 +90,7 @@ async function getStoredSetPlays(startingLineupId: string) {
                 setPlayId: setPlayId._id.toString(),
                 name: setPlayId.name,
                 type: setPlayId.type,
-                playId: _id.toString()
+                selectedSetPlayId: _id.toString()
             };
         });
 }
@@ -119,15 +133,13 @@ test('stores a catalog reference and reads the current catalog name', async () =
         type: SetPlayEnumType.Remis
     });
     const setPlayId = catalogPlay._id.toString();
-    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, [
-        { setPlayId }
-    ]);
+    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, { setPlayId });
     const stored = await SetPlaysDataModel.collection.findOne({
         startingLineupId: new mongoose.Types.ObjectId(lineupId)
     });
     expect(stored?.setPlayList).toEqual([
         {
-            _id: new mongoose.Types.ObjectId(saved[0].playId),
+            _id: new mongoose.Types.ObjectId(saved[0].selectedSetPlayId),
             setPlayId: catalogPlay._id
         }
     ]);
@@ -139,10 +151,10 @@ test('stores a catalog reference and reads the current catalog name', async () =
         { name: 'Remis – zmieniona nazwa' }
     ).exec();
     expect(await SetPlaysDataModel.getSetPlaysForUser(lineupId)).toEqual([
-        { name: 'Remis – zmieniona nazwa', userData: {} }
+        { name: 'Remis – zmieniona nazwa', userData: null }
     ]);
     expect(await SetPlaysDataModel.getSetPlaysForAdmin(2, ownUserId)).toEqual([
-        { name: 'Remis – zmieniona nazwa', adminData: {} }
+        { name: 'Remis – zmieniona nazwa', adminData: null }
     ]);
 });
 
@@ -317,19 +329,23 @@ describe('getSetPlayListByStartingLineupId', () => {
     });
 
     test('returns only the requested lineup’s populated selections as plain objects', async () => {
-        const saved = await SetPlaysDataModel.saveSetPlays(lineupId, [
+        const saved = await addSelectedSetPlays(lineupId, [
             { setPlayId: catalogId(SetPlayEnumType.Remis) },
             {
                 setPlayId: catalogId(SetPlayEnumType.Rezerwa),
                 userData: { playerId: ownPlayerIds[5] }
             }
         ]);
-        await SetPlaysDataModel.saveSetPlayResults(lineupId, saved[0].playId, {
-            playerIdList: [ownPlayerIds[0]]
+        await SetPlaysDataModel.saveSetPlayResults(
+            lineupId,
+            saved[0].selectedSetPlayId,
+            {
+                playerIdList: [ownPlayerIds[0]]
+            }
+        );
+        await SetPlaysDataModel.saveSetPlays(opponentLineupId, {
+            setPlayId: catalogId(SetPlayEnumType.Muchomor)
         });
-        await SetPlaysDataModel.saveSetPlays(opponentLineupId, [
-            { setPlayId: catalogId(SetPlayEnumType.Muchomor) }
-        ]);
         await SetPlaysModel.updateOne(
             { _id: catalogId(SetPlayEnumType.Remis) },
             { name: 'Remis – zmieniona nazwa' }
@@ -411,12 +427,12 @@ test.each([
             setPlayId: catalogId(type),
 
             ...(data === undefined ? {} : { userData: data })
-        } as SetPlaySelectionType;
-        const saved = await SetPlaysDataModel.saveSetPlays(lineupId, [payload]);
+        } as SetPlayDataType;
+        const saved = await SetPlaysDataModel.saveSetPlays(lineupId, payload);
         expect(await SetPlaysDataModel.getSetPlaysForUser(lineupId)).toEqual([
             {
                 name: catalogNames[type],
-                userData: data ?? {}
+                userData: data ?? null
             }
         ]);
         if (data === undefined) {
@@ -430,7 +446,7 @@ test.each([
         }
         expect(await getStoredSetPlays(lineupId)).toEqual([
             {
-                playId: saved[0].playId,
+                selectedSetPlayId: saved[0].selectedSetPlayId,
                 ...payload,
                 type,
                 name: catalogNames[type],
@@ -447,7 +463,7 @@ test.each([
 );
 
 test('returns only user-facing names and inputs for the requested lineup', async () => {
-    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, [
+    const saved = await addSelectedSetPlays(lineupId, [
         { setPlayId: catalogId(SetPlayEnumType.Remis) },
         {
             setPlayId: catalogId(SetPlayEnumType.GwarancjaStartow),
@@ -458,11 +474,15 @@ test('returns only user-facing names and inputs for the requested lineup', async
             userData: { leaderIdList: ownPlayerIds.slice(0, 4) }
         }
     ]);
-    await SetPlaysDataModel.saveSetPlayResults(lineupId, saved[0].playId, {
-        playerIdList: [ownPlayerIds[0]]
-    });
+    await SetPlaysDataModel.saveSetPlayResults(
+        lineupId,
+        saved[0].selectedSetPlayId,
+        {
+            playerIdList: [ownPlayerIds[0]]
+        }
+    );
     expect(await SetPlaysDataModel.getSetPlaysForUser(lineupId)).toEqual([
-        { name: 'Remis', userData: {} },
+        { name: 'Remis', userData: null },
         {
             name: 'Gwarancja startów',
             userData: { playerId: ownPlayerIds[0] }
@@ -478,7 +498,7 @@ test('returns only user-facing names and inputs for the requested lineup', async
 });
 
 test('returns only admin-facing names and results for the requested user and round', async () => {
-    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, [
+    const saved = await addSelectedSetPlays(lineupId, [
         { setPlayId: catalogId(SetPlayEnumType.Remis) },
         {
             setPlayId: catalogId(SetPlayEnumType.BrudnaPala),
@@ -490,16 +510,24 @@ test('returns only admin-facing names and results for the requested user and rou
         },
         { setPlayId: catalogId(SetPlayEnumType.Ncd6) }
     ]);
-    await SetPlaysDataModel.saveSetPlayResults(lineupId, saved[0].playId, {
-        playerIdList: [ownPlayerIds[0]]
-    });
-    await SetPlaysDataModel.saveSetPlayResults(lineupId, saved[1].playId, {
-        leaders: ownPlayerIds.slice(0, 4).map(playerId => ({ playerId }))
-    });
+    await SetPlaysDataModel.saveSetPlayResults(
+        lineupId,
+        saved[0].selectedSetPlayId,
+        {
+            playerIdList: [ownPlayerIds[0]]
+        }
+    );
+    await SetPlaysDataModel.saveSetPlayResults(
+        lineupId,
+        saved[1].selectedSetPlayId,
+        {
+            leaders: ownPlayerIds.slice(0, 4).map(playerId => ({ playerId }))
+        }
+    );
     const nextLineup = await createLineup(ownUserId, ownPlayerIds, 3);
-    await SetPlaysDataModel.saveSetPlays(nextLineup._id.toString(), [
-        { setPlayId: catalogId(SetPlayEnumType.Muchomor) }
-    ]);
+    await SetPlaysDataModel.saveSetPlays(nextLineup._id.toString(), {
+        setPlayId: catalogId(SetPlayEnumType.Muchomor)
+    });
 
     expect(await SetPlaysDataModel.getSetPlaysForAdmin(2, ownUserId)).toEqual([
         { name: 'Remis', adminData: { playerIdList: [ownPlayerIds[0]] } },
@@ -511,11 +539,11 @@ test('returns only admin-facing names and results for the requested user and rou
                 })
             }
         },
-        { name: 'Gwarancja startów', adminData: {} },
-        { name: 'NCD6', adminData: {} }
+        { name: 'Gwarancja startów', adminData: null },
+        { name: 'NCD6', adminData: null }
     ]);
     expect(await SetPlaysDataModel.getSetPlaysForAdmin(3, ownUserId)).toEqual([
-        { name: 'Muchomor', adminData: {} }
+        { name: 'Muchomor', adminData: null }
     ]);
     expect(
         await SetPlaysDataModel.getSetPlaysForAdmin(2, opponentUserId)
@@ -526,12 +554,12 @@ test('returns only admin-facing names and results for the requested user and rou
 });
 
 test('saves a complete user selection and reads it without pending admin results', async () => {
-    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, [
-        { setPlayId: catalogId(SetPlayEnumType.Remis) }
-    ]);
+    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, {
+        setPlayId: catalogId(SetPlayEnumType.Remis)
+    });
     expect(saved).toEqual([
         {
-            playId: expect.any(String),
+            selectedSetPlayId: expect.any(String),
             setPlayId: catalogId(SetPlayEnumType.Remis),
             type: SetPlayEnumType.Remis,
             name: 'Remis'
@@ -540,12 +568,51 @@ test('saves a complete user selection and reads it without pending admin results
     expect(await getStoredSetPlays(lineupId)).toEqual(saved);
 });
 
-test('counts plays and rejects invalid type repetitions without changing the saved selection', async () => {
-    const six: SetPlaySelectionType[] = [
-        { setPlayId: catalogId(SetPlayEnumType.Ncd), userData: {} },
-        { setPlayId: catalogId(SetPlayEnumType.Ncd), userData: {} },
-        { setPlayId: catalogId(SetPlayEnumType.Ncd6), userData: {} },
-        { setPlayId: catalogId(SetPlayEnumType.Ncd6), userData: {} },
+test('accepts null userData when saving and updating plays without user inputs', async () => {
+    const [saved] = await SetPlaysDataModel.saveSetPlays(lineupId, {
+        setPlayId: catalogId(SetPlayEnumType.Remis),
+        userData: null
+    });
+    expect(saved).not.toHaveProperty('userData');
+
+    const updated = await SetPlaysDataModel.updateSetPlay(
+        lineupId,
+        saved.selectedSetPlayId,
+        { setPlayId: catalogId(SetPlayEnumType.Muchomor), userData: null }
+    );
+
+    expect(updated[0]).not.toHaveProperty('userData');
+    expect(await getStoredSetPlays(lineupId)).toEqual(updated);
+});
+
+test('rejects null userData when the selected play requires user inputs', async () => {
+    const [saved] = await SetPlaysDataModel.saveSetPlays(lineupId, {
+        setPlayId: catalogId(SetPlayEnumType.Remis)
+    });
+    const setPlayData: SetPlayDataType = {
+        setPlayId: catalogId(SetPlayEnumType.Rezerwa),
+        userData: null
+    };
+
+    await expect(
+        SetPlaysDataModel.saveSetPlays(lineupId, setPlayData)
+    ).rejects.toThrow();
+    await expect(
+        SetPlaysDataModel.updateSetPlay(
+            lineupId,
+            saved.selectedSetPlayId,
+            setPlayData
+        )
+    ).rejects.toThrow();
+    expect(await getStoredSetPlays(lineupId)).toEqual([saved]);
+});
+
+test('counts sequential additions and rejects the seventh play without changing saved selections', async () => {
+    const six: SetPlayDataType[] = [
+        { setPlayId: catalogId(SetPlayEnumType.Ncd), userData: null },
+        { setPlayId: catalogId(SetPlayEnumType.Ncd), userData: null },
+        { setPlayId: catalogId(SetPlayEnumType.Ncd6), userData: null },
+        { setPlayId: catalogId(SetPlayEnumType.Ncd6), userData: null },
         {
             setPlayId: catalogId(SetPlayEnumType.Rezerwa),
             userData: { playerId: ownPlayerIds[5] }
@@ -555,32 +622,47 @@ test('counts plays and rejects invalid type repetitions without changing the sav
             userData: { playerId: marketPlayerId }
         }
     ];
-    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, six);
+    const saved = await addSelectedSetPlays(lineupId, six);
     await expect(
-        SetPlaysDataModel.saveSetPlays(lineupId, [
-            ...six,
-            { setPlayId: catalogId(SetPlayEnumType.Muchomor) }
-        ])
+        SetPlaysDataModel.saveSetPlays(lineupId, {
+            setPlayId: catalogId(SetPlayEnumType.Muchomor)
+        })
     ).rejects.toThrow();
-    await expect(
-        SetPlaysDataModel.saveSetPlays(lineupId, [six[0], six[0], six[0]])
-    ).rejects.toThrow();
-    for (const reserve of six.slice(4)) {
-        await expect(
-            SetPlaysDataModel.saveSetPlays(lineupId, [reserve, reserve])
-        ).rejects.toThrow();
-        await expect(
-            SetPlaysDataModel.saveSetPlays(lineupId, [six[4], six[5], reserve])
-        ).rejects.toThrow();
-    }
     expect(await getStoredSetPlays(lineupId)).toEqual(saved);
 });
 
-test('rejects ineligible and nonexistent player selections without partially saving a batch', async () => {
-    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, [
-        { setPlayId: catalogId(SetPlayEnumType.Remis) }
-    ]);
-    const invalid: SetPlaySelectionType[] = [
+test.each([
+    [SetPlayEnumType.Remis, 2],
+    [SetPlayEnumType.Rezerwa, 1],
+    [SetPlayEnumType.RezerwaGielda, 1]
+])(
+    'enforces the occurrence limit for %s on sequential additions',
+    async (type, maximum) => {
+        const setPlayData: SetPlayDataType = {
+            setPlayId: catalogId(type),
+            ...(type === SetPlayEnumType.Rezerwa
+                ? { userData: { playerId: ownPlayerIds[5] } }
+                : {}),
+            ...(type === SetPlayEnumType.RezerwaGielda
+                ? { userData: { playerId: marketPlayerId } }
+                : {})
+        };
+        const saved = await addSelectedSetPlays(
+            lineupId,
+            Array.from({ length: maximum }, () => setPlayData)
+        );
+        await expect(
+            SetPlaysDataModel.saveSetPlays(lineupId, setPlayData)
+        ).rejects.toThrow(`may be selected at most ${maximum}`);
+        expect(await getStoredSetPlays(lineupId)).toEqual(saved);
+    }
+);
+
+test('rejects ineligible and nonexistent additions without changing saved selections', async () => {
+    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, {
+        setPlayId: catalogId(SetPlayEnumType.Remis)
+    });
+    const invalid: SetPlayDataType[] = [
         {
             setPlayId: catalogId(SetPlayEnumType.GwarancjaStartow),
             userData: { playerId: ownPlayerIds[5] }
@@ -639,27 +721,28 @@ test('rejects ineligible and nonexistent player selections without partially sav
     ];
     for (const play of invalid) {
         await expect(
-            SetPlaysDataModel.saveSetPlays(lineupId, [
-                { setPlayId: catalogId(SetPlayEnumType.Muchomor) },
-                play
-            ])
+            SetPlaysDataModel.saveSetPlays(lineupId, play)
         ).rejects.toThrow();
         expect(await getStoredSetPlays(lineupId)).toEqual(saved);
     }
 });
 
 test('records reserve heat results with zero defaults and keeps other results pending', async () => {
-    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, [
+    const saved = await addSelectedSetPlays(lineupId, [
         {
             setPlayId: catalogId(SetPlayEnumType.Rezerwa),
             userData: { playerId: ownPlayerIds[5] }
         },
         { setPlayId: catalogId(SetPlayEnumType.Remis) }
     ]);
-    await SetPlaysDataModel.saveSetPlayResults(lineupId, saved[0].playId, {
-        heatOne: 3,
-        heatFour: 0
-    });
+    await SetPlaysDataModel.saveSetPlayResults(
+        lineupId,
+        saved[0].selectedSetPlayId,
+        {
+            heatOne: 3,
+            heatFour: 0
+        }
+    );
     expect(await getStoredSetPlays(lineupId)).toEqual([
         {
             ...saved[0],
@@ -677,87 +760,92 @@ test('records reserve heat results with zero defaults and keeps other results pe
     ]);
 });
 
-test('edits, reorders and removes individual plays while preserving unrelated results', async () => {
-    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, [
+test('edits and removes one play while preserving the order and results of other selections', async () => {
+    const saved = await addSelectedSetPlays(lineupId, [
         {
             setPlayId: catalogId(SetPlayEnumType.Rezerwa),
             userData: { playerId: ownPlayerIds[5] }
         },
         { setPlayId: catalogId(SetPlayEnumType.Remis) }
     ]);
-    await SetPlaysDataModel.saveSetPlayResults(lineupId, saved[0].playId, {
-        heatOne: 3
-    });
-    await SetPlaysDataModel.saveSetPlayResults(lineupId, saved[1].playId, {
-        playerIdList: []
-    });
-    const evaluated = await getStoredSetPlays(lineupId);
-    const reordered = await SetPlaysDataModel.saveSetPlays(lineupId, [
+    await SetPlaysDataModel.saveSetPlayResults(
+        lineupId,
+        saved[0].selectedSetPlayId,
         {
-            playId: saved[1].playId,
-            setPlayId: catalogId(SetPlayEnumType.Remis)
-        },
-        {
-            playId: saved[0].playId,
-            setPlayId: catalogId(SetPlayEnumType.Rezerwa),
-            userData: { playerId: ownPlayerIds[5] }
+            heatOne: 3
         }
-    ]);
-    expect(reordered).toEqual([evaluated[1], evaluated[0]]);
+    );
+    await SetPlaysDataModel.saveSetPlayResults(
+        lineupId,
+        saved[1].selectedSetPlayId,
+        {
+            playerIdList: []
+        }
+    );
+    const evaluated = await getStoredSetPlays(lineupId);
     const unchanged = await SetPlaysDataModel.updateSetPlay(
         lineupId,
-        saved[0].playId,
+        saved[0].selectedSetPlayId,
         {
             setPlayId: catalogId(SetPlayEnumType.Rezerwa),
             userData: { playerId: ownPlayerIds[5] }
         }
     );
-    expect(unchanged).toEqual(reordered);
+    expect(unchanged).toEqual(evaluated);
     const edited = await SetPlaysDataModel.updateSetPlay(
         lineupId,
-        saved[0].playId,
+        saved[0].selectedSetPlayId,
         {
             setPlayId: catalogId(SetPlayEnumType.Rezerwa),
             userData: { playerId: ownPlayerIds[0] }
         }
     );
     expect(edited).toEqual([
-        evaluated[1],
-        { ...saved[0], userData: { playerId: ownPlayerIds[0] } }
+        { ...saved[0], userData: { playerId: ownPlayerIds[0] } },
+        evaluated[1]
     ]);
     const replaced = await SetPlaysDataModel.updateSetPlay(
         lineupId,
-        saved[0].playId,
+        saved[0].selectedSetPlayId,
         {
             setPlayId: catalogId(SetPlayEnumType.Muchomor)
         }
     );
-    expect(replaced[1]).toEqual({
-        playId: expect.any(String),
+    expect(replaced[0]).toEqual({
+        selectedSetPlayId: expect.any(String),
         setPlayId: catalogId(SetPlayEnumType.Muchomor),
         type: SetPlayEnumType.Muchomor,
         name: 'Muchomor'
     });
-    expect(replaced[1].playId).not.toBe(saved[0].playId);
+    expect(replaced[0].selectedSetPlayId).not.toBe(saved[0].selectedSetPlayId);
+    expect(replaced[1]).toEqual(evaluated[1]);
     await expect(
-        SetPlaysDataModel.saveSetPlayResults(lineupId, saved[0].playId, {})
+        SetPlaysDataModel.saveSetPlayResults(
+            lineupId,
+            saved[0].selectedSetPlayId,
+            {}
+        )
     ).rejects.toThrow();
-    const removed = await SetPlaysDataModel.removeSetPlay(
-        lineupId,
-        replaced[1].playId
-    );
-    expect(removed).toEqual([evaluated[1]]);
     expect(
-        await SetPlaysDataModel.removeSetPlay(lineupId, saved[1].playId)
+        await SetPlaysDataModel.removeSetPlay(
+            lineupId,
+            replaced[0].selectedSetPlayId
+        )
+    ).toEqual([evaluated[1]]);
+    expect(
+        await SetPlaysDataModel.removeSetPlay(
+            lineupId,
+            saved[1].selectedSetPlayId
+        )
     ).toEqual([]);
     expect(await getStoredSetPlays(lineupId)).toEqual([]);
     await expect(
-        SetPlaysDataModel.removeSetPlay(lineupId, saved[1].playId)
+        SetPlaysDataModel.removeSetPlay(lineupId, saved[1].selectedSetPlayId)
     ).rejects.toThrow();
 });
 
 test('enforces the lineup index and selection limits on persisted documents', async () => {
-    await SetPlaysDataModel.saveSetPlays(lineupId, []);
+    await SetPlaysDataModel.create({ startingLineupId: lineupId });
     await expect(
         SetPlaysDataModel.create({
             startingLineupId: lineupId,
@@ -783,19 +871,17 @@ test('enforces the lineup index and selection limits on persisted documents', as
 });
 
 test('defaults omitted Typer attempt heats to zero and preserves reported scores', async () => {
-    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, [
-        {
-            setPlayId: catalogId(SetPlayEnumType.Typer),
-            userData: {
-                playerId: ownPlayerIds[0],
-                attemptOne: { heatOne: 100 },
-                attemptTwo: { heatFour: 2.5 }
-            }
+    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, {
+        setPlayId: catalogId(SetPlayEnumType.Typer),
+        userData: {
+            playerId: ownPlayerIds[0],
+            attemptOne: { heatOne: 100 },
+            attemptTwo: { heatFour: 2.5 }
         }
-    ]);
+    });
     expect(await getStoredSetPlays(lineupId)).toEqual([
         {
-            playId: saved[0].playId,
+            selectedSetPlayId: saved[0].selectedSetPlayId,
             setPlayId: catalogId(SetPlayEnumType.Typer),
             type: SetPlayEnumType.Typer,
             name: 'Typer',
@@ -819,106 +905,82 @@ test('defaults omitted Typer attempt heats to zero and preserves reported scores
 });
 
 test('rejects incomplete, malformed and actor-injected user payloads', async () => {
-    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, [
-        { setPlayId: catalogId(SetPlayEnumType.Remis) }
-    ]);
+    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, {
+        setPlayId: catalogId(SetPlayEnumType.Remis)
+    });
     const attempt = { heatOne: 3, heatTwo: 2, heatThree: 1, heatFour: 0 };
     const invalid: unknown[] = [
-        [{ type: 'unknown', userData: {} }],
-        [{ setPlayId: catalogId(SetPlayEnumType.Rezerwa), userData: {} }],
-        [
-            {
-                setPlayId: catalogId(SetPlayEnumType.Rezerwa),
-                userData: { playerId: 'bad-id' }
+        { type: 'unknown', userData: {} },
+        { setPlayId: catalogId(SetPlayEnumType.Rezerwa), userData: {} },
+        {
+            setPlayId: catalogId(SetPlayEnumType.Rezerwa),
+            userData: { playerId: 'bad-id' }
+        },
+        {
+            setPlayId: catalogId(SetPlayEnumType.Remis),
+            adminData: { playerIdList: [] }
+        },
+        {
+            setPlayId: catalogId(SetPlayEnumType.Spartacus),
+            userData: { ownPlayerId: ownPlayerIds[0] }
+        },
+        {
+            setPlayId: catalogId(SetPlayEnumType.BrudnaPala),
+            userData: { leaderIdList: ownPlayerIds.slice(0, 3) }
+        },
+        {
+            setPlayId: catalogId(SetPlayEnumType.BrudnaPala),
+            userData: {
+                leaderIdList: [
+                    ownPlayerIds[0],
+                    ownPlayerIds[0],
+                    ownPlayerIds[1],
+                    ownPlayerIds[2]
+                ]
             }
-        ],
-        [
-            {
-                setPlayId: catalogId(SetPlayEnumType.Remis),
-                adminData: { playerIdList: [] }
+        },
+        {
+            setPlayId: catalogId(SetPlayEnumType.Typer),
+            userData: { playerId: ownPlayerIds[0], attemptOne: attempt }
+        },
+        {
+            setPlayId: catalogId(SetPlayEnumType.Typer),
+            userData: {
+                playerId: ownPlayerIds[0],
+                attemptOne: attempt,
+                attemptTwo: { ...attempt, heatOne: 101 }
             }
-        ],
-        [
-            {
-                setPlayId: catalogId(SetPlayEnumType.Spartacus),
-                userData: { ownPlayerId: ownPlayerIds[0] }
+        },
+        {
+            setPlayId: catalogId(SetPlayEnumType.Typer),
+            userData: {
+                playerId: ownPlayerIds[0],
+                attemptOne: attempt,
+                attemptTwo: { ...attempt, heatOne: NaN }
             }
-        ],
-        [
-            {
-                setPlayId: catalogId(SetPlayEnumType.BrudnaPala),
-                userData: { leaderIdList: ownPlayerIds.slice(0, 3) }
-            }
-        ],
-        [
-            {
-                setPlayId: catalogId(SetPlayEnumType.BrudnaPala),
-                userData: {
-                    leaderIdList: [
-                        ownPlayerIds[0],
-                        ownPlayerIds[0],
-                        ownPlayerIds[1],
-                        ownPlayerIds[2]
-                    ]
-                }
-            }
-        ],
-        [
-            {
-                setPlayId: catalogId(SetPlayEnumType.Typer),
-                userData: { playerId: ownPlayerIds[0], attemptOne: attempt }
-            }
-        ],
-        [
-            {
-                setPlayId: catalogId(SetPlayEnumType.Typer),
-                userData: {
-                    playerId: ownPlayerIds[0],
-                    attemptOne: attempt,
-                    attemptTwo: { ...attempt, heatOne: 101 }
-                }
-            }
-        ],
-        [
-            {
-                setPlayId: catalogId(SetPlayEnumType.Typer),
-                userData: {
-                    playerId: ownPlayerIds[0],
-                    attemptOne: attempt,
-                    attemptTwo: { ...attempt, heatOne: NaN }
-                }
-            }
-        ],
-        [
-            {
-                setPlayId: catalogId(SetPlayEnumType.KoloFortunyNorbiego),
-                userData: { minimum: 20, maximum: 10 }
-            }
-        ],
-        [
-            {
-                setPlayId: catalogId(SetPlayEnumType.KoloFortunyNorbiego),
-                userData: { minimum: -1, maximum: 10 }
-            }
-        ],
-        [
-            {
-                setPlayId: catalogId(SetPlayEnumType.KoloFortunyNorbiego),
-                userData: { minimum: 0, maximum: Infinity }
-            }
-        ],
-        [
-            {
-                setPlayId: catalogId(SetPlayEnumType.KoloFortunyNorbiego),
-                userData: { minimum: 0, maximum: '10' }
-            }
-        ]
+        },
+        {
+            setPlayId: catalogId(SetPlayEnumType.KoloFortunyNorbiego),
+            userData: { minimum: 20, maximum: 10 }
+        },
+        {
+            setPlayId: catalogId(SetPlayEnumType.KoloFortunyNorbiego),
+            userData: { minimum: -1, maximum: 10 }
+        },
+        {
+            setPlayId: catalogId(SetPlayEnumType.KoloFortunyNorbiego),
+            userData: { minimum: 0, maximum: Infinity }
+        },
+        {
+            setPlayId: catalogId(SetPlayEnumType.KoloFortunyNorbiego),
+            userData: { minimum: 0, maximum: '10' }
+        }
     ];
     for (const input of invalid) {
         await expect(
             SetPlaysDataModel.saveSetPlays(
                 lineupId,
-                input as SetPlaySelectionType[]
+                input as SetPlayDataType
             )
         ).rejects.toThrow();
     }
@@ -927,138 +989,131 @@ test('rejects incomplete, malformed and actor-injected user payloads', async () 
 
 test('uses independent draft pools, accepting missing and null assignments', async () => {
     // A Gabbana draft does not exclude the player from the Dolce market pool.
-    await SetPlaysDataModel.saveSetPlays(lineupId, [
-        {
-            setPlayId: catalogId(SetPlayEnumType.RezerwaGielda),
-            userData: { playerId: otherPoolPlayerId }
-        }
-    ]);
+    const initial = await SetPlaysDataModel.saveSetPlays(lineupId, {
+        setPlayId: catalogId(SetPlayEnumType.RezerwaGielda),
+        userData: { playerId: otherPoolPlayerId }
+    });
     await PlayersModel.updateOne(
         { _id: marketPlayerId },
         { $set: { dolceUserId: null, gabbanaUserId: null } }
     ).exec();
-    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, [
+    const saved = await SetPlaysDataModel.updateSetPlay(
+        lineupId,
+        initial[0].selectedSetPlayId,
         {
             setPlayId: catalogId(SetPlayEnumType.RezerwaGielda),
             userData: { playerId: marketPlayerId }
         }
-    ]);
+    );
     expect(saved[0]).toHaveProperty('userData', { playerId: marketPlayerId });
-    await SetPlaysDataModel.saveSetPlays(opponentLineupId, [
+    const opponentMarket = await SetPlaysDataModel.saveSetPlays(
+        opponentLineupId,
         {
             setPlayId: catalogId(SetPlayEnumType.RezerwaGielda),
             userData: { playerId: ownPlayerIds[0] }
         }
-    ]);
+    );
     await expect(
-        SetPlaysDataModel.saveSetPlays(opponentLineupId, [
+        SetPlaysDataModel.updateSetPlay(
+            opponentLineupId,
+            opponentMarket[0].selectedSetPlayId,
             {
                 setPlayId: catalogId(SetPlayEnumType.RezerwaGielda),
                 userData: { playerId: opponentPlayerIds[0] }
             }
-        ])
+        )
     ).rejects.toThrow();
-    await SetPlaysDataModel.saveSetPlays(opponentLineupId, [
+    const opponentReserve = await SetPlaysDataModel.saveSetPlays(
+        opponentLineupId,
         {
             setPlayId: catalogId(SetPlayEnumType.Rezerwa),
             userData: { playerId: opponentPlayerIds[5] }
         }
-    ]);
+    );
     await expect(
-        SetPlaysDataModel.saveSetPlays(opponentLineupId, [
+        SetPlaysDataModel.updateSetPlay(
+            opponentLineupId,
+            opponentReserve[1].selectedSetPlayId,
             {
                 setPlayId: catalogId(SetPlayEnumType.Rezerwa),
                 userData: { playerId: ownPlayerIds[0] }
             }
-        ])
+        )
     ).rejects.toThrow();
 });
 
 test('resolves the opponent from the schedule and requires the appropriate opponent data', async () => {
     await StartingLineupModel.deleteOne({ _id: opponentLineupId }).exec();
     await expect(
-        SetPlaysDataModel.saveSetPlays(lineupId, [
-            {
-                setPlayId: catalogId(SetPlayEnumType.Typer),
-                userData: {
-                    playerId: ownPlayerIds[0],
-                    attemptOne: {
-                        heatOne: 0,
-                        heatTwo: 1,
-                        heatThree: 2,
-                        heatFour: 3
-                    },
-                    attemptTwo: {
-                        heatOne: 3,
-                        heatTwo: 2,
-                        heatThree: 1,
-                        heatFour: 0
-                    }
+        SetPlaysDataModel.saveSetPlays(lineupId, {
+            setPlayId: catalogId(SetPlayEnumType.Typer),
+            userData: {
+                playerId: ownPlayerIds[0],
+                attemptOne: {
+                    heatOne: 0,
+                    heatTwo: 1,
+                    heatThree: 2,
+                    heatFour: 3
+                },
+                attemptTwo: {
+                    heatOne: 3,
+                    heatTwo: 2,
+                    heatThree: 1,
+                    heatFour: 0
                 }
             }
-        ])
+        })
     ).rejects.toThrow('Opponent starting lineup not found');
     // Avatar needs the opponent squad, but not their submitted starting lineup.
-    await SetPlaysDataModel.saveSetPlays(lineupId, [
-        {
-            setPlayId: catalogId(SetPlayEnumType.Awatar),
-            userData: { playerId: ownPlayerIds[5] }
-        }
-    ]);
+    await SetPlaysDataModel.saveSetPlays(lineupId, {
+        setPlayId: catalogId(SetPlayEnumType.Awatar),
+        userData: { playerId: ownPlayerIds[5] }
+    });
     await ScheduleModel.deleteMany().exec();
     await expect(
-        SetPlaysDataModel.saveSetPlays(lineupId, [
-            {
-                setPlayId: catalogId(SetPlayEnumType.Awatar),
-                userData: { playerId: marketPlayerId }
-            }
-        ])
+        SetPlaysDataModel.saveSetPlays(lineupId, {
+            setPlayId: catalogId(SetPlayEnumType.Awatar),
+            userData: { playerId: marketPlayerId }
+        })
     ).rejects.toThrow('Scheduled opponent not found');
-    await SetPlaysDataModel.saveSetPlays(lineupId, [
-        {
-            setPlayId: catalogId(SetPlayEnumType.RyszardKowalski),
-            userData: { playerId: ownPlayerIds[0] }
-        }
-    ]);
+    await SetPlaysDataModel.saveSetPlays(lineupId, {
+        setPlayId: catalogId(SetPlayEnumType.RyszardKowalski),
+        userData: { playerId: ownPlayerIds[0] }
+    });
 });
 
 test('counts repetitions independently of players and resets the six-play allowance each round', async () => {
-    const six: SetPlaySelectionType[] = [
-        {
-            setPlayId: catalogId(SetPlayEnumType.GwarancjaStartow),
-            userData: { playerId: ownPlayerIds[0] }
-        },
-        {
-            setPlayId: catalogId(SetPlayEnumType.GwarancjaStartow),
-            userData: { playerId: ownPlayerIds[0] }
-        },
+    const guarantee = {
+        setPlayId: catalogId(SetPlayEnumType.GwarancjaStartow),
+        userData: { playerId: ownPlayerIds[0] }
+    };
+    await addSelectedSetPlays(lineupId, [guarantee, guarantee]);
+    await expect(
+        SetPlaysDataModel.saveSetPlays(lineupId, {
+            ...guarantee,
+            userData: { playerId: ownPlayerIds[1] }
+        })
+    ).rejects.toThrow('may be selected at most 2');
+    const rest = [
         { setPlayId: catalogId(SetPlayEnumType.Ncd) },
         { setPlayId: catalogId(SetPlayEnumType.Ncd) },
         { setPlayId: catalogId(SetPlayEnumType.Ncd6) },
         { setPlayId: catalogId(SetPlayEnumType.Ncd6) }
     ];
-    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, six);
-    await expect(
-        SetPlaysDataModel.saveSetPlays(lineupId, [
-            six[0],
-            six[1],
-            {
-                setPlayId: catalogId(SetPlayEnumType.GwarancjaStartow),
-                userData: { playerId: ownPlayerIds[1] }
-            }
-        ])
-    ).rejects.toThrow();
+    const saved = await addSelectedSetPlays(lineupId, rest);
     const nextLineup = await createLineup(ownUserId, ownPlayerIds, 3);
     expect(
-        await SetPlaysDataModel.saveSetPlays(nextLineup._id.toString(), six)
+        await addSelectedSetPlays(nextLineup._id.toString(), [
+            guarantee,
+            guarantee,
+            ...rest
+        ])
     ).toHaveLength(6);
     expect(await getStoredSetPlays(lineupId)).toEqual(saved);
-    await SetPlaysDataModel.saveSetPlays(lineupId, []);
     await expect(
-        SetPlaysDataModel.saveSetPlays(nextLineup._id.toString(), [
-            ...six,
-            { setPlayId: catalogId(SetPlayEnumType.Remis) }
-        ])
+        SetPlaysDataModel.saveSetPlays(nextLineup._id.toString(), {
+            setPlayId: catalogId(SetPlayEnumType.Remis)
+        })
     ).rejects.toThrow();
 });
 
@@ -1070,21 +1125,19 @@ test('rejects Spartacus in round one using the lineup round', async () => {
         roundNumber: 1
     });
     await expect(
-        SetPlaysDataModel.saveSetPlays(firstLineup._id.toString(), [
-            {
-                setPlayId: catalogId(SetPlayEnumType.Spartacus),
-                userData: {
-                    ownPlayerId: ownPlayerIds[0],
-                    opponentPlayerId: opponentPlayerIds[0]
-                }
+        SetPlaysDataModel.saveSetPlays(firstLineup._id.toString(), {
+            setPlayId: catalogId(SetPlayEnumType.Spartacus),
+            userData: {
+                ownPlayerId: ownPlayerIds[0],
+                opponentPlayerId: opponentPlayerIds[0]
             }
-        ])
+        })
     ).rejects.toThrow('Spartacus is available from round two');
     expect(await getStoredSetPlays(firstLineup._id.toString())).toEqual([]);
 });
 
 test('persists each admin result shape including explicit false and fractional averages', async () => {
-    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, [
+    const saved = await addSelectedSetPlays(lineupId, [
         { setPlayId: catalogId(SetPlayEnumType.Remis) },
         { setPlayId: catalogId(SetPlayEnumType.Ncd) },
         { setPlayId: catalogId(SetPlayEnumType.Ncd6) },
@@ -1122,7 +1175,7 @@ test('persists each admin result shape including explicit false and fractional a
     for (let index = 0; index < saved.length; index++) {
         await SetPlaysDataModel.saveSetPlayResults(
             lineupId,
-            saved[index].playId,
+            saved[index].selectedSetPlayId,
             results[index]
         );
     }
@@ -1148,20 +1201,22 @@ test('persists each admin result shape including explicit false and fractional a
 });
 
 test('defaults omitted Brudna Pala result checkboxes to false', async () => {
-    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, [
-        {
-            setPlayId: catalogId(SetPlayEnumType.BrudnaPala),
-            userData: { leaderIdList: ownPlayerIds.slice(0, 4) }
-        }
-    ]);
-    await SetPlaysDataModel.saveSetPlayResults(lineupId, saved[0].playId, {
-        leaders: [
-            { playerId: ownPlayerIds[0] },
-            { playerId: ownPlayerIds[1], scoredMore: true },
-            { playerId: ownPlayerIds[2], scoredMore: false },
-            { playerId: ownPlayerIds[3] }
-        ]
+    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, {
+        setPlayId: catalogId(SetPlayEnumType.BrudnaPala),
+        userData: { leaderIdList: ownPlayerIds.slice(0, 4) }
     });
+    await SetPlaysDataModel.saveSetPlayResults(
+        lineupId,
+        saved[0].selectedSetPlayId,
+        {
+            leaders: [
+                { playerId: ownPlayerIds[0] },
+                { playerId: ownPlayerIds[1], scoredMore: true },
+                { playerId: ownPlayerIds[2], scoredMore: false },
+                { playerId: ownPlayerIds[3] }
+            ]
+        }
+    );
     const plays = await getStoredSetPlays(lineupId);
     expect(plays[0]).toHaveProperty('adminData', {
         leaders: ownPlayerIds.slice(0, 4).map((playerId, index) => {
@@ -1174,14 +1229,16 @@ test('defaults omitted Brudna Pala result checkboxes to false', async () => {
 });
 
 test('defaults market reserve heats to zero before admin results are submitted', async () => {
-    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, [
-        {
-            setPlayId: catalogId(SetPlayEnumType.RezerwaGielda),
-            userData: { playerId: marketPlayerId }
-        }
-    ]);
+    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, {
+        setPlayId: catalogId(SetPlayEnumType.RezerwaGielda),
+        userData: { playerId: marketPlayerId }
+    });
     expect(saved[0]).toHaveProperty('adminData', DEFAULT_PLAYER_SCORE_DETAILS);
-    await SetPlaysDataModel.saveSetPlayResults(lineupId, saved[0].playId, {});
+    await SetPlaysDataModel.saveSetPlayResults(
+        lineupId,
+        saved[0].selectedSetPlayId,
+        {}
+    );
     expect((await getStoredSetPlays(lineupId))[0]).toEqual({
         ...saved[0],
         adminData: {
@@ -1197,7 +1254,7 @@ test('defaults market reserve heats to zero before admin results are submitted',
 });
 
 test('rejects incomplete, foreign and malformed admin results without losing valid results', async () => {
-    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, [
+    const saved = await addSelectedSetPlays(lineupId, [
         { setPlayId: catalogId(SetPlayEnumType.Remis) },
         { setPlayId: catalogId(SetPlayEnumType.Ncd) },
         { setPlayId: catalogId(SetPlayEnumType.Ncd6) },
@@ -1217,9 +1274,13 @@ test('rejects incomplete, foreign and malformed admin results without losing val
             userData: { playerId: ownPlayerIds[5] }
         }
     ]);
-    await SetPlaysDataModel.saveSetPlayResults(lineupId, saved[0].playId, {
-        playerIdList: []
-    });
+    await SetPlaysDataModel.saveSetPlayResults(
+        lineupId,
+        saved[0].selectedSetPlayId,
+        {
+            playerIdList: []
+        }
+    );
     const before = await getStoredSetPlays(lineupId);
     const leaders = ownPlayerIds
         .slice(0, 4)
@@ -1281,7 +1342,7 @@ test('rejects incomplete, foreign and malformed admin results without losing val
         await expect(
             SetPlaysDataModel.saveSetPlayResults(
                 lineupId,
-                saved[index].playId,
+                saved[index].selectedSetPlayId,
                 input as SetPlayAdminInputType
             )
         ).rejects.toThrow();
@@ -1290,7 +1351,7 @@ test('rejects incomplete, foreign and malformed admin results without losing val
 });
 
 test('rejects results for every type without admin inputs', async () => {
-    const selections: SetPlaySelectionType[] = [
+    const selections: SetPlayDataType[] = [
         {
             setPlayId: catalogId(SetPlayEnumType.GwarancjaStartow),
             userData: { playerId: ownPlayerIds[0] }
@@ -1330,47 +1391,60 @@ test('rejects results for every type without admin inputs', async () => {
         }
     ];
     for (const selection of selections) {
-        const saved = await SetPlaysDataModel.saveSetPlays(lineupId, [
-            selection
-        ]);
+        const saved = await SetPlaysDataModel.saveSetPlays(lineupId, selection);
         await expect(
-            SetPlaysDataModel.saveSetPlayResults(lineupId, saved[0].playId, {})
+            SetPlaysDataModel.saveSetPlayResults(
+                lineupId,
+                saved[0].selectedSetPlayId,
+                {}
+            )
         ).rejects.toThrow();
         expect(await getStoredSetPlays(lineupId)).toEqual(saved);
+        await SetPlaysDataModel.removeSetPlay(
+            lineupId,
+            saved[0].selectedSetPlayId
+        );
     }
 });
 
 test('targets one of two identical-type plays without changing the other results', async () => {
-    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, [
+    const saved = await addSelectedSetPlays(lineupId, [
         { setPlayId: catalogId(SetPlayEnumType.Remis) },
         { setPlayId: catalogId(SetPlayEnumType.Remis) }
     ]);
-    expect(saved[0].playId).not.toBe(saved[1].playId);
-    await SetPlaysDataModel.saveSetPlayResults(lineupId, saved[0].playId, {
-        playerIdList: [ownPlayerIds[0]]
-    });
-    await SetPlaysDataModel.saveSetPlayResults(lineupId, saved[1].playId, {
-        playerIdList: []
-    });
+    expect(saved[0].selectedSetPlayId).not.toBe(saved[1].selectedSetPlayId);
+    await SetPlaysDataModel.saveSetPlayResults(
+        lineupId,
+        saved[0].selectedSetPlayId,
+        {
+            playerIdList: [ownPlayerIds[0]]
+        }
+    );
+    await SetPlaysDataModel.saveSetPlayResults(
+        lineupId,
+        saved[1].selectedSetPlayId,
+        {
+            playerIdList: []
+        }
+    );
     expect(await getStoredSetPlays(lineupId)).toEqual([
         { ...saved[0], adminData: { playerIdList: [ownPlayerIds[0]] } },
         { ...saved[1], adminData: { playerIdList: [] } }
     ]);
 });
 
-test('rejects duplicate, unknown, removed and foreign-lineup play identities', async () => {
-    const own = await SetPlaysDataModel.saveSetPlays(lineupId, [
-        { setPlayId: catalogId(SetPlayEnumType.Remis) }
-    ]);
-    const foreign = await SetPlaysDataModel.saveSetPlays(opponentLineupId, [
-        { setPlayId: catalogId(SetPlayEnumType.Remis) }
-    ]);
-    const ids = [
+test('rejects caller-supplied purchase identities and unknown, removed or foreign edit targets', async () => {
+    const own = await SetPlaysDataModel.saveSetPlays(lineupId, {
+        setPlayId: catalogId(SetPlayEnumType.Remis)
+    });
+    const foreign = await SetPlaysDataModel.saveSetPlays(opponentLineupId, {
+        setPlayId: catalogId(SetPlayEnumType.Remis)
+    });
+    for (const id of [
         'invalid',
         new mongoose.Types.ObjectId().toString(),
-        foreign[0].playId
-    ];
-    for (const id of ids) {
+        foreign[0].selectedSetPlayId
+    ]) {
         await expect(
             SetPlaysDataModel.updateSetPlay(lineupId, id, {
                 setPlayId: catalogId(SetPlayEnumType.Muchomor)
@@ -1384,35 +1458,33 @@ test('rejects duplicate, unknown, removed and foreign-lineup play identities', a
                 playerIdList: []
             })
         ).rejects.toThrow();
+        const injected = {
+            selectedSetPlayId: id,
+            setPlayId: catalogId(SetPlayEnumType.Remis)
+        };
         await expect(
-            SetPlaysDataModel.saveSetPlays(lineupId, [
-                { playId: id, setPlayId: catalogId(SetPlayEnumType.Remis) }
-            ])
-        ).rejects.toThrow();
+            SetPlaysDataModel.saveSetPlays(lineupId, injected)
+        ).rejects.toThrow('Supply selectedSetPlayId as the edit target');
     }
+    const injected = {
+        selectedSetPlayId: own[0].selectedSetPlayId,
+        setPlayId: own[0].setPlayId
+    };
     await expect(
-        SetPlaysDataModel.saveSetPlays(lineupId, [
-            { playId: own[0].playId, setPlayId: own[0].setPlayId },
-            { playId: own[0].playId, setPlayId: own[0].setPlayId }
-        ])
-    ).rejects.toThrow('Duplicate playId');
+        SetPlaysDataModel.saveSetPlays(lineupId, injected)
+    ).rejects.toThrow('Supply selectedSetPlayId as the edit target');
     expect(await getStoredSetPlays(lineupId)).toEqual(own);
     expect(await getStoredSetPlays(opponentLineupId)).toEqual(foreign);
-    await SetPlaysDataModel.removeSetPlay(lineupId, own[0].playId);
+    await SetPlaysDataModel.removeSetPlay(lineupId, own[0].selectedSetPlayId);
     await expect(
-        SetPlaysDataModel.updateSetPlay(lineupId, own[0].playId, {
+        SetPlaysDataModel.updateSetPlay(lineupId, own[0].selectedSetPlayId, {
             setPlayId: catalogId(SetPlayEnumType.Muchomor)
         })
     ).rejects.toThrow();
-    await expect(
-        SetPlaysDataModel.saveSetPlays(lineupId, [
-            { playId: own[0].playId, setPlayId: own[0].setPlayId }
-        ])
-    ).rejects.toThrow('Invalid playId');
 });
 
 test('individual edits enforce occurrence limits and reject admin-data injection', async () => {
-    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, [
+    const saved = await addSelectedSetPlays(lineupId, [
         {
             setPlayId: catalogId(SetPlayEnumType.Rezerwa),
             userData: { playerId: ownPlayerIds[5] }
@@ -1421,18 +1493,22 @@ test('individual edits enforce occurrence limits and reject admin-data injection
         { setPlayId: catalogId(SetPlayEnumType.Muchomor) },
         { setPlayId: catalogId(SetPlayEnumType.Remis) }
     ]);
-    await SetPlaysDataModel.saveSetPlayResults(lineupId, saved[3].playId, {
-        playerIdList: []
-    });
+    await SetPlaysDataModel.saveSetPlayResults(
+        lineupId,
+        saved[3].selectedSetPlayId,
+        {
+            playerIdList: []
+        }
+    );
     const before = await getStoredSetPlays(lineupId);
     await expect(
-        SetPlaysDataModel.updateSetPlay(lineupId, saved[3].playId, {
+        SetPlaysDataModel.updateSetPlay(lineupId, saved[3].selectedSetPlayId, {
             setPlayId: catalogId(SetPlayEnumType.Rezerwa),
             userData: { playerId: ownPlayerIds[0] }
         })
     ).rejects.toThrow();
     await expect(
-        SetPlaysDataModel.updateSetPlay(lineupId, saved[3].playId, {
+        SetPlaysDataModel.updateSetPlay(lineupId, saved[3].selectedSetPlayId, {
             setPlayId: catalogId(SetPlayEnumType.Muchomor)
         })
     ).rejects.toThrow();
@@ -1443,50 +1519,71 @@ test('individual edits enforce occurrence limits and reject admin-data injection
     await expect(
         SetPlaysDataModel.updateSetPlay(
             lineupId,
-            saved[3].playId,
-            injected as SetPlayUpdateType
+            saved[3].selectedSetPlayId,
+            injected as SetPlayDataType
         )
     ).rejects.toThrow();
     expect(await getStoredSetPlays(lineupId)).toEqual(before);
 });
 
-test('batch edits clear changed results and remove omitted plays', async () => {
-    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, [
+test('individual edits clear changed results and preserve other selections', async () => {
+    const saved = await addSelectedSetPlays(lineupId, [
         {
             setPlayId: catalogId(SetPlayEnumType.Rezerwa),
             userData: { playerId: ownPlayerIds[5] }
         },
         { setPlayId: catalogId(SetPlayEnumType.Remis) }
     ]);
-    await SetPlaysDataModel.saveSetPlayResults(lineupId, saved[0].playId, {
-        heatOne: 3
-    });
-    const changed = await SetPlaysDataModel.saveSetPlays(lineupId, [
+    await SetPlaysDataModel.saveSetPlayResults(
+        lineupId,
+        saved[0].selectedSetPlayId,
         {
-            playId: saved[0].playId,
+            heatOne: 3
+        }
+    );
+    await SetPlaysDataModel.saveSetPlayResults(
+        lineupId,
+        saved[1].selectedSetPlayId,
+        {
+            playerIdList: []
+        }
+    );
+    const changed = await SetPlaysDataModel.updateSetPlay(
+        lineupId,
+        saved[0].selectedSetPlayId,
+        {
             setPlayId: catalogId(SetPlayEnumType.Rezerwa),
             userData: { playerId: ownPlayerIds[0] }
         }
-    ]);
+    );
     expect(changed).toEqual([
         {
-            playId: saved[0].playId,
-            setPlayId: catalogId(SetPlayEnumType.Rezerwa),
-            type: SetPlayEnumType.Rezerwa,
-            name: 'Rezerwa',
+            ...saved[0],
             userData: { playerId: ownPlayerIds[0] },
             adminData: DEFAULT_PLAYER_SCORE_DETAILS
+        },
+        { ...saved[1], adminData: { playerIdList: [] } }
+    ]);
+    const replacement = await SetPlaysDataModel.updateSetPlay(
+        lineupId,
+        saved[0].selectedSetPlayId,
+        {
+            setPlayId: catalogId(SetPlayEnumType.Remis)
         }
-    ]);
+    );
+    expect(replacement[0].selectedSetPlayId).not.toBe(
+        saved[0].selectedSetPlayId
+    );
+    expect(replacement[1]).toEqual(changed[1]);
     await expect(
-        SetPlaysDataModel.saveSetPlayResults(lineupId, saved[1].playId, {
-            playerIdList: []
-        })
-    ).rejects.toThrow();
-    const replacement = await SetPlaysDataModel.saveSetPlays(lineupId, [
-        { playId: saved[0].playId, setPlayId: catalogId(SetPlayEnumType.Remis) }
-    ]);
-    expect(replacement[0].playId).not.toBe(saved[0].playId);
+        SetPlaysDataModel.saveSetPlayResults(
+            lineupId,
+            saved[0].selectedSetPlayId,
+            {
+                playerIdList: []
+            }
+        )
+    ).rejects.toThrow('Invalid selectedSetPlayId');
     expect(await getStoredSetPlays(lineupId)).toEqual(replacement);
 });
 
@@ -1497,7 +1594,11 @@ test('rejects missing lineups on writes and allows a removed play to be replaced
     ).rejects.toThrow();
     expect(await SetPlaysDataModel.getSetPlaysForUser(missing)).toEqual([]);
     for (const id of ['bad-id', missing]) {
-        await expect(SetPlaysDataModel.saveSetPlays(id, [])).rejects.toThrow();
+        await expect(
+            SetPlaysDataModel.saveSetPlays(id, {
+                setPlayId: catalogId(SetPlayEnumType.Remis)
+            })
+        ).rejects.toThrow();
     }
     expect(await getStoredSetPlays(lineupId)).toEqual([]);
     await expect(
@@ -1511,30 +1612,28 @@ test('rejects missing lineups on writes and allows a removed play to be replaced
     await expect(
         SetPlaysDataModel.saveSetPlayResults(lineupId, missing, {})
     ).rejects.toThrow();
-    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, [
-        {
-            setPlayId: catalogId(SetPlayEnumType.Rezerwa),
-            userData: { playerId: ownPlayerIds[5] }
-        }
-    ]);
-    await SetPlaysDataModel.removeSetPlay(lineupId, saved[0].playId);
-    const replacement = await SetPlaysDataModel.saveSetPlays(lineupId, [
-        {
-            setPlayId: catalogId(SetPlayEnumType.Rezerwa),
-            userData: { playerId: ownPlayerIds[0] }
-        }
-    ]);
-    expect(replacement[0].playId).not.toBe(saved[0].playId);
+    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, {
+        setPlayId: catalogId(SetPlayEnumType.Rezerwa),
+        userData: { playerId: ownPlayerIds[5] }
+    });
+    await SetPlaysDataModel.removeSetPlay(lineupId, saved[0].selectedSetPlayId);
+    const replacement = await SetPlaysDataModel.saveSetPlays(lineupId, {
+        setPlayId: catalogId(SetPlayEnumType.Rezerwa),
+        userData: { playerId: ownPlayerIds[0] }
+    });
+    expect(replacement[0].selectedSetPlayId).not.toBe(
+        saved[0].selectedSetPlayId
+    );
 });
 
 test('simultaneous initial saves cannot create duplicate lineup documents', async () => {
     const attempts = await Promise.allSettled([
-        SetPlaysDataModel.saveSetPlays(lineupId, [
-            { setPlayId: catalogId(SetPlayEnumType.Remis) }
-        ]),
-        SetPlaysDataModel.saveSetPlays(lineupId, [
-            { setPlayId: catalogId(SetPlayEnumType.Muchomor) }
-        ])
+        SetPlaysDataModel.saveSetPlays(lineupId, {
+            setPlayId: catalogId(SetPlayEnumType.Remis)
+        }),
+        SetPlaysDataModel.saveSetPlays(lineupId, {
+            setPlayId: catalogId(SetPlayEnumType.Muchomor)
+        })
     ]);
     expect(attempts.some(attempt => attempt.status === 'fulfilled')).toBe(true);
     expect(
@@ -1545,21 +1644,23 @@ test('simultaneous initial saves cannot create duplicate lineup documents', asyn
 
 test('rejects catalog metadata and selection changes through actor operations', async () => {
     const selection = { setPlayId: catalogId(SetPlayEnumType.Remis) };
-    const [saved] = await SetPlaysDataModel.saveSetPlays(lineupId, [selection]);
+    const [saved] = await SetPlaysDataModel.saveSetPlays(lineupId, selection);
     const results = { playerIdList: [ownPlayerIds[0]] };
-    await SetPlaysDataModel.saveSetPlayResults(lineupId, saved.playId, results);
+    await SetPlaysDataModel.saveSetPlayResults(
+        lineupId,
+        saved.selectedSetPlayId,
+        results
+    );
     for (const field of [
         { name: 'Forged name' },
         { type: SetPlayEnumType.Muchomor },
         { adminData: results }
     ]) {
         await expect(
-            SetPlaysDataModel.saveSetPlays(lineupId, [
-                { ...selection, ...field }
-            ])
+            SetPlaysDataModel.saveSetPlays(lineupId, { ...selection, ...field })
         ).rejects.toThrow();
         await expect(
-            SetPlaysDataModel.updateSetPlay(lineupId, saved.playId, {
+            SetPlaysDataModel.updateSetPlay(lineupId, saved.selectedSetPlayId, {
                 ...selection,
                 ...field
             })
@@ -1572,10 +1673,14 @@ test('rejects catalog metadata and selection changes through actor operations', 
         { name: 'Forged name' }
     ]) {
         await expect(
-            SetPlaysDataModel.saveSetPlayResults(lineupId, saved.playId, {
-                ...results,
-                ...field
-            })
+            SetPlaysDataModel.saveSetPlayResults(
+                lineupId,
+                saved.selectedSetPlayId,
+                {
+                    ...results,
+                    ...field
+                }
+            )
         ).rejects.toThrow();
     }
     expect(await SetPlaysDataModel.getSetPlaysForAdmin(2, ownUserId)).toEqual([
@@ -1585,18 +1690,22 @@ test('rejects catalog metadata and selection changes through actor operations', 
 
 test('rejects missing, malformed and unknown catalog references without partial writes', async () => {
     const selection = { setPlayId: catalogId(SetPlayEnumType.Remis) };
-    const [saved] = await SetPlaysDataModel.saveSetPlays(lineupId, [selection]);
+    const [saved] = await SetPlaysDataModel.saveSetPlays(lineupId, selection);
     for (const setPlayId of [
         undefined,
         'bad-id',
         new mongoose.Types.ObjectId().toString()
     ]) {
-        const invalid = { setPlayId } as SetPlaySelectionType;
+        const invalid = { setPlayId } as SetPlayDataType;
         await expect(
-            SetPlaysDataModel.saveSetPlays(lineupId, [selection, invalid])
+            SetPlaysDataModel.saveSetPlays(lineupId, invalid)
         ).rejects.toThrow();
         await expect(
-            SetPlaysDataModel.updateSetPlay(lineupId, saved.playId, invalid)
+            SetPlaysDataModel.updateSetPlay(
+                lineupId,
+                saved.selectedSetPlayId,
+                invalid
+            )
         ).rejects.toThrow();
     }
     await expect(
@@ -1619,51 +1728,55 @@ test('counts catalog aliases by type and replaces a purchase when its catalog re
     const firstSelection = { setPlayId: catalogId(SetPlayEnumType.Remis) };
     const secondSelection = { setPlayId: second._id.toString() };
     const thirdSelection = { setPlayId: third._id.toString() };
-    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, [
+    const saved = await addSelectedSetPlays(lineupId, [
         firstSelection,
         secondSelection
     ]);
     await expect(
-        SetPlaysDataModel.saveSetPlays(lineupId, [
-            firstSelection,
-            secondSelection,
-            thirdSelection
-        ])
+        SetPlaysDataModel.saveSetPlays(lineupId, thirdSelection)
     ).rejects.toThrow('may be selected at most 2');
-    await SetPlaysDataModel.saveSetPlayResults(lineupId, saved[0].playId, {
-        playerIdList: []
-    });
+    await SetPlaysDataModel.saveSetPlayResults(
+        lineupId,
+        saved[0].selectedSetPlayId,
+        {
+            playerIdList: []
+        }
+    );
     const evaluated = await SetPlaysDataModel.saveSetPlayResults(
         lineupId,
-        saved[1].playId,
+        saved[1].selectedSetPlayId,
         {
             playerIdList: [ownPlayerIds[0]]
         }
     );
     const replaced = await SetPlaysDataModel.updateSetPlay(
         lineupId,
-        saved[0].playId,
+        saved[0].selectedSetPlayId,
         thirdSelection
     );
     expect(replaced[0]).toEqual({
-        playId: expect.any(String),
+        selectedSetPlayId: expect.any(String),
         setPlayId: third._id.toString(),
         name: 'Third draw play',
         type: SetPlayEnumType.Remis
     });
-    expect(replaced[0].playId).not.toBe(saved[0].playId);
+    expect(replaced[0].selectedSetPlayId).not.toBe(saved[0].selectedSetPlayId);
     expect(replaced[1]).toEqual(evaluated[1]);
     await expect(
-        SetPlaysDataModel.saveSetPlayResults(lineupId, saved[0].playId, {
-            playerIdList: []
-        })
-    ).rejects.toThrow('Invalid playId');
+        SetPlaysDataModel.saveSetPlayResults(
+            lineupId,
+            saved[0].selectedSetPlayId,
+            {
+                playerIdList: []
+            }
+        )
+    ).rejects.toThrow('Invalid selectedSetPlayId');
 });
 
 test('reports dangling catalog references instead of hiding purchases', async () => {
-    const [saved] = await SetPlaysDataModel.saveSetPlays(lineupId, [
-        { setPlayId: catalogId(SetPlayEnumType.Remis) }
-    ]);
+    const [saved] = await SetPlaysDataModel.saveSetPlays(lineupId, {
+        setPlayId: catalogId(SetPlayEnumType.Remis)
+    });
     const stored = await SetPlaysDataModel.collection.findOne({
         startingLineupId: new mongoose.Types.ObjectId(lineupId)
     });
@@ -1675,9 +1788,13 @@ test('reports dangling catalog references instead of hiding purchases', async ()
         SetPlaysDataModel.getSetPlaysForAdmin(2, ownUserId)
     ).rejects.toThrow('Missing catalog entry');
     await expect(
-        SetPlaysDataModel.saveSetPlayResults(lineupId, saved.playId, {
-            playerIdList: []
-        })
+        SetPlaysDataModel.saveSetPlayResults(
+            lineupId,
+            saved.selectedSetPlayId,
+            {
+                playerIdList: []
+            }
+        )
     ).rejects.toThrow('Missing catalog entry');
     expect(
         await SetPlaysDataModel.collection.findOne({ _id: stored?._id })
@@ -1694,7 +1811,7 @@ test('ignores unrelated unknown fields in selections, results and Mongoose docum
             extra: true
         }
     } as const;
-    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, [selection]);
+    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, selection);
     expect(saved[0]).toHaveProperty('userData', {
         ownPlayerId: ownPlayerIds[0],
         opponentPlayerId: opponentPlayerIds[0]
@@ -1707,7 +1824,7 @@ test('ignores unrelated unknown fields in selections, results and Mongoose docum
     };
     const updated = await SetPlaysDataModel.saveSetPlayResults(
         lineupId,
-        saved[0].playId,
+        saved[0].selectedSetPlayId,
         results
     );
     expect(updated[0]).toHaveProperty('adminData', {
@@ -1733,4 +1850,54 @@ test('ignores unrelated unknown fields in selections, results and Mongoose docum
         ownAverage: 2,
         opponentAverage: 1
     });
+});
+
+test('appends one play while preserving existing selection identities and results', async () => {
+    const initial = await SetPlaysDataModel.saveSetPlays(lineupId, {
+        setPlayId: catalogId(SetPlayEnumType.Remis)
+    });
+    const evaluated = await SetPlaysDataModel.saveSetPlayResults(
+        lineupId,
+        initial[0].selectedSetPlayId,
+        {
+            playerIdList: [ownPlayerIds[0]]
+        }
+    );
+    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, {
+        setPlayId: catalogId(SetPlayEnumType.Muchomor)
+    });
+    expect(saved).toHaveLength(2);
+    expect(saved[0]).toEqual(evaluated[0]);
+    expect(saved[1]).toMatchObject({
+        setPlayId: catalogId(SetPlayEnumType.Muchomor),
+        type: SetPlayEnumType.Muchomor
+    });
+    expect(saved[1].selectedSetPlayId).not.toBe(saved[0].selectedSetPlayId);
+    expect(await getStoredSetPlays(lineupId)).toEqual(saved);
+});
+
+test('rejects list payloads on save and edit without changing saved selections', async () => {
+    const play = { setPlayId: catalogId(SetPlayEnumType.Remis) };
+    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, play);
+    await expect(
+        // @ts-expect-error Saving accepts one play, not a list.
+        SetPlaysDataModel.saveSetPlays(lineupId, [play])
+    ).rejects.toThrow('Invalid set play selection');
+    await expect(
+        // @ts-expect-error Editing accepts one play, not a list.
+        SetPlaysDataModel.updateSetPlay(lineupId, saved[0].selectedSetPlayId, [
+            play
+        ])
+    ).rejects.toThrow('Invalid set play selection');
+    expect(await getStoredSetPlays(lineupId)).toEqual(saved);
+});
+
+test('rejects an edit without a target instead of appending a play', async () => {
+    const play = { setPlayId: catalogId(SetPlayEnumType.Remis) };
+    const saved = await SetPlaysDataModel.saveSetPlays(lineupId, play);
+    await expect(
+        // @ts-expect-error An edit must identify an existing selection.
+        SetPlaysDataModel.updateSetPlay(lineupId, undefined, play)
+    ).rejects.toThrow();
+    expect(await getStoredSetPlays(lineupId)).toEqual(saved);
 });

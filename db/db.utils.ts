@@ -1,17 +1,17 @@
 import type { MatchPairType } from '@/db/db.types';
 import type {
-    SetPlaysDataSelectionReturnType,
     SetPlayAdminDataType,
-    SetPlaySelectionType,
     SetPlayUserDataType
 } from '@/db/models/games/set-plays-data';
-import type { StartingLineupType } from '@/db/models/games/starting-lineup';
 
 import {
     MAX_SELECTIONS_PER_SET_PLAY,
     MAX_SELECTIONS_PER_RESERVE_SET_PLAY
 } from '@/db/db.constants';
-import { SetPlayEnumType } from '@/db/models/schema.types';
+import StartingLineupModel, {
+    type StartingLineupType
+} from '@/db/models/games/starting-lineup';
+import { objectIdSchema, SetPlayEnumType } from '@/db/models/schema.types';
 
 // single round-robin schedule for a group of teams, using the berger table algorithm
 export function generateBergerTableRounds(
@@ -80,16 +80,13 @@ export function getSetPlaySelectionLimit(type: SetPlayEnumType) {
         : MAX_SELECTIONS_PER_SET_PLAY;
 }
 
-export function getSetPlaySelections(
-    plays: SetPlaysDataSelectionReturnType[]
-): SetPlaySelectionType[] {
-    return plays.map(({ playId, setPlayId, ...play }) => {
-        return {
-            playId,
-            setPlayId,
-            ...('userData' in play ? { userData: play.userData } : {})
-        };
-    });
+export async function getSetPlayStartingLineup(startingLineupId: string) {
+    const id = objectIdSchema.unwrap().parse(startingLineupId).toLowerCase();
+    const lineup = await StartingLineupModel.findById(id).exec();
+    if (!lineup) {
+        throw new Error(`Invalid startingLineupId: ${id}`);
+    }
+    return lineup;
 }
 
 export function getStartingLineupPlayerIds(lineup: StartingLineupType) {

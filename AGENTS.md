@@ -33,24 +33,40 @@ Apply these before any of the pattern rules below. They decide _whether_ and _ho
   - Keep the diff minimal: touch only what the task needs, do not reformat or "improve" neighbouring code, do not rename things in passing.
   - Deletion beats addition. Removing dead code, an unused prop or an unnecessary layer is a valid and welcome change.
 
+  ## Implementation simplicity
+
+- Follow existing repository conventions over
+  generic design patterns.
+- Before implementing, inspect 2–3 comparable
+  features and identify the established approach.
+- Prefer the smallest change that fully satisfies
+  the specification.
+- Do not introduce abstractions, interfaces,
+  factories, or layers without a concrete need.
+- Prefer readable control flow over indirection.
+- Reuse existing utilities; avoid speculative
+  frameworks and extensibility.
+- Review the final diff for avoidable complexity.
+- Justify every new abstraction.
+
 ## Mongoose model naming
 
 When adding or changing a Mongoose model, follow [starting-lineup.ts](db/models/games/starting-lineup.ts). Use the entity name consistently, with these conventions:
 
-| Definition | Naming pattern | Example |
-| --- | --- | --- |
-| Model file | kebab-case entity name | `starting-lineup.ts` |
-| Zod schema | camelCase entity + `ZodSchema` | `startingLineupZodSchema` |
-| Inferred document fields | PascalCase entity + `Type` | `StartingLineupType = z.infer<typeof startingLineupZodSchema>` |
-| Instance-method interface | Entity + `MethodsType` | `StartingLineupMethodsType` |
-| Model interface containing statics | Entity + `ModelType` | `StartingLineupModelType` |
-| Mongoose schema | camelCase entity + `Schema` | `startingLineupSchema` |
-| Compiled model constant | PascalCase entity + `Model` | `StartingLineupModel` |
-| Registered model name and matching `ref` | PascalCase entity, without the `Model` suffix | `'StartingLineup'` |
-| Operation return type | Entity + operation + `ReturnType` | `StartingLineupPlayersByRoundReturnType` |
-| Populated document fields | `Populated` + entity + `Type` | `PopulatedStartingLineupType` |
-| Document return alias | Entity + `DocumentType` | `StartingLineupDocumentType` |
-| Hydrated populated query alias | `PopulatedFindType` within the model module | `HydratedDocument<PopulatedStartingLineupType>` |
+| Definition                               | Naming pattern                                | Example                                                        |
+| ---------------------------------------- | --------------------------------------------- | -------------------------------------------------------------- |
+| Model file                               | kebab-case entity name                        | `starting-lineup.ts`                                           |
+| Zod schema                               | camelCase entity + `ZodSchema`                | `startingLineupZodSchema`                                      |
+| Inferred document fields                 | PascalCase entity + `Type`                    | `StartingLineupType = z.infer<typeof startingLineupZodSchema>` |
+| Instance-method interface                | Entity + `MethodsType`                        | `StartingLineupMethodsType`                                    |
+| Model interface containing statics       | Entity + `ModelType`                          | `StartingLineupModelType`                                      |
+| Mongoose schema                          | camelCase entity + `Schema`                   | `startingLineupSchema`                                         |
+| Compiled model constant                  | PascalCase entity + `Model`                   | `StartingLineupModel`                                          |
+| Registered model name and matching `ref` | PascalCase entity, without the `Model` suffix | `'StartingLineup'`                                             |
+| Operation return type                    | Entity + operation + `ReturnType`             | `StartingLineupPlayersByRoundReturnType`                       |
+| Populated document fields                | `Populated` + entity + `Type`                 | `PopulatedStartingLineupType`                                  |
+| Document return alias                    | Entity + `DocumentType`                       | `StartingLineupDocumentType`                                   |
+| Hydrated populated query alias           | `PopulatedFindType` within the model module   | `HydratedDocument<PopulatedStartingLineupType>`                |
 
 Default-export the compiled model. Pass the corresponding types to `Schema<EntityType, EntityModelType, EntityMethodsType>` and `model<EntityType, EntityModelType>`, including method types only when the model defines them. Declare return and population aliases only when needed.
 

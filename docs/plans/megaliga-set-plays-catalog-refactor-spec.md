@@ -49,7 +49,7 @@ Keep one selected-play data document per starting lineup. The lineup continues t
 - Rename the current `set-play` module to `set-plays-data`, updating its model/type names and affected imports consistently. Keep it responsible for selections and results.
 - Retain the aggregate's required starting-lineup reference, unique lineup constraint, and bounded selection array. Do not add duplicate user or round fields or split purchases into separate documents in this step.
 - Each selected entry retains its purchase `_id`, required catalog `setPlayId` reference, and applicable `userData` and `adminData`. Persist neither `name` nor `type` on that entry, including hidden discriminator copies.
-- `setPlayId` identifies an available catalog play. The existing `playId` identifies one purchased instance. Multiple permitted purchases may share `setPlayId`; updates, removals, and result submissions must continue to target the purchase identity.
+- `setPlayId` identifies an available catalog play. The existing `selectedSetPlayId` identifies one purchased instance. Multiple permitted purchases may share `setPlayId`; updates, removals, and result submissions must continue to target the purchase identity.
 - Use distinct MongoDB collections for catalog definitions and selection data. Inspect the existing collection binding when renaming the model: Mongoose's default pluralization must not route the new catalog into the old selection collection. A module rename must not silently move or discard stored data.
 - Do not introduce prices, active flags, ordering, versioning, catalog-management statics, or uniqueness rules for catalog names/types without an actual requirement.
 
