@@ -272,10 +272,10 @@ interface SetPlaysDataModelType extends Model<
         selectedSetPlayId: string,
         setPlayData: SetPlayDataType
     ) => Promise<SetPlaysDataSelectionReturnType[]>;
-    // removeSetPlay: (
-    //     startingLineupId: string,
-    //     selectedSetPlayId: string
-    // ) => Promise<SetPlaysDataSelectionReturnType[]>;
+    removeSetPlay: (
+        startingLineupId: string,
+        selectedSetPlayId: string
+    ) => Promise<SetPlaysDataSelectionReturnType[]>;
     // saveSetPlayResults: (
     //     startingLineupId: string,
     //     selectedSetPlayId: string,
@@ -744,77 +744,40 @@ setPlaysDataSchema.static(
         }
     }
 );
-//
-// setPlaysDataSchema.static(
-//     'removeSetPlay',
-//     async function removeSetPlay(
-//         startingLineupId: string,
-//         selectedSetPlayId: string
-//     ) {
-//         try {
-//             const lineup = await getSetPlayStartingLineup(startingLineupId);
-//             const document = await this.findOne({
-//                 startingLineupId: lineup._id
-//             })
-//                 .populate<PopulatedFindType>({
-//                     path: 'setPlayList.setPlayId',
-//                     select: 'name type'
-//                 })
-//                 .exec();
-//             if (!document) {
-//                 throw new Error('No set plays for starting lineup');
-//             }
-//             const plays = document
-//                 .toObject<PopulatedSetPlaysDataType>({ flattenObjectIds: true })
-//                 .setPlayList.map(({ _id, setPlayId, ...play }) => {
-//                     if (!setPlayId) {
-//                         throw new Error(
-//                             'Missing catalog entry for selected set play'
-//                         );
-//                     }
-//                     return {
-//                         ...play,
-//                         setPlayId: setPlayId._id.toString(),
-//                         name: setPlayId.name,
-//                         type: setPlayId.type,
-//                         selectedSetPlayId: _id.toString()
-//                     } as SetPlaysDataSelectionReturnType;
-//                 });
-//             const index = getSelectedSetPlayIndex(plays, selectedSetPlayId);
-//             document.depopulate('setPlayList.setPlayId');
-//             document.set(
-//                 'setPlayList',
-//                 document
-//                     .toObject()
-//                     .setPlayList.filter((_, position) => position !== index)
-//             );
-//             await document.save();
-//             const savedDocument = await document.populate<PopulatedFindType>({
-//                 path: 'setPlayList.setPlayId',
-//                 select: 'name type'
-//             });
-//             return savedDocument
-//                 .toObject<PopulatedSetPlaysDataType>({ flattenObjectIds: true })
-//                 .setPlayList.map(({ _id, setPlayId, ...play }) => {
-//                     if (!setPlayId) {
-//                         throw new Error(
-//                             'Missing catalog entry for selected set play'
-//                         );
-//                     }
-//                     return {
-//                         ...play,
-//                         setPlayId: setPlayId._id.toString(),
-//                         name: setPlayId.name,
-//                         type: setPlayId.type,
-//                         selectedSetPlayId: _id.toString()
-//                     } as SetPlaysDataSelectionReturnType;
-//                 });
-//         } catch (error) {
-//             console.error('Error removing set play:', error);
-//             throw error;
-//         }
-//     }
-// );
+
+setPlaysDataSchema.static(
+    'removeSetPlay',
+    async function removeSetPlay(
+        startingLineupId: string,
+        selectedSetPlayId: string
+    ): Promise<SetPlaysDataSelectionReturnType[]> {
+        try {
+            const document = await this.findOne({ startingLineupId }).exec();
+            if (!document) {
+                throw new Error('No set plays for starting lineup');
+            }
+
+            const selectedSetPlays = document.toObject().setPlayList;
+            const selectedSetPlayExists = selectedSetPlays.some(
+                setPlay => setPlay._id.toString() === selectedSetPlayId
+            );
+            if (!selectedSetPlayExists) {
+                throw new Error('Selected set play not found');
+            }
+
+            document.set(
+                'setPlayList',
+                selectedSetPlays.filter(
+                    setPlay => setPlay._id.toString() !== selectedSetPlayId
+                )
+            );
+            return await document.saveSelectedSetPlay();
+        } catch (error) {
+            console.error('Error removing set play:', error);
+            throw error;
+        }
+    }
+);
 //
 // setPlaysDataSchema.static(
 //     'saveSetPlayResults',

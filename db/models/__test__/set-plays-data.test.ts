@@ -501,6 +501,178 @@ describe('updateSetPlay', () => {
     });
 });
 
+describe('removeSetPlay', () => {
+    test('Should throw when no set plays document exists for the starting lineup', async () => {
+        await expect(
+            SetPlaysDataModel.removeSetPlay(
+                startingLineupId,
+                new mongoose.Types.ObjectId().toString()
+            )
+        ).rejects.toThrow('No set plays for starting lineup');
+        expect(await getStoredSetPlays(startingLineupId)).toEqual([]);
+        expect(await SetPlaysDataModel.exists({ startingLineupId })).toBeNull();
+    });
+
+    test('Should throw when the selected set play list is empty', async () => {
+        await SetPlaysDataModel.create({ startingLineupId, setPlayList: [] });
+
+        await expect(
+            SetPlaysDataModel.removeSetPlay(
+                startingLineupId,
+                new mongoose.Types.ObjectId().toString()
+            )
+        ).rejects.toThrow('Selected set play not found');
+        expect(await getStoredSetPlays(startingLineupId)).toEqual([]);
+    });
+
+    test('Should propagate validation errors without changing saved selected set plays', async () => {
+        const document = await SetPlaysDataModel.create({
+            startingLineupId,
+            setPlayList: [
+                { setPlayId: getSetPlayId(SetPlayEnumType.Remis) },
+                {
+                    setPlayId: getSetPlayId(SetPlayEnumType.GwarancjaStartow),
+                    userData: { playerId: ownPlayerIds[0] }
+                }
+            ]
+        });
+        const before = await SetPlaysDataModel.findOne({ startingLineupId })
+            .lean()
+            .exec();
+        await SetPlaysModel.deleteOne({
+            _id: getSetPlayId(SetPlayEnumType.GwarancjaStartow)
+        });
+
+        await expect(
+            SetPlaysDataModel.removeSetPlay(
+                startingLineupId,
+                document.setPlayList[0]._id.toString()
+            )
+        ).rejects.toThrow('Set play with provided setPlayId does not exists');
+        const after = await SetPlaysDataModel.findOne({ startingLineupId })
+            .lean()
+            .exec();
+        expect(after?.setPlayList).toEqual(before?.setPlayList);
+    });
+
+    test('Should remove the last selected set play and return an empty list', async () => {
+        const document = await SetPlaysDataModel.create({
+            startingLineupId,
+            setPlayList: [{ setPlayId: getSetPlayId(SetPlayEnumType.Remis) }]
+        });
+
+        const remaining = await SetPlaysDataModel.removeSetPlay(
+            startingLineupId,
+            document.setPlayList[0]._id.toString()
+        );
+
+        expect(remaining).toEqual([]);
+        expect(await getStoredSetPlays(startingLineupId)).toEqual([]);
+        expect(await SetPlaysDataModel.exists({ startingLineupId })).toEqual({
+            _id: document._id
+        });
+    });
+
+    test('Should remove only the selected set play when two selections have the same type', async () => {
+        const document = await SetPlaysDataModel.create({
+            startingLineupId,
+            setPlayList: [
+                {
+                    setPlayId: getSetPlayId(SetPlayEnumType.GwarancjaStartow),
+                    userData: { playerId: ownPlayerIds[0] }
+                },
+                {
+                    setPlayId: getSetPlayId(SetPlayEnumType.GwarancjaStartow),
+                    userData: { playerId: ownPlayerIds[1] }
+                }
+            ]
+        });
+
+        const remaining = await SetPlaysDataModel.removeSetPlay(
+            startingLineupId,
+            document.setPlayList[0]._id.toString()
+        );
+
+        expect(remaining).toEqual([
+            {
+                selectedSetPlayId: document.setPlayList[1]._id.toString(),
+                setPlayId: getSetPlayId(SetPlayEnumType.GwarancjaStartow),
+                name: 'Gwarancja startów',
+                type: SetPlayEnumType.GwarancjaStartow,
+                userData: { playerId: ownPlayerIds[1] }
+            }
+        ]);
+        expect(await getStoredSetPlays(startingLineupId)).toEqual(remaining);
+    });
+
+    test.each([0, 1, 2])(
+        'Should remove the selected set play and return the complete mapped list with other types (removed index %i)',
+        async selectedIndex => {
+            await SetPlaysDataModel.create({
+                startingLineupId,
+                setPlayList: [
+                    {
+                        setPlayId: getSetPlayId(
+                            SetPlayEnumType.GwarancjaStartow
+                        ),
+                        userData: { playerId: ownPlayerIds[0] }
+                    },
+                    {
+                        setPlayId: getSetPlayId(
+                            SetPlayEnumType.GwarancjaStartow
+                        ),
+                        userData: { playerId: ownPlayerIds[1] }
+                    },
+                    { setPlayId: getSetPlayId(SetPlayEnumType.Remis) }
+                ]
+            });
+            const before = await getStoredSetPlays(startingLineupId);
+
+            const remaining = await SetPlaysDataModel.removeSetPlay(
+                startingLineupId,
+                before[selectedIndex].selectedSetPlayId
+            );
+
+            const expected = [
+                ...before.slice(0, selectedIndex),
+                ...before.slice(selectedIndex + 1)
+            ];
+            expect(remaining).toEqual(expected);
+            expect(await getStoredSetPlays(startingLineupId)).toEqual(expected);
+        }
+    );
+
+    test('Should remove the selected set play when six set plays are already selected', async () => {
+        await SetPlaysDataModel.create({
+            startingLineupId,
+            setPlayList: [
+                { setPlayId: getSetPlayId(SetPlayEnumType.Ncd) },
+                { setPlayId: getSetPlayId(SetPlayEnumType.Ncd) },
+                { setPlayId: getSetPlayId(SetPlayEnumType.Ncd6) },
+                { setPlayId: getSetPlayId(SetPlayEnumType.Ncd6) },
+                {
+                    setPlayId: getSetPlayId(SetPlayEnumType.Rezerwa),
+                    userData: { playerId: ownPlayerIds[5] }
+                },
+                {
+                    setPlayId: getSetPlayId(SetPlayEnumType.RezerwaGielda),
+                    userData: { playerId: marketPlayerId }
+                }
+            ]
+        });
+        const before = await getStoredSetPlays(startingLineupId);
+
+        const remaining = await SetPlaysDataModel.removeSetPlay(
+            startingLineupId,
+            before[4].selectedSetPlayId
+        );
+
+        const expected = [...before.slice(0, 4), before[5]];
+        expect(remaining).toEqual(expected);
+        expect(await getStoredSetPlays(startingLineupId)).toEqual(expected);
+    });
+});
+
 describe('saveSelectedSetPlay', () => {
     test('Should save the first selected set play and return the mapped setPlayList', async () => {
         const document = new SetPlaysDataModel({ startingLineupId });
