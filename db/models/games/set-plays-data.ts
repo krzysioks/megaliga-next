@@ -267,11 +267,11 @@ interface SetPlaysDataModelType extends Model<
         setPlayData: SetPlayDataType,
         setPlayType: SetPlayEnumType
     ) => Promise<SetPlaysDataSelectionReturnType[]>;
-    // updateSetPlay: (
-    //     startingLineupId: string,
-    //     selectedSetPlayId: string,
-    //     setPlayData: SetPlayDataType
-    // ) => Promise<SetPlaysDataSelectionReturnType[]>;
+    updateSetPlay: (
+        startingLineupId: string,
+        selectedSetPlayId: string,
+        setPlayData: SetPlayDataType
+    ) => Promise<SetPlaysDataSelectionReturnType[]>;
     // removeSetPlay: (
     //     startingLineupId: string,
     //     selectedSetPlayId: string
@@ -703,32 +703,47 @@ setPlaysDataSchema.static(
     }
 );
 
-// setPlaysDataSchema.static(
-//     'updateSetPlay',
-//     async function updateSetPlay(
-//         startingLineupId: string,
-//         selectedSetPlayId: string,
-//         setPlayData: SetPlayDataType
-//     ) {
-//         try {
-//             const lineup = await getSetPlayStartingLineup(startingLineupId);
-//             const document = await this.findOne({
-//                 startingLineupId: lineup._id
-//             }).exec();
-//             if (!document) {
-//                 throw new Error('No set plays for starting lineup');
-//             }
-//             return await document.saveSelectedSetPlay(
-//                 lineup,
-//                 setPlayData,
-//                 objectIdSchema.unwrap().parse(selectedSetPlayId)
-//             );
-//         } catch (error) {
-//             console.error('Error updating set play:', error);
-//             throw error;
-//         }
-//     }
-// );
+setPlaysDataSchema.static(
+    'updateSetPlay',
+    async function updateSetPlay(
+        startingLineupId: string,
+        selectedSetPlayId: string,
+        setPlayData: SetPlayDataType
+    ): Promise<SetPlaysDataSelectionReturnType[]> {
+        try {
+            const document = await this.findOne({ startingLineupId }).exec();
+            if (!document) {
+                throw new Error('No set plays for starting lineup');
+            }
+
+            const selectedSetPlays = document.toObject().setPlayList;
+            const selectedSetPlayExists = selectedSetPlays.some(
+                setPlay => setPlay._id.toString() === selectedSetPlayId
+            );
+            if (!selectedSetPlayExists) {
+                throw new Error('Selected set play not found');
+            }
+
+            document.set(
+                'setPlayList',
+                selectedSetPlays.map(setPlay => {
+                    if (setPlay._id.toString() !== selectedSetPlayId) {
+                        return setPlay;
+                    }
+                    return {
+                        ...setPlay,
+                        setPlayId: setPlayData.setPlayId,
+                        userData: setPlayData.userData
+                    };
+                })
+            );
+            return await document.saveSelectedSetPlay();
+        } catch (error) {
+            console.error('Error updating set play:', error);
+            throw error;
+        }
+    }
+);
 //
 // setPlaysDataSchema.static(
 //     'removeSetPlay',

@@ -330,6 +330,177 @@ describe('saveSetPlay', () => {
     });
 });
 
+describe('updateSetPlay', () => {
+    test('Should throw when no set plays document exists for the starting lineup', async () => {
+        await expect(
+            SetPlaysDataModel.updateSetPlay(
+                startingLineupId,
+                new mongoose.Types.ObjectId().toString(),
+                { setPlayId: getSetPlayId(SetPlayEnumType.Remis) }
+            )
+        ).rejects.toThrow('No set plays for starting lineup');
+        expect(await getStoredSetPlays(startingLineupId)).toEqual([]);
+        expect(await SetPlaysDataModel.exists({ startingLineupId })).toBeNull();
+    });
+
+    test('Should throw when the selected set play list is empty', async () => {
+        await SetPlaysDataModel.create({ startingLineupId, setPlayList: [] });
+
+        await expect(
+            SetPlaysDataModel.updateSetPlay(
+                startingLineupId,
+                new mongoose.Types.ObjectId().toString(),
+                { setPlayId: getSetPlayId(SetPlayEnumType.Remis) }
+            )
+        ).rejects.toThrow('Selected set play not found');
+        expect(await getStoredSetPlays(startingLineupId)).toEqual([]);
+    });
+
+    test('Should throw when the selected set play belongs to another starting lineup', async () => {
+        await SetPlaysDataModel.create({
+            startingLineupId,
+            setPlayList: [{ setPlayId: getSetPlayId(SetPlayEnumType.Remis) }]
+        });
+        const otherDocument = await SetPlaysDataModel.create({
+            startingLineupId: opponentStartingLineupId,
+            setPlayList: [{ setPlayId: getSetPlayId(SetPlayEnumType.Remis) }]
+        });
+        const before = await getStoredSetPlays(startingLineupId);
+        const otherBefore = await getStoredSetPlays(opponentStartingLineupId);
+
+        await expect(
+            SetPlaysDataModel.updateSetPlay(
+                startingLineupId,
+                otherDocument.setPlayList[0]._id.toString(),
+                { setPlayId: getSetPlayId(SetPlayEnumType.Muchomor) }
+            )
+        ).rejects.toThrow('Selected set play not found');
+        expect(await getStoredSetPlays(startingLineupId)).toEqual(before);
+        expect(await getStoredSetPlays(opponentStartingLineupId)).toEqual(
+            otherBefore
+        );
+    });
+
+    test('Should propagate payload validation errors without changing saved selected set plays', async () => {
+        await SetPlaysDataModel.create({
+            startingLineupId,
+            setPlayList: [
+                {
+                    setPlayId: getSetPlayId(SetPlayEnumType.GwarancjaStartow),
+                    userData: { playerId: ownPlayerIds[0] }
+                }
+            ]
+        });
+        const before = await getStoredSetPlays(startingLineupId);
+
+        await expect(
+            SetPlaysDataModel.updateSetPlay(
+                startingLineupId,
+                before[0].selectedSetPlayId,
+                { setPlayId: getSetPlayId(SetPlayEnumType.GwarancjaStartow) }
+            )
+        ).rejects.toThrow(ZodError);
+        expect(await getStoredSetPlays(startingLineupId)).toEqual(before);
+    });
+
+    test.each([
+        { scenario: 'one selection', otherType: undefined },
+        {
+            scenario: 'two selections of the same type',
+            otherType: SetPlayEnumType.GwarancjaStartow
+        },
+        {
+            scenario: 'two selections of different types',
+            otherType: SetPlayEnumType.RyszardKowalski
+        }
+    ])(
+        'Should update selected set play data and return the complete mapped list with $scenario',
+        async ({ otherType }) => {
+            await SetPlaysDataModel.create({
+                startingLineupId,
+                setPlayList: [
+                    {
+                        setPlayId: getSetPlayId(
+                            SetPlayEnumType.GwarancjaStartow
+                        ),
+                        userData: { playerId: ownPlayerIds[0] }
+                    },
+                    ...(otherType
+                        ? [
+                              {
+                                  setPlayId: getSetPlayId(otherType),
+                                  userData: { playerId: ownPlayerIds[1] }
+                              }
+                          ]
+                        : [])
+                ]
+            });
+            const before = await getStoredSetPlays(startingLineupId);
+
+            const updated = await SetPlaysDataModel.updateSetPlay(
+                startingLineupId,
+                before[0].selectedSetPlayId,
+                {
+                    setPlayId: getSetPlayId(SetPlayEnumType.GwarancjaStartow),
+                    userData: { playerId: ownPlayerIds[2] }
+                }
+            );
+
+            expect(updated).toEqual([
+                {
+                    selectedSetPlayId: before[0].selectedSetPlayId,
+                    setPlayId: getSetPlayId(SetPlayEnumType.GwarancjaStartow),
+                    name: 'Gwarancja startów',
+                    type: SetPlayEnumType.GwarancjaStartow,
+                    userData: { playerId: ownPlayerIds[2] }
+                },
+                ...before.slice(1)
+            ]);
+            expect(await getStoredSetPlays(startingLineupId)).toEqual(updated);
+        }
+    );
+
+    test('Should update selected set play data when six set plays are already selected', async () => {
+        await SetPlaysDataModel.create({
+            startingLineupId,
+            setPlayList: [
+                { setPlayId: getSetPlayId(SetPlayEnumType.Ncd) },
+                { setPlayId: getSetPlayId(SetPlayEnumType.Ncd) },
+                { setPlayId: getSetPlayId(SetPlayEnumType.Ncd6) },
+                { setPlayId: getSetPlayId(SetPlayEnumType.Ncd6) },
+                {
+                    setPlayId: getSetPlayId(SetPlayEnumType.Rezerwa),
+                    userData: { playerId: ownPlayerIds[5] }
+                },
+                {
+                    setPlayId: getSetPlayId(SetPlayEnumType.RezerwaGielda),
+                    userData: { playerId: marketPlayerId }
+                }
+            ]
+        });
+        const before = await getStoredSetPlays(startingLineupId);
+
+        const updated = await SetPlaysDataModel.updateSetPlay(
+            startingLineupId,
+            before[4].selectedSetPlayId,
+            {
+                setPlayId: getSetPlayId(SetPlayEnumType.Rezerwa),
+                userData: { playerId: ownPlayerIds[4] }
+            }
+        );
+
+        expect(updated).toEqual([
+            ...before.slice(0, 4),
+            {
+                ...before[4],
+                userData: { playerId: ownPlayerIds[4] }
+            },
+            before[5]
+        ]);
+        expect(await getStoredSetPlays(startingLineupId)).toEqual(updated);
+    });
+});
+
 describe('saveSelectedSetPlay', () => {
     test('Should save the first selected set play and return the mapped setPlayList', async () => {
         const document = new SetPlaysDataModel({ startingLineupId });
@@ -1014,21 +1185,6 @@ describe('getSetPlaysForAdmin', () => {
 //         { ...saved[0], userData: { playerId: ownPlayerIds[0] } },
 //         evaluated[1]
 //     ]);
-//     const replaced = await SetPlaysDataModel.updateSetPlay(
-//         lineupId,
-//         saved[0].selectedSetPlayId,
-//         {
-//             setPlayId: catalogId(SetPlayEnumType.Muchomor)
-//         }
-//     );
-//     expect(replaced[0]).toEqual({
-//         selectedSetPlayId: expect.any(String),
-//         setPlayId: catalogId(SetPlayEnumType.Muchomor),
-//         type: SetPlayEnumType.Muchomor,
-//         name: 'Muchomor'
-//     });
-//     expect(replaced[0].selectedSetPlayId).not.toBe(saved[0].selectedSetPlayId);
-//     expect(replaced[1]).toEqual(evaluated[1]);
 //     await expect(
 //         SetPlaysDataModel.saveSetPlayResults(
 //             lineupId,
@@ -1039,7 +1195,7 @@ describe('getSetPlaysForAdmin', () => {
 //     expect(
 //         await SetPlaysDataModel.removeSetPlay(
 //             lineupId,
-//             replaced[0].selectedSetPlayId
+//             saved[0].selectedSetPlayId
 //         )
 //     ).toEqual([evaluated[1]]);
 //     expect(
@@ -1596,27 +1752,6 @@ describe('getSetPlaysForAdmin', () => {
 //         },
 //         { ...saved[1], adminData: { playerIdList: [] } }
 //     ]);
-//     const replacement = await SetPlaysDataModel.updateSetPlay(
-//         lineupId,
-//         saved[0].selectedSetPlayId,
-//         {
-//             setPlayId: catalogId(SetPlayEnumType.Remis)
-//         }
-//     );
-//     expect(replacement[0].selectedSetPlayId).not.toBe(
-//         saved[0].selectedSetPlayId
-//     );
-//     expect(replacement[1]).toEqual(changed[1]);
-//     await expect(
-//         SetPlaysDataModel.saveSetPlayResults(
-//             lineupId,
-//             saved[0].selectedSetPlayId,
-//             {
-//                 playerIdList: []
-//             }
-//         )
-//     ).rejects.toThrow('Invalid selectedSetPlayId');
-//     expect(await getStoredSetPlays(lineupId)).toEqual(replacement);
 // });
 
 // test('Should rejects missing lineups on writes and allows a removed play to be replaced', async () => {
@@ -1776,7 +1911,7 @@ describe('getSetPlaysForAdmin', () => {
 //         name: 'Third draw play',
 //         type: SetPlayEnumType.Remis
 //     });
-//     expect(replaced[0].selectedSetPlayId).not.toBe(saved[0].selectedSetPlayId);
+//     expect(replaced[0].selectedSetPlayId).toBe(saved[0].selectedSetPlayId);
 //     expect(replaced[1]).toEqual(evaluated[1]);
 //     await expect(
 //         SetPlaysDataModel.saveSetPlayResults(
