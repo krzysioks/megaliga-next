@@ -1,13 +1,15 @@
-import { isDeepStrictEqual } from 'node:util';
+import type { SetPlaysType } from '@/db/models/set-plays';
 
 import { HydratedDocument, model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
-import { MAX_SET_PLAYS_PER_ROUND } from '@/db/db.constants';
-import { getSetPlayStartingLineup, normalizeSetPlayData } from '@/db/db.utils';
-import StartingLineupModel, {
-    type StartingLineupType
-} from '@/db/models/games/starting-lineup';
+import {
+    MAX_SET_PLAYS_PER_ROUND,
+    MIN_REGULAR_SEASON_ROUND,
+    MAX_REGULAR_SEASON_ROUND
+} from '@/db/db.constants';
+import { normalizeSetPlayData } from '@/db/db.utils';
+import StartingLineupModel from '@/db/models/games/starting-lineup';
 import {
     attemptZodSchema,
     booleanDefaultFalseSchema,
@@ -17,14 +19,24 @@ import {
     SetPlayEnumType,
     uniquePlayerIdList
 } from '@/db/models/schema.types';
-import SetPlaysModel, { type SetPlaysType } from '@/db/models/set-plays';
+import UserModel from '@/db/models/user';
 import {
-    getSelectedSetPlayIndex,
-    validateSetPlays,
-    validateSetPlayResults,
-    validateSelectedSetPlay,
-    validateSelectedSetPlayFields
+    validateSetPlayConstraints,
+    validateSetPlays
 } from '@/db/models/validation.utils';
+
+import '@/db/models/set-plays';
+
+// import { isDeepStrictEqual } from 'node:util';
+// import { getSetPlayStartingLineup } from '@/db/db.utils';
+// import type { StartingLineupType } from '@/db/models/games/starting-lineup';
+// import SetPlaysModel from '@/db/models/set-plays';
+// import {
+//     getSelectedSetPlayIndex,
+//     validateSetPlayResults,
+//     validateSelectedSetPlay,
+//     validateSelectedSetPlayFields
+// } from '@/db/models/validation.utils';
 
 const setPlayPayloadZodSchema = z.discriminatedUnion('type', [
     z.object({
@@ -172,9 +184,9 @@ type SetPlayUserInputType = Extract<
     SetPlayPayloadInputType,
     { userData: unknown }
 >['userData'];
-export type SetPlayAdminInputType = NonNullable<
-    Extract<SetPlayPayloadInputType, { adminData?: unknown }>['adminData']
->;
+// export type SetPlayAdminInputType = NonNullable<
+//     Extract<SetPlayPayloadInputType, { adminData?: unknown }>['adminData']
+// >;
 
 type SetPlayListItemType = {
     _id: Types.ObjectId;
@@ -205,7 +217,10 @@ export type PopulatedSetPlaysDataType = Omit<
     setPlayList: PopulatedSetPlayListItemType[];
 };
 
-export type PopulatedFindType = HydratedDocument<PopulatedSetPlaysDataType>;
+export type PopulatedFindType = HydratedDocument<
+    PopulatedSetPlaysDataType,
+    SetPlaysDataMethodsType
+>;
 
 export type SetPlayDataType = {
     setPlayId: string;
@@ -229,11 +244,7 @@ export type SetPlaysDataListByStartingLineupIdReturnType = {
 };
 
 interface SetPlaysDataMethodsType {
-    saveSelectedSetPlay: (
-        startingLineupDocument: StartingLineupType,
-        setPlayData: SetPlayDataType,
-        selectedSetPlayId?: string
-    ) => Promise<SetPlaysDataSelectionReturnType[]>;
+    saveSelectedSetPlay: () => Promise<SetPlaysDataSelectionReturnType[]>;
 }
 
 interface SetPlaysDataModelType extends Model<
@@ -251,24 +262,25 @@ interface SetPlaysDataModelType extends Model<
         roundNumber: number,
         userId: string
     ) => Promise<SetPlaysDataForAdminReturnType[]>;
-    saveSetPlays: (
+    saveSetPlay: (
         startingLineupId: string,
-        setPlayData: SetPlayDataType
+        setPlayData: SetPlayDataType,
+        setPlayType: SetPlayEnumType
     ) => Promise<SetPlaysDataSelectionReturnType[]>;
-    updateSetPlay: (
-        startingLineupId: string,
-        selectedSetPlayId: string,
-        setPlayData: SetPlayDataType
-    ) => Promise<SetPlaysDataSelectionReturnType[]>;
-    removeSetPlay: (
-        startingLineupId: string,
-        selectedSetPlayId: string
-    ) => Promise<SetPlaysDataSelectionReturnType[]>;
-    saveSetPlayResults: (
-        startingLineupId: string,
-        selectedSetPlayId: string,
-        adminData: SetPlayAdminInputType
-    ) => Promise<SetPlaysDataSelectionReturnType[]>;
+    // updateSetPlay: (
+    //     startingLineupId: string,
+    //     selectedSetPlayId: string,
+    //     setPlayData: SetPlayDataType
+    // ) => Promise<SetPlaysDataSelectionReturnType[]>;
+    // removeSetPlay: (
+    //     startingLineupId: string,
+    //     selectedSetPlayId: string
+    // ) => Promise<SetPlaysDataSelectionReturnType[]>;
+    // saveSetPlayResults: (
+    //     startingLineupId: string,
+    //     selectedSetPlayId: string,
+    //     adminData: SetPlayAdminInputType
+    // ) => Promise<SetPlaysDataSelectionReturnType[]>;
 }
 
 const setPlayListSchema = new Schema<SetPlayListItemType>({
@@ -312,7 +324,9 @@ setPlaysDataSchema.pre('validate', async function validateSetPlayDocument() {
         .toObject<PopulatedSetPlaysDataType>({ flattenObjectIds: true })
         .setPlayList.map(({ _id, setPlayId, ...play }) => {
             if (!setPlayId) {
-                throw new Error('Missing catalog entry for selected set play');
+                throw new Error(
+                    'Set play with provided setPlayId does not exists'
+                );
             }
             return {
                 ...play,
@@ -341,121 +355,152 @@ setPlaysDataSchema.pre('validate', async function validateSetPlayDocument() {
     );
 });
 
+// setPlaysDataSchema.method(
+//     'saveSelectedSetPlay',
+//     async function saveSelectedSetPlay(
+//         startingLineupDocument: StartingLineupType,
+//         setPlayData: SetPlayDataType,
+//         selectedSetPlayId?: string
+//     ) {
+//         validateSelectedSetPlayFields(setPlayData);
+//         const setPlayId = objectIdSchema
+//             .unwrap()
+//             .parse(setPlayData.setPlayId)
+//             .toLowerCase();
+//         const setPlay = await SetPlaysModel.findById(setPlayId)
+//             .select('name type')
+//             .exec();
+//         if (!setPlay) {
+//             throw new Error(`Invalid setPlayId: ${setPlayId}`);
+//         }
+//         const entry = setPlayPayloadZodSchema.parse({
+//             type: setPlay.type,
+//             userData: setPlayData.userData
+//         });
+//         if ('userData' in entry) {
+//             entry.userData = normalizeSetPlayData(entry.userData);
+//         }
+//
+//         const populated = await this.populate<PopulatedFindType>({
+//             path: 'setPlayList.setPlayId',
+//             select: 'name type'
+//         });
+//         const selectedSetPlayList = populated
+//             .toObject<PopulatedSetPlaysDataType>({ flattenObjectIds: true })
+//             .setPlayList.map(({ _id, setPlayId, ...play }) => {
+//                 if (!setPlayId) {
+//                     throw new Error(
+//                         'Missing catalog entry for selected set play'
+//                     );
+//                 }
+//                 return {
+//                     ...play,
+//                     setPlayId: setPlayId._id.toString(),
+//                     name: setPlayId.name,
+//                     type: setPlayId.type,
+//                     selectedSetPlayId: _id.toString()
+//                 } as SetPlaysDataSelectionReturnType;
+//             });
+//         const index =
+//             selectedSetPlayId === undefined
+//                 ? selectedSetPlayList.length
+//                 : getSelectedSetPlayIndex(
+//                       selectedSetPlayList,
+//                       selectedSetPlayId
+//                   );
+//         const previous = selectedSetPlayList[index];
+//         const samePlay = previous?.setPlayId === setPlayId;
+//         const unchanged =
+//             samePlay &&
+//             isDeepStrictEqual(
+//                 'userData' in previous ? previous.userData : undefined,
+//                 'userData' in entry ? entry.userData : undefined
+//             );
+//         selectedSetPlayList[index] = {
+//             ...entry,
+//             name: setPlay.name,
+//             setPlayId,
+//             selectedSetPlayId: samePlay
+//                 ? previous.selectedSetPlayId
+//                 : new Types.ObjectId().toString(),
+//             ...(unchanged &&
+//             'adminData' in previous &&
+//             previous.adminData !== undefined
+//                 ? { adminData: previous.adminData }
+//                 : {})
+//         } as SetPlaysDataSelectionReturnType;
+//         setPlayPayloadListZodSchema.parse(selectedSetPlayList);
+//         await validateSelectedSetPlay(startingLineupDocument, [entry]);
+//
+//         this.depopulate('setPlayList.setPlayId');
+//         this.set(
+//             'setPlayList',
+//             selectedSetPlayList.map(play => {
+//                 return {
+//                     _id: play.selectedSetPlayId,
+//                     setPlayId: play.setPlayId,
+//                     ...('userData' in play ? { userData: play.userData } : {}),
+//                     ...('adminData' in play && play.adminData !== undefined
+//                         ? { adminData: play.adminData }
+//                         : {})
+//                 };
+//             })
+//         );
+//         await this.save();
+//         const savedDocument = await this.populate<PopulatedFindType>({
+//             path: 'setPlayList.setPlayId',
+//             select: 'name type'
+//         });
+//         return savedDocument
+//             .toObject<PopulatedSetPlaysDataType>({ flattenObjectIds: true })
+//             .setPlayList.map(({ _id, setPlayId, ...play }) => {
+//                 if (!setPlayId) {
+//                     throw new Error(
+//                         'Missing catalog entry for selected set play'
+//                     );
+//                 }
+//                 return {
+//                     ...play,
+//                     setPlayId: setPlayId._id.toString(),
+//                     name: setPlayId.name,
+//                     type: setPlayId.type,
+//                     selectedSetPlayId: _id.toString()
+//                 } as SetPlaysDataSelectionReturnType;
+//             });
+//     }
+// );
+
+// adds selected set play to setPlayList and returns updated list of set plays.
+// Will be used to render list of selected set plays
 setPlaysDataSchema.method(
     'saveSelectedSetPlay',
-    async function saveSelectedSetPlay(
-        startingLineupDocument: StartingLineupType,
-        setPlayData: SetPlayDataType,
-        selectedSetPlayId?: string
-    ) {
-        validateSelectedSetPlayFields(setPlayData);
-        const setPlayId = objectIdSchema
-            .unwrap()
-            .parse(setPlayData.setPlayId)
-            .toLowerCase();
-        const setPlay = await SetPlaysModel.findById(setPlayId)
-            .select('name type')
-            .exec();
-        if (!setPlay) {
-            throw new Error(`Invalid setPlayId: ${setPlayId}`);
-        }
-        const entry = setPlayPayloadZodSchema.parse({
-            type: setPlay.type,
-            userData: setPlayData.userData
-        });
-        if ('userData' in entry) {
-            entry.userData = normalizeSetPlayData(entry.userData);
-        }
-
-        const populated = await this.populate<PopulatedFindType>({
-            path: 'setPlayList.setPlayId',
-            select: 'name type'
-        });
-        const selectedSetPlayList = populated
-            .toObject<PopulatedSetPlaysDataType>({ flattenObjectIds: true })
-            .setPlayList.map(({ _id, setPlayId, ...play }) => {
-                if (!setPlayId) {
-                    throw new Error(
-                        'Missing catalog entry for selected set play'
-                    );
-                }
-                return {
-                    ...play,
-                    setPlayId: setPlayId._id.toString(),
-                    name: setPlayId.name,
-                    type: setPlayId.type,
-                    selectedSetPlayId: _id.toString()
-                } as SetPlaysDataSelectionReturnType;
+    async function saveSelectedSetPlay() {
+        try {
+            await this.save();
+            const document = await this.populate<PopulatedFindType>({
+                path: 'setPlayList.setPlayId',
+                select: 'name type'
             });
-        const index =
-            selectedSetPlayId === undefined
-                ? selectedSetPlayList.length
-                : getSelectedSetPlayIndex(
-                      selectedSetPlayList,
-                      selectedSetPlayId
-                  );
-        const previous = selectedSetPlayList[index];
-        const samePlay = previous?.setPlayId === setPlayId;
-        const unchanged =
-            samePlay &&
-            isDeepStrictEqual(
-                'userData' in previous ? previous.userData : undefined,
-                'userData' in entry ? entry.userData : undefined
-            );
-        selectedSetPlayList[index] = {
-            ...entry,
-            name: setPlay.name,
-            setPlayId,
-            selectedSetPlayId: samePlay
-                ? previous.selectedSetPlayId
-                : new Types.ObjectId().toString(),
-            ...(unchanged &&
-            'adminData' in previous &&
-            previous.adminData !== undefined
-                ? { adminData: previous.adminData }
-                : {})
-        } as SetPlaysDataSelectionReturnType;
-        setPlayPayloadListZodSchema.parse(selectedSetPlayList);
-        await validateSelectedSetPlay(startingLineupDocument, [entry]);
-
-        this.depopulate('setPlayList.setPlayId');
-        this.set(
-            'setPlayList',
-            selectedSetPlayList.map(play => {
-                return {
-                    _id: play.selectedSetPlayId,
-                    setPlayId: play.setPlayId,
-                    ...('userData' in play ? { userData: play.userData } : {}),
-                    ...('adminData' in play && play.adminData !== undefined
-                        ? { adminData: play.adminData }
-                        : {})
-                };
-            })
-        );
-        await this.save();
-        const savedDocument = await this.populate<PopulatedFindType>({
-            path: 'setPlayList.setPlayId',
-            select: 'name type'
-        });
-        return savedDocument
-            .toObject<PopulatedSetPlaysDataType>({ flattenObjectIds: true })
-            .setPlayList.map(({ _id, setPlayId, ...play }) => {
-                if (!setPlayId) {
-                    throw new Error(
-                        'Missing catalog entry for selected set play'
-                    );
-                }
-                return {
-                    ...play,
-                    setPlayId: setPlayId._id.toString(),
-                    name: setPlayId.name,
-                    type: setPlayId.type,
-                    selectedSetPlayId: _id.toString()
-                } as SetPlaysDataSelectionReturnType;
-            });
+            return document
+                .toObject<PopulatedSetPlaysDataType>({ flattenObjectIds: true })
+                .setPlayList.map(({ _id, setPlayId, ...play }) => {
+                    return {
+                        ...play,
+                        selectedSetPlayId: _id.toString(),
+                        setPlayId: setPlayId._id.toString(),
+                        name: setPlayId.name,
+                        type: setPlayId.type
+                    } as SetPlaysDataSelectionReturnType;
+                });
+        } catch (error) {
+            console.error('Error saving selected set play:', error);
+            throw error;
+        }
     }
 );
 
+// returns selected set plays for given startingLineupId.
+// Used in set-plays.getAvailableSetPlays for validation purposes
 setPlaysDataSchema.static(
     'getSetPlayListByStartingLineupId',
     async function getSetPlayListByStartingLineupId(
@@ -550,6 +595,20 @@ setPlaysDataSchema.static(
         userId: string
     ): Promise<SetPlaysDataForAdminReturnType[]> {
         try {
+            if (
+                roundNumber < MIN_REGULAR_SEASON_ROUND ||
+                roundNumber > MAX_REGULAR_SEASON_ROUND
+            ) {
+                throw new Error(
+                    `Invalid roundNumber: ${roundNumber}. Must be between ${MIN_REGULAR_SEASON_ROUND} and ${MAX_REGULAR_SEASON_ROUND}`
+                );
+            }
+
+            const isValidUserId = await UserModel.exists({ _id: userId });
+            if (!isValidUserId) {
+                throw new Error(`Invalid userId: ${userId}`);
+            }
+
             const startingLineupDocument =
                 await StartingLineupModel.getUserStartingLineupByRound(
                     userId,
@@ -595,222 +654,247 @@ setPlaysDataSchema.static(
 );
 
 setPlaysDataSchema.static(
-    'saveSetPlays',
-    async function saveSetPlays(
+    'saveSetPlay',
+    async function saveSetPlay(
         startingLineupId: string,
-        setPlayData: SetPlayDataType
+        setPlayData: SetPlayDataType,
+        setPlayType: SetPlayEnumType
     ) {
         try {
-            const startingLineupDocument =
-                await getSetPlayStartingLineup(startingLineupId);
-            const document =
-                (await this.findOne({
-                    startingLineupId: startingLineupDocument._id
-                }).exec()) ??
-                new this({ startingLineupId: startingLineupDocument._id });
-            return await document.saveSelectedSetPlay(
-                startingLineupDocument,
-                setPlayData
-            );
-        } catch (error) {
-            console.error('Error saving set plays:', error);
-            throw error;
-        }
-    }
-);
-
-setPlaysDataSchema.static(
-    'updateSetPlay',
-    async function updateSetPlay(
-        startingLineupId: string,
-        selectedSetPlayId: string,
-        setPlayData: SetPlayDataType
-    ) {
-        try {
-            const lineup = await getSetPlayStartingLineup(startingLineupId);
-            const document = await this.findOne({
-                startingLineupId: lineup._id
-            }).exec();
-            if (!document) {
-                throw new Error('No set plays for starting lineup');
-            }
-            return await document.saveSelectedSetPlay(
-                lineup,
-                setPlayData,
-                objectIdSchema.unwrap().parse(selectedSetPlayId)
-            );
-        } catch (error) {
-            console.error('Error updating set play:', error);
-            throw error;
-        }
-    }
-);
-
-setPlaysDataSchema.static(
-    'removeSetPlay',
-    async function removeSetPlay(
-        startingLineupId: string,
-        selectedSetPlayId: string
-    ) {
-        try {
-            const lineup = await getSetPlayStartingLineup(startingLineupId);
-            const document = await this.findOne({
-                startingLineupId: lineup._id
-            })
-                .populate<PopulatedFindType>({
-                    path: 'setPlayList.setPlayId',
-                    select: 'name type'
-                })
-                .exec();
-            if (!document) {
-                throw new Error('No set plays for starting lineup');
-            }
-            const plays = document
-                .toObject<PopulatedSetPlaysDataType>({ flattenObjectIds: true })
-                .setPlayList.map(({ _id, setPlayId, ...play }) => {
-                    if (!setPlayId) {
-                        throw new Error(
-                            'Missing catalog entry for selected set play'
-                        );
-                    }
-                    return {
-                        ...play,
-                        setPlayId: setPlayId._id.toString(),
-                        name: setPlayId.name,
-                        type: setPlayId.type,
-                        selectedSetPlayId: _id.toString()
-                    } as SetPlaysDataSelectionReturnType;
-                });
-            const index = getSelectedSetPlayIndex(plays, selectedSetPlayId);
-            document.depopulate('setPlayList.setPlayId');
-            document.set(
-                'setPlayList',
-                document
-                    .toObject()
-                    .setPlayList.filter((_, position) => position !== index)
-            );
-            await document.save();
-            const savedDocument = await document.populate<PopulatedFindType>({
-                path: 'setPlayList.setPlayId',
-                select: 'name type'
+            const startingLineupExists = await StartingLineupModel.exists({
+                _id: startingLineupId
             });
-            return savedDocument
-                .toObject<PopulatedSetPlaysDataType>({ flattenObjectIds: true })
-                .setPlayList.map(({ _id, setPlayId, ...play }) => {
-                    if (!setPlayId) {
-                        throw new Error(
-                            'Missing catalog entry for selected set play'
-                        );
-                    }
-                    return {
-                        ...play,
-                        setPlayId: setPlayId._id.toString(),
-                        name: setPlayId.name,
-                        type: setPlayId.type,
-                        selectedSetPlayId: _id.toString()
-                    } as SetPlaysDataSelectionReturnType;
-                });
-        } catch (error) {
-            console.error('Error removing set play:', error);
-            throw error;
-        }
-    }
-);
-
-setPlaysDataSchema.static(
-    'saveSetPlayResults',
-    async function saveSetPlayResults(
-        startingLineupId: string,
-        selectedSetPlayId: string,
-        adminData: SetPlayAdminInputType
-    ) {
-        try {
-            const lineup = await getSetPlayStartingLineup(startingLineupId);
-            const document = await this.findOne({
-                startingLineupId: lineup._id
-            })
-                .populate<PopulatedFindType>({
-                    path: 'setPlayList.setPlayId',
-                    select: 'name type'
-                })
-                .exec();
-            if (!document) {
-                throw new Error('No set plays for starting lineup');
-            }
-            const plays = document
-                .toObject<PopulatedSetPlaysDataType>({ flattenObjectIds: true })
-                .setPlayList.map(({ _id, setPlayId, ...play }) => {
-                    if (!setPlayId) {
-                        throw new Error(
-                            'Missing catalog entry for selected set play'
-                        );
-                    }
-                    return {
-                        ...play,
-                        setPlayId: setPlayId._id.toString(),
-                        name: setPlayId.name,
-                        type: setPlayId.type,
-                        selectedSetPlayId: _id.toString()
-                    } as SetPlaysDataSelectionReturnType;
-                });
-            const index = getSelectedSetPlayIndex(plays, selectedSetPlayId);
-            const schema = setPlayPayloadZodSchema.options.find(
-                option => option.shape.type.value === plays[index].type
-            );
-            if (!schema) {
-                throw new Error('Invalid set play type');
-            }
-            if (!('adminData' in schema.shape)) {
-                throw new Error('This set play does not accept admin results');
-            }
-            if (
-                adminData &&
-                [
-                    'setPlayId',
-                    'selectedSetPlayId',
-                    'name',
-                    'type',
-                    'userData'
-                ].some(field => field in adminData)
-            ) {
+            if (!startingLineupExists) {
                 throw new Error(
-                    'Admin results cannot change the selected play'
+                    `Invalid startingLineupId: ${startingLineupId}`
                 );
             }
-            const resultSchema =
-                schema.shape.adminData instanceof z.ZodDefault
-                    ? schema.shape.adminData.removeDefault()
-                    : schema.shape.adminData.unwrap();
-            const results = normalizeSetPlayData(resultSchema.parse(adminData));
-            await validateSetPlayResults(plays[index], results, lineup);
-            document.get(`setPlayList.${index}`).set('adminData', results);
-            await document.save();
-            const savedDocument = await document.populate<PopulatedFindType>({
-                path: 'setPlayList.setPlayId',
-                select: 'name type'
-            });
-            return savedDocument
-                .toObject<PopulatedSetPlaysDataType>({ flattenObjectIds: true })
-                .setPlayList.map(({ _id, setPlayId, ...play }) => {
-                    if (!setPlayId) {
-                        throw new Error(
-                            'Missing catalog entry for selected set play'
-                        );
-                    }
-                    return {
-                        ...play,
-                        setPlayId: setPlayId._id.toString(),
-                        name: setPlayId.name,
-                        type: setPlayId.type,
-                        selectedSetPlayId: _id.toString()
-                    } as SetPlaysDataSelectionReturnType;
-                });
+
+            const existingDocument: PopulatedFindType | null =
+                await this.findOne({ startingLineupId })
+                    .populate<PopulatedFindType>({
+                        path: 'setPlayList.setPlayId',
+                        select: 'type'
+                    })
+                    .exec();
+            const availableTypes = validateSetPlayConstraints(
+                existingDocument?.setPlayList.map(item => item.setPlayId) ?? []
+            );
+            if (!availableTypes.includes(setPlayType)) {
+                throw new Error(
+                    'Selected set play cannot be added due to megaliga setPlays rules'
+                );
+            }
+
+            const document = existingDocument ?? new this({ startingLineupId });
+            document.depopulate('setPlayList.setPlayId');
+            document.set('setPlayList', [
+                ...document.setPlayList,
+                {
+                    setPlayId: setPlayData.setPlayId,
+                    userData: setPlayData.userData
+                }
+            ]);
+            return await document.saveSelectedSetPlay();
         } catch (error) {
-            console.error('Error saving set play results:', error);
+            console.error('Error saving set play:', error);
             throw error;
         }
     }
 );
+
+// setPlaysDataSchema.static(
+//     'updateSetPlay',
+//     async function updateSetPlay(
+//         startingLineupId: string,
+//         selectedSetPlayId: string,
+//         setPlayData: SetPlayDataType
+//     ) {
+//         try {
+//             const lineup = await getSetPlayStartingLineup(startingLineupId);
+//             const document = await this.findOne({
+//                 startingLineupId: lineup._id
+//             }).exec();
+//             if (!document) {
+//                 throw new Error('No set plays for starting lineup');
+//             }
+//             return await document.saveSelectedSetPlay(
+//                 lineup,
+//                 setPlayData,
+//                 objectIdSchema.unwrap().parse(selectedSetPlayId)
+//             );
+//         } catch (error) {
+//             console.error('Error updating set play:', error);
+//             throw error;
+//         }
+//     }
+// );
+//
+// setPlaysDataSchema.static(
+//     'removeSetPlay',
+//     async function removeSetPlay(
+//         startingLineupId: string,
+//         selectedSetPlayId: string
+//     ) {
+//         try {
+//             const lineup = await getSetPlayStartingLineup(startingLineupId);
+//             const document = await this.findOne({
+//                 startingLineupId: lineup._id
+//             })
+//                 .populate<PopulatedFindType>({
+//                     path: 'setPlayList.setPlayId',
+//                     select: 'name type'
+//                 })
+//                 .exec();
+//             if (!document) {
+//                 throw new Error('No set plays for starting lineup');
+//             }
+//             const plays = document
+//                 .toObject<PopulatedSetPlaysDataType>({ flattenObjectIds: true })
+//                 .setPlayList.map(({ _id, setPlayId, ...play }) => {
+//                     if (!setPlayId) {
+//                         throw new Error(
+//                             'Missing catalog entry for selected set play'
+//                         );
+//                     }
+//                     return {
+//                         ...play,
+//                         setPlayId: setPlayId._id.toString(),
+//                         name: setPlayId.name,
+//                         type: setPlayId.type,
+//                         selectedSetPlayId: _id.toString()
+//                     } as SetPlaysDataSelectionReturnType;
+//                 });
+//             const index = getSelectedSetPlayIndex(plays, selectedSetPlayId);
+//             document.depopulate('setPlayList.setPlayId');
+//             document.set(
+//                 'setPlayList',
+//                 document
+//                     .toObject()
+//                     .setPlayList.filter((_, position) => position !== index)
+//             );
+//             await document.save();
+//             const savedDocument = await document.populate<PopulatedFindType>({
+//                 path: 'setPlayList.setPlayId',
+//                 select: 'name type'
+//             });
+//             return savedDocument
+//                 .toObject<PopulatedSetPlaysDataType>({ flattenObjectIds: true })
+//                 .setPlayList.map(({ _id, setPlayId, ...play }) => {
+//                     if (!setPlayId) {
+//                         throw new Error(
+//                             'Missing catalog entry for selected set play'
+//                         );
+//                     }
+//                     return {
+//                         ...play,
+//                         setPlayId: setPlayId._id.toString(),
+//                         name: setPlayId.name,
+//                         type: setPlayId.type,
+//                         selectedSetPlayId: _id.toString()
+//                     } as SetPlaysDataSelectionReturnType;
+//                 });
+//         } catch (error) {
+//             console.error('Error removing set play:', error);
+//             throw error;
+//         }
+//     }
+// );
+//
+// setPlaysDataSchema.static(
+//     'saveSetPlayResults',
+//     async function saveSetPlayResults(
+//         startingLineupId: string,
+//         selectedSetPlayId: string,
+//         adminData: SetPlayAdminInputType
+//     ) {
+//         try {
+//             const lineup = await getSetPlayStartingLineup(startingLineupId);
+//             const document = await this.findOne({
+//                 startingLineupId: lineup._id
+//             })
+//                 .populate<PopulatedFindType>({
+//                     path: 'setPlayList.setPlayId',
+//                     select: 'name type'
+//                 })
+//                 .exec();
+//             if (!document) {
+//                 throw new Error('No set plays for starting lineup');
+//             }
+//             const plays = document
+//                 .toObject<PopulatedSetPlaysDataType>({ flattenObjectIds: true })
+//                 .setPlayList.map(({ _id, setPlayId, ...play }) => {
+//                     if (!setPlayId) {
+//                         throw new Error(
+//                             'Missing catalog entry for selected set play'
+//                         );
+//                     }
+//                     return {
+//                         ...play,
+//                         setPlayId: setPlayId._id.toString(),
+//                         name: setPlayId.name,
+//                         type: setPlayId.type,
+//                         selectedSetPlayId: _id.toString()
+//                     } as SetPlaysDataSelectionReturnType;
+//                 });
+//             const index = getSelectedSetPlayIndex(plays, selectedSetPlayId);
+//             const schema = setPlayPayloadZodSchema.options.find(
+//                 option => option.shape.type.value === plays[index].type
+//             );
+//             if (!schema) {
+//                 throw new Error('Invalid set play type');
+//             }
+//             if (!('adminData' in schema.shape)) {
+//                 throw new Error('This set play does not accept admin results');
+//             }
+//             if (
+//                 adminData &&
+//                 [
+//                     'setPlayId',
+//                     'selectedSetPlayId',
+//                     'name',
+//                     'type',
+//                     'userData'
+//                 ].some(field => field in adminData)
+//             ) {
+//                 throw new Error(
+//                     'Admin results cannot change the selected play'
+//                 );
+//             }
+//             const resultSchema =
+//                 schema.shape.adminData instanceof z.ZodDefault
+//                     ? schema.shape.adminData.removeDefault()
+//                     : schema.shape.adminData.unwrap();
+//             const results = normalizeSetPlayData(resultSchema.parse(adminData));
+//             await validateSetPlayResults(plays[index], results, lineup);
+//             document.get(`setPlayList.${index}`).set('adminData', results);
+//             await document.save();
+//             const savedDocument = await document.populate<PopulatedFindType>({
+//                 path: 'setPlayList.setPlayId',
+//                 select: 'name type'
+//             });
+//             return savedDocument
+//                 .toObject<PopulatedSetPlaysDataType>({ flattenObjectIds: true })
+//                 .setPlayList.map(({ _id, setPlayId, ...play }) => {
+//                     if (!setPlayId) {
+//                         throw new Error(
+//                             'Missing catalog entry for selected set play'
+//                         );
+//                     }
+//                     return {
+//                         ...play,
+//                         setPlayId: setPlayId._id.toString(),
+//                         name: setPlayId.name,
+//                         type: setPlayId.type,
+//                         selectedSetPlayId: _id.toString()
+//                     } as SetPlaysDataSelectionReturnType;
+//                 });
+//         } catch (error) {
+//             console.error('Error saving set play results:', error);
+//             throw error;
+//         }
+//     }
+// );
 
 const SetPlaysDataModel = model<SetPlaysDataType, SetPlaysDataModelType>(
     'SetPlaysData',

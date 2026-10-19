@@ -49,6 +49,13 @@ Apply these before any of the pattern rules below. They decide _whether_ and _ho
 - Review the final diff for avoidable complexity.
 - Justify every new abstraction.
 
+## Unit test rules
+
+- Model test suites cover the model's custom static functions and instance methods. Exercise validation and database utilities through the model functions that use them; do not test those utilities directly in model suites.
+- Group tests in one `describe` section per function or method, named after that function or method. Remove standalone cases that have no particular model function to test.
+- Cover every outcome of each function or method, including each explicit error and distinct return path. Put error cases first and successful paths last; assert the expected error message when the function defines one.
+- Start every `test` and `test.each` case name with `Should`.
+
 ## Mongoose model naming
 
 When adding or changing a Mongoose model, follow [starting-lineup.ts](db/models/games/starting-lineup.ts). Use the entity name consistently, with these conventions:

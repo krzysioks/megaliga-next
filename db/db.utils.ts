@@ -8,10 +8,12 @@ import {
     MAX_SELECTIONS_PER_SET_PLAY,
     MAX_SELECTIONS_PER_RESERVE_SET_PLAY
 } from '@/db/db.constants';
-import StartingLineupModel, {
-    type StartingLineupType
-} from '@/db/models/games/starting-lineup';
-import { objectIdSchema, SetPlayEnumType } from '@/db/models/schema.types';
+import { SetPlayEnumType } from '@/db/models/schema.types';
+// import { objectIdSchema } from '@/db/models/schema.types';
+
+// import StartingLineupModel, {
+//     type StartingLineupType
+// } from '@/db/models/games/starting-lineup';
 
 // single round-robin schedule for a group of teams, using the berger table algorithm
 export function generateBergerTableRounds(
@@ -80,24 +82,24 @@ export function getSetPlaySelectionLimit(type: SetPlayEnumType) {
         : MAX_SELECTIONS_PER_SET_PLAY;
 }
 
-export async function getSetPlayStartingLineup(startingLineupId: string) {
-    const id = objectIdSchema.unwrap().parse(startingLineupId).toLowerCase();
-    const lineup = await StartingLineupModel.findById(id).exec();
-    if (!lineup) {
-        throw new Error(`Invalid startingLineupId: ${id}`);
-    }
-    return lineup;
-}
-
-export function getStartingLineupPlayerIds(lineup: StartingLineupType) {
-    return [
-        lineup.playerOne,
-        lineup.playerTwo,
-        lineup.playerThree,
-        lineup.playerFour,
-        lineup.playerFive
-    ].map(id => id?.toString());
-}
+// export async function getSetPlayStartingLineup(startingLineupId: string) {
+//     const id = objectIdSchema.unwrap().parse(startingLineupId).toLowerCase();
+//     const lineup = await StartingLineupModel.findById(id).exec();
+//     if (!lineup) {
+//         throw new Error(`Invalid startingLineupId: ${id}`);
+//     }
+//     return lineup;
+// }
+//
+// export function getStartingLineupPlayerIds(lineup: StartingLineupType) {
+//     return [
+//         lineup.playerOne,
+//         lineup.playerTwo,
+//         lineup.playerThree,
+//         lineup.playerFour,
+//         lineup.playerFive
+//     ].map(id => id?.toString());
+// }
 
 export function normalizeSetPlayData<
     T extends SetPlayUserDataType | SetPlayAdminDataType
