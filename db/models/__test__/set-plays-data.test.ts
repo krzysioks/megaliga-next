@@ -114,7 +114,8 @@ const createStartingLineup = async (
         playerTwo: players[1],
         playerThree: players[2],
         playerFour: players[3],
-        playerFive: players[4]
+        playerFive: players[4],
+        roles: { pn: players[0], kb: players[1], p: players[2] }
     });
 };
 

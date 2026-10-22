@@ -70,7 +70,12 @@ beforeEach(async () => {
     const lineup = await StartingLineupModel.create({
         userId,
         roundNumber: 2,
-        ...lineupPlayers
+        ...lineupPlayers,
+        roles: {
+            pn: lineupPlayers.playerOne,
+            kb: lineupPlayers.playerTwo,
+            p: lineupPlayers.playerThree
+        }
     });
     startingLineupId = lineup._id.toString();
 });
@@ -107,7 +112,12 @@ describe('Test SetPlaysModel methods and static functions', () => {
                 await StartingLineupModel.create({
                     userId,
                     roundNumber,
-                    ...lineupPlayers
+                    ...lineupPlayers,
+                    roles: {
+                        pn: lineupPlayers.playerOne,
+                        kb: lineupPlayers.playerTwo,
+                        p: lineupPlayers.playerThree
+                    }
                 });
 
                 expect(

@@ -78,7 +78,12 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             playerTwo: players[1]._id.toString(),
             playerThree: players[2]._id.toString(),
             playerFour: players[3]._id.toString(),
-            playerFive: players[4]._id.toString()
+            playerFive: players[4]._id.toString(),
+            roles: {
+                pn: players[0]._id.toString(),
+                kb: players[1]._id.toString(),
+                p: players[2]._id.toString()
+            }
         }).save();
 
         const startingLineupTwo = await new StartingLineupModel({
@@ -89,7 +94,12 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             playerTwo: players[6]._id.toString(),
             playerThree: players[7]._id.toString(),
             playerFour: players[8]._id.toString(),
-            playerFive: players[9]._id.toString()
+            playerFive: players[9]._id.toString(),
+            roles: {
+                pn: players[5]._id.toString(),
+                kb: players[6]._id.toString(),
+                p: players[7]._id.toString()
+            }
         }).save();
 
         const schedule = await new ScheduleModel({
@@ -267,7 +277,12 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 playerTwo: players[1]._id.toString(),
                 playerThree: players[2]._id.toString(),
                 playerFour: players[3]._id.toString(),
-                playerFive: players[4]._id.toString()
+                playerFive: players[4]._id.toString(),
+                roles: {
+                    pn: players[0]._id.toString(),
+                    kb: players[1]._id.toString(),
+                    p: players[2]._id.toString()
+                }
             }).save();
 
             const startingLineupTwo = await new StartingLineupModel({
@@ -278,7 +293,12 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 playerTwo: players[6]._id.toString(),
                 playerThree: players[7]._id.toString(),
                 playerFour: players[8]._id.toString(),
-                playerFive: players[9]._id.toString()
+                playerFive: players[9]._id.toString(),
+                roles: {
+                    pn: players[5]._id.toString(),
+                    kb: players[6]._id.toString(),
+                    p: players[7]._id.toString()
+                }
             }).save();
 
             const schedule = await new ScheduleModel({
@@ -805,8 +825,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             heatFour: 1,
             heatFive: 1,
             heatSix: 1,
-            heatSeven: 1,
-            setPlay: 1
+            heatSeven: 1
         });
 
         const createCompletePlayers = () =>
@@ -845,7 +864,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             expect(result).toBe(false);
         });
 
-        test('Should return false if 6 documents exist but not all players have heats and setPlay filled in', async () => {
+        test('Should return false if 6 documents exist but not all players have heats filled in', async () => {
             const scoreDetailsData = [
                 createCompleteScoreDetails(2),
                 createCompleteScoreDetails(2),
@@ -889,7 +908,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             expect(result).toBe(false);
         });
 
-        test('Should return true if 6 documents exist and all players have heats and setPlay filled in', async () => {
+        test('Should return true if 6 documents exist and all players have heats filled in', async () => {
             await ScoreDetailsModel.create([
                 createCompleteScoreDetails(3),
                 createCompleteScoreDetails(3),

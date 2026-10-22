@@ -10,6 +10,18 @@ import UserModel from '@/db/models/user';
 
 //StartingLineup is representation of megaliga_starting_lineup of old megaliga database. Will be used for displaying selected starting lineup for given match. Used in dashboard in form to select lineup before match. Also will be used in ScoreDetails model to populate setplays
 
+const playerRolesZodSchema = z
+    .object({
+        pn: objectIdSchema,
+        kb: objectIdSchema,
+        p: objectIdSchema
+    })
+    .required()
+    .refine(
+        roles => new Set([roles.pn, roles.kb, roles.p]).size === 3,
+        { message: 'A player can have only one role' }
+    );
+
 export const startingLineupZodSchema = z.object({
     userId: objectIdSchema, //Reference to User model, to know to whom this lineup belongs
     roundNumber: roundNumberSchema,
@@ -18,26 +30,27 @@ export const startingLineupZodSchema = z.object({
     playerTwo: objectIdSchema,
     playerThree: objectIdSchema,
     playerFour: objectIdSchema,
-    playerFive: objectIdSchema
+    playerFive: objectIdSchema,
+    roles: playerRolesZodSchema
 });
 
 export type StartingLineupType = z.infer<typeof startingLineupZodSchema>;
 
-const playerPositionsZodSchema = startingLineupZodSchema.omit({
-    userId: true,
-    roundNumber: true,
-    setPlays: true
-});
+const playerPositionsAndRolesZodSchema = startingLineupZodSchema
+    .omit({ userId: true, roundNumber: true, setPlays: true })
+    .required();
 
-export type PlayerPostions = Required<z.infer<typeof playerPositionsZodSchema>>;
+export type PlayerPositionsAndRolesType = z.infer<
+    typeof playerPositionsAndRolesZodSchema
+>;
 
 interface StartingLineupMethodsType {
-    updatePlayersPosition: (positions: PlayerPostions) => Promise<void>;
+    updatePlayersPosition: (data: PlayerPositionsAndRolesType) => Promise<void>;
 }
 
 const PLAYER_POSITION_KEYS = [
-    ...Object.keys(playerPositionsZodSchema.shape)
-] as (keyof PlayerPostions)[];
+    ...Object.keys(playerPositionsAndRolesZodSchema.shape)
+] as (keyof PlayerPositionsAndRolesType)[];
 
 type StartingLineupDocumentType = Promise<HydratedDocument<StartingLineupType>>;
 
@@ -76,7 +89,7 @@ interface StartingLineupModelType extends Model<
         roundNumber: number
     ) => StartingLineupDocumentType;
     setPlayersPosition: (
-        positions: PlayerPostions,
+        data: PlayerPositionsAndRolesType,
         userId: string,
         roundNumber: number
     ) => Promise<void>;
@@ -102,7 +115,12 @@ const startingLineupSchema = new Schema<
         required: true
     },
     playerFour: { type: Schema.Types.ObjectId, ref: 'Players', required: true },
-    playerFive: { type: Schema.Types.ObjectId, ref: 'Players', required: true }
+    playerFive: { type: Schema.Types.ObjectId, ref: 'Players', required: true },
+    roles: {
+        pn: { type: Schema.Types.ObjectId, ref: 'Players', required: true },
+        kb: { type: Schema.Types.ObjectId, ref: 'Players', required: true },
+        p: { type: Schema.Types.ObjectId, ref: 'Players', required: true }
+    }
 });
 
 startingLineupSchema.static(
@@ -127,19 +145,23 @@ startingLineupSchema.static(
 startingLineupSchema.static(
     'setPlayersPosition',
     async function setPlayersPosition(
-        positions: PlayerPostions,
+        data: PlayerPositionsAndRolesType,
         userId: string,
         roundNumber: number
     ) {
         try {
-            const hasOnlyAllowedKeys = Object.keys(positions).every(key =>
-                PLAYER_POSITION_KEYS.includes(key as keyof PlayerPostions)
-            );
+            const hasOnlyAllowedKeys = Object.keys(data).every(key => {
+                return PLAYER_POSITION_KEYS.includes(
+                    key as keyof PlayerPositionsAndRolesType
+                );
+            });
             if (!hasOnlyAllowedKeys) {
                 throw new Error(
-                    'Invalid positions payload. Allowed fields: playerOne, playerTwo, playerThree, playerFour, playerFive.'
+                    'Invalid positions payload. Allowed fields: playerOne, playerTwo, playerThree, playerFour, playerFive, roles.'
                 );
             }
+
+            playerPositionsAndRolesZodSchema.parse(data);
 
             const isValidUserId = await UserModel.exists({ _id: userId });
             if (!isValidUserId) {
@@ -160,7 +182,7 @@ startingLineupSchema.static(
             await new StartingLineupModel({
                 userId,
                 roundNumber,
-                ...positions
+                ...data
             }).save();
         } catch (error) {
             console.error('Error updating starting lineup:', error);
@@ -172,19 +194,23 @@ startingLineupSchema.static(
 
 startingLineupSchema.method(
     'updatePlayersPosition',
-    async function updatePlayersPosition(positions: PlayerPostions) {
+    async function updatePlayersPosition(data: PlayerPositionsAndRolesType) {
         try {
-            const hasOnlyAllowedKeys = Object.keys(positions).every(key =>
-                PLAYER_POSITION_KEYS.includes(key as keyof PlayerPostions)
-            );
+            const hasOnlyAllowedKeys = Object.keys(data).every(key => {
+                return PLAYER_POSITION_KEYS.includes(
+                    key as keyof PlayerPositionsAndRolesType
+                );
+            });
 
             if (!hasOnlyAllowedKeys) {
                 throw new Error(
-                    'Invalid positions payload. Allowed fields: playerOne, playerTwo, playerThree, playerFour, playerFive.'
+                    'Invalid positions payload. Allowed fields: playerOne, playerTwo, playerThree, playerFour, playerFive, roles.'
                 );
             }
 
-            this.set(positions);
+            playerPositionsAndRolesZodSchema.parse(data);
+
+            this.set(data);
             await this.save();
         } catch (error) {
             console.error('Error updating starting lineup:', error);

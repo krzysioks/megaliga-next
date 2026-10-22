@@ -543,8 +543,7 @@ scoreDetailsSchema.static(
                         player.heatFour != null &&
                         player.heatFive != null &&
                         player.heatSix != null &&
-                        player.heatSeven != null &&
-                        player.setPlay != null
+                        player.heatSeven != null
                     );
                 });
             };

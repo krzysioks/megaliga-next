@@ -369,7 +369,12 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                         playerTwo: players[1]._id.toString(),
                         playerThree: players[2]._id.toString(),
                         playerFour: players[3]._id.toString(),
-                        playerFive: players[4]._id.toString()
+                        playerFive: players[4]._id.toString(),
+                        roles: {
+                            pn: players[0]._id.toString(),
+                            kb: players[1]._id.toString(),
+                            p: players[2]._id.toString()
+                        }
                     },
                     {
                         userId: userTwo._id.toString(),
@@ -379,7 +384,12 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                         playerTwo: players[1]._id.toString(),
                         playerThree: players[2]._id.toString(),
                         playerFour: players[3]._id.toString(),
-                        playerFive: players[4]._id.toString()
+                        playerFive: players[4]._id.toString(),
+                        roles: {
+                            pn: players[0]._id.toString(),
+                            kb: players[1]._id.toString(),
+                            p: players[2]._id.toString()
+                        }
                     }
                 ]);
             const [startingLineupThree, startingLineupFour] =
@@ -392,7 +402,12 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                         playerTwo: players[1]._id.toString(),
                         playerThree: players[2]._id.toString(),
                         playerFour: players[3]._id.toString(),
-                        playerFive: players[4]._id.toString()
+                        playerFive: players[4]._id.toString(),
+                        roles: {
+                            pn: players[0]._id.toString(),
+                            kb: players[1]._id.toString(),
+                            p: players[2]._id.toString()
+                        }
                     },
                     {
                         userId: userOne._id.toString(),
@@ -402,7 +417,12 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                         playerTwo: players[1]._id.toString(),
                         playerThree: players[2]._id.toString(),
                         playerFour: players[3]._id.toString(),
-                        playerFive: players[4]._id.toString()
+                        playerFive: players[4]._id.toString(),
+                        roles: {
+                            pn: players[0]._id.toString(),
+                            kb: players[1]._id.toString(),
+                            p: players[2]._id.toString()
+                        }
                     }
                 ]);
 
