@@ -73,6 +73,7 @@ describe('Test PlayersModel methods and static functions', () => {
                 Array.from({ length: count }, (_, index) =>
                     createPlayerData({
                         extraligaPlayerName: `${prefix}-player-${index + 1}`,
+                        isJunior: index === 0,
                         [field]: index % 2 === 0 ? firstUserId : secondUserId
                     } as Partial<PlayersType>)
                 );
@@ -143,6 +144,17 @@ describe('Test PlayersModel methods and static functions', () => {
             expect(gabbanaUserTwoPlayers).toHaveLength(5);
             expect(playoffUserOnePlayers).toHaveLength(8);
             expect(playoffUserTwoPlayers).toHaveLength(7);
+            expect(
+                Object.fromEntries(
+                    dolceUserOnePlayers.map(player => {
+                        return [player.extraligaPlayerName, player.isJunior];
+                    })
+                )
+            ).toEqual({
+                'dolce-player-1': true,
+                'dolce-player-3': false,
+                'dolce-player-5': false
+            });
 
             expect(
                 dolceUserOnePlayers.every(
@@ -157,6 +169,7 @@ describe('Test PlayersModel methods and static functions', () => {
             await PlayersModel.create([
                 createPlayerData({
                     extraligaPlayerName: 'dolce-available-1',
+                    isJunior: true,
                     dolceUserId: null as unknown as string
                 }),
                 createPlayerData({
@@ -207,6 +220,16 @@ describe('Test PlayersModel methods and static functions', () => {
             expect(
                 dolceAvailable.map(player => player.extraligaPlayerName).sort()
             ).toEqual(['dolce-available-1', 'dolce-available-2']);
+            expect(
+                dolceAvailable.find(
+                    player => player.extraligaPlayerName === 'dolce-available-1'
+                )?.isJunior
+            ).toBe(true);
+            expect(
+                dolceAvailable.find(
+                    player => player.extraligaPlayerName === 'dolce-available-2'
+                )?.isJunior
+            ).toBe(false);
             expect(
                 gabbanaAvailable
                     .map(player => player.extraligaPlayerName)
@@ -351,11 +374,36 @@ describe('Test PlayersModel methods and static functions', () => {
         });
     }); // resetPlayersAssignment
 
+    describe('parsePlayers', () => {
+        test('Should trim player names and skip empty entries without changing saved players', async () => {
+            await PlayersModel.create([
+                createPlayerData({ extraligaPlayerName: 'Existing Player' }),
+                createPlayerData({
+                    extraligaPlayerName: 'Inactive Player',
+                    playerStatus: 'inactive'
+                })
+            ]);
+            const before = await PlayersModel.find().lean().exec();
+
+            expect(
+                PlayersModel.parsePlayers(' Player One , , Player Two,  ')
+            ).toEqual([
+                { extraligaPlayerName: 'Player One', isJunior: false },
+                { extraligaPlayerName: 'Player Two', isJunior: false }
+            ]);
+            expect(PlayersModel.parsePlayers('')).toEqual([]);
+            expect(PlayersModel.parsePlayers(',  , ')).toEqual([]);
+            expect(await PlayersModel.find().lean().exec()).toEqual(before);
+        });
+    });
+
     describe('importPlayers', () => {
-        it('Should add new players from the imported list as active', async () => {
-            await PlayersModel.importPlayers(
+        test('Should import reviewed junior and non-junior players as active', async () => {
+            const reviewedPlayers = PlayersModel.parsePlayers(
                 'Player One, Player Two, Player Three'
             );
+            reviewedPlayers[0].isJunior = true;
+            await PlayersModel.importPlayers(reviewedPlayers);
 
             const players = await PlayersModel.find().exec();
 
@@ -366,30 +414,63 @@ describe('Test PlayersModel methods and static functions', () => {
             players.forEach(player => {
                 expect(player.playerStatus).toBe('active');
             });
+            expect(
+                players.find(
+                    player => player.extraligaPlayerName === 'Player One'
+                )?.isJunior
+            ).toBe(true);
+            expect(
+                players
+                    .filter(
+                        player => player.extraligaPlayerName !== 'Player One'
+                    )
+                    .every(player => player.isJunior === false)
+            ).toBe(true);
         });
 
-        it('Should not duplicate players who already exist in the collection', async () => {
-            await new PlayersModel(
-                createPlayerData({ extraligaPlayerName: 'Player One' })
-            ).save();
+        test('Should update junior status without duplicating existing players or changing their assignments', async () => {
+            const [playerOne, playerTwo] = await PlayersModel.create([
+                createPlayerData({ extraligaPlayerName: 'Player One' }),
+                createPlayerData({
+                    extraligaPlayerName: 'Player Two',
+                    isJunior: true,
+                    playerStatus: 'inactive'
+                })
+            ]);
 
-            await PlayersModel.importPlayers('Player One, Player Two');
+            await PlayersModel.importPlayers([
+                { extraligaPlayerName: 'Player One', isJunior: true },
+                { extraligaPlayerName: 'Player Two', isJunior: false },
+                { extraligaPlayerName: 'Player Three', isJunior: false }
+            ]);
 
             const players = await PlayersModel.find().exec();
 
-            expect(players).toHaveLength(2);
+            expect(players).toHaveLength(3);
             expect(
                 players.map(player => player.extraligaPlayerName).sort()
-            ).toEqual(['Player One', 'Player Two']);
+            ).toEqual(['Player One', 'Player Three', 'Player Two']);
+            expect(
+                players
+                    .find(player => player.extraligaPlayerName === 'Player One')
+                    ?.toObject()
+            ).toEqual({ ...playerOne.toObject(), isJunior: true });
+            expect(
+                players
+                    .find(player => player.extraligaPlayerName === 'Player Two')
+                    ?.toObject()
+            ).toEqual({ ...playerTwo.toObject(), isJunior: false });
         });
 
-        it('Should set playerStatus to inactive for players missing from the imported list', async () => {
+        test('Should set playerStatus to inactive for players missing from the imported list', async () => {
             await PlayersModel.create([
                 createPlayerData({ extraligaPlayerName: 'Player One' }),
                 createPlayerData({ extraligaPlayerName: 'Player Two' })
             ]);
 
-            await PlayersModel.importPlayers('Player One');
+            await PlayersModel.importPlayers([
+                { extraligaPlayerName: 'Player One', isJunior: false }
+            ]);
 
             const playerOne = await PlayersModel.findOne({
                 extraligaPlayerName: 'Player One'

@@ -18,6 +18,7 @@ const PLAYER_STATUS_ENUM = statusEnumSchema._def.values;
 
 export const playersZodSchema = z.object({
     extraligaPlayerName: standardStringSchema,
+    isJunior: z.boolean().default(false),
     dolceUserId: objectIdSchema,
     gabbanaUserId: objectIdSchema,
     playoffUserId: objectIdSchema,
@@ -32,6 +33,11 @@ export type PlayersType = z.infer<typeof playersZodSchema>;
 
 export type PlayersReturnType = PlayersType & { playerId: string };
 
+export type PlayersImportType = Pick<
+    PlayersType,
+    'extraligaPlayerName' | 'isJunior'
+>;
+
 interface PlayersMethodsType {
     draftPlayer: (userId: string, type: PlayerAssignmentType) => Promise<void>;
 }
@@ -45,7 +51,8 @@ interface PlayersModelType extends Model<PlayersType, '', PlayersMethodsType> {
         type: PlayerAssignmentType
     ) => Promise<PlayersReturnType[]>;
     resetPlayersAssignment: () => Promise<void>;
-    importPlayers: (newPlayers: string) => Promise<void>;
+    parsePlayers: (newPlayers: string) => PlayersImportType[];
+    importPlayers: (newPlayers: PlayersImportType[]) => Promise<void>;
 }
 
 const playersSchema = new Schema<
@@ -54,6 +61,7 @@ const playersSchema = new Schema<
     PlayersMethodsType
 >({
     extraligaPlayerName: { type: String, required: true },
+    isJunior: { type: Boolean, default: false },
     dolceUserId: { type: Types.ObjectId, ref: 'User' },
     gabbanaUserId: { type: Types.ObjectId, ref: 'User' },
     playoffUserId: { type: Types.ObjectId, ref: 'User' },
@@ -98,6 +106,7 @@ playersSchema.static(
                 return {
                     playerId: playerDocument._id.toString(),
                     extraligaPlayerName: playerDocument.extraligaPlayerName,
+                    isJunior: playerDocument.isJunior,
                     dolceUserId: playerDocument.dolceUserId,
                     gabbanaUserId: playerDocument.gabbanaUserId,
                     playoffUserId: playerDocument.playoffUserId,
@@ -148,6 +157,7 @@ playersSchema.static(
                 return {
                     playerId: playerDocument._id.toString(),
                     extraligaPlayerName: playerDocument.extraligaPlayerName,
+                    isJunior: playerDocument.isJunior,
                     dolceUserId: playerDocument.dolceUserId,
                     gabbanaUserId: playerDocument.gabbanaUserId,
                     playoffUserId: playerDocument.playoffUserId,
@@ -193,38 +203,61 @@ playersSchema.static(
     }
 );
 
+playersSchema.static('parsePlayers', function parsePlayers(newPlayers: string) {
+    return newPlayers
+        .split(',')
+        .map(name => name.trim())
+        .filter(Boolean)
+        .map(extraligaPlayerName => {
+            return { extraligaPlayerName, isJunior: false };
+        });
+});
+
 playersSchema.static(
     'importPlayers',
-    async function importPlayers(newPlayers: string) {
+    async function importPlayers(newPlayers: PlayersImportType[]) {
         try {
-            const newPlayerNames = newPlayers
-                .split(',')
-                .map(name => {
-                    return name.trim();
-                })
-                .filter(Boolean);
+            const newPlayerNames = newPlayers.map(player => {
+                return player.extraligaPlayerName;
+            });
 
             const existingPlayers = await this.find(
                 {},
-                'extraligaPlayerName'
+                'extraligaPlayerName isJunior'
             ).exec();
             const existingPlayerNames = existingPlayers.map(player => {
                 return player.extraligaPlayerName;
             });
 
-            const playerNamesToAdd = newPlayerNames.filter(name => {
-                return !existingPlayerNames.includes(name);
+            const playersToAdd = newPlayers.filter(player => {
+                return !existingPlayerNames.includes(
+                    player.extraligaPlayerName
+                );
             });
 
-            if (playerNamesToAdd.length) {
+            if (playersToAdd.length) {
                 await this.create(
-                    playerNamesToAdd.map(name => {
+                    playersToAdd.map(player => {
                         return {
-                            extraligaPlayerName: name,
+                            extraligaPlayerName: player.extraligaPlayerName,
+                            isJunior: player.isJunior,
                             playerStatus: 'active'
                         };
                     })
                 );
+            }
+
+            for (const existingPlayer of existingPlayers) {
+                const reviewedPlayer = newPlayers.find(player => {
+                    return (
+                        player.extraligaPlayerName ===
+                        existingPlayer.extraligaPlayerName
+                    );
+                });
+                if (reviewedPlayer) {
+                    existingPlayer.set({ isJunior: reviewedPlayer.isJunior });
+                    await existingPlayer.save();
+                }
             }
 
             const playerNamesToDeactivate = existingPlayerNames.filter(name => {
