@@ -7,8 +7,11 @@ import ScoreDetailsModel, {
     ScoreDetailsReturnType,
     ScoreDetailsInputType
 } from '@/db/models/games/score-details';
+import SetPlaysDataModel from '@/db/models/games/set-plays-data';
 import StartingLineupModel from '@/db/models/games/starting-lineup';
 import PlayersModel from '@/db/models/players';
+import { SetPlayEnumType } from '@/db/models/schema.types';
+import SetPlaysModel from '@/db/models/set-plays';
 import UserModel, { UserType } from '@/db/models/user';
 
 const createUserData = (index: number): UserType => ({
@@ -35,6 +38,8 @@ beforeAll(async () => {
 
 // before any test clear collections
 beforeEach(async () => {
+    await SetPlaysDataModel.deleteMany();
+    await SetPlaysModel.deleteMany();
     await ScoreDetailsModel.deleteMany();
     await ScheduleModel.deleteMany();
     await StartingLineupModel.deleteMany();
@@ -44,6 +49,8 @@ beforeEach(async () => {
 
 // close connection to server so that test suite will close
 afterAll(async () => {
+    await SetPlaysDataModel.deleteMany();
+    await SetPlaysModel.deleteMany();
     await ScoreDetailsModel.deleteMany();
     await ScheduleModel.deleteMany();
     await StartingLineupModel.deleteMany();
@@ -53,206 +60,306 @@ afterAll(async () => {
 });
 
 describe('Test ScoreDetailsModel methods and static functions', () => {
-    test('Should return score details with all referenced data populated correctly', async () => {
-        const userOne = await new UserModel(createUserData(0)).save();
-        const userTwo = await new UserModel(createUserData(1)).save();
+    describe('getScoreDetailsByScheduleAndRoundId', () => {
+        test('Should throw error if invalid scheduleId is provided', async () => {
+            const invalidScheduleId = new mongoose.Types.ObjectId().toString();
 
-        const players = await PlayersModel.create([
-            { extraligaPlayerName: 'Player One' },
-            { extraligaPlayerName: 'Player Two' },
-            { extraligaPlayerName: 'Player Three' },
-            { extraligaPlayerName: 'Player Four' },
-            { extraligaPlayerName: 'Player Five' },
-            { extraligaPlayerName: 'Player Six' },
-            { extraligaPlayerName: 'Player Seven' },
-            { extraligaPlayerName: 'Player Eight' },
-            { extraligaPlayerName: 'Player Nine' },
-            { extraligaPlayerName: 'Player Ten' }
-        ]);
+            await expect(
+                ScoreDetailsModel.getScoreDetailsByScheduleAndRoundId(
+                    invalidScheduleId,
+                    1
+                )
+            ).rejects.toThrow(`Invalid scheduleId: ${invalidScheduleId}`);
+        });
 
-        const startingLineupOne = await new StartingLineupModel({
-            userId: userOne._id.toString(),
-            roundNumber: 3,
-            setPlays: 'team-one-setplay',
-            playerOne: players[0]._id.toString(),
-            playerTwo: players[1]._id.toString(),
-            playerThree: players[2]._id.toString(),
-            playerFour: players[3]._id.toString(),
-            playerFive: players[4]._id.toString(),
-            roles: {
-                pn: players[0]._id.toString(),
-                kb: players[1]._id.toString(),
-                p: players[2]._id.toString()
-            }
-        }).save();
+        test('Should throw error if score details document not found', async () => {
+            const userOne = await new UserModel(createUserData(10)).save();
+            const userTwo = await new UserModel(createUserData(11)).save();
 
-        const startingLineupTwo = await new StartingLineupModel({
-            userId: userTwo._id.toString(),
-            roundNumber: 3,
-            setPlays: 'team-two-setplay',
-            playerOne: players[5]._id.toString(),
-            playerTwo: players[6]._id.toString(),
-            playerThree: players[7]._id.toString(),
-            playerFour: players[8]._id.toString(),
-            playerFive: players[9]._id.toString(),
-            roles: {
-                pn: players[5]._id.toString(),
-                kb: players[6]._id.toString(),
-                p: players[7]._id.toString()
-            }
-        }).save();
+            const schedule = await new ScheduleModel({
+                userOneId: userOne._id.toString(),
+                userTwoId: userTwo._id.toString(),
+                roundNumber: 4,
+                ligueGroupsId: new mongoose.Types.ObjectId().toString(),
+                userOneScore: 50,
+                userTwoScore: 40
+            }).save();
 
-        const schedule = await new ScheduleModel({
-            userOneId: userOne._id.toString(),
-            userTwoId: userTwo._id.toString(),
-            roundNumber: 3,
-            ligueGroupsId: new mongoose.Types.ObjectId().toString(),
-            userOneScore: 46,
-            userTwoScore: 44
-        }).save();
+            const missingRoundNumber = 99;
 
-        const scoreDetailsToCreate: ScoreDetailsInputType = {
-            scheduleId: schedule._id.toString(),
-            roundNumber: 3,
-            teamOne: {
+            await expect(
+                ScoreDetailsModel.getScoreDetailsByScheduleAndRoundId(
+                    schedule._id.toString(),
+                    missingRoundNumber
+                )
+            ).rejects.toThrow(
+                `Score details for scheduleId: ${schedule._id.toString()} and roundNumber: ${missingRoundNumber} not found`
+            );
+        });
+
+        test('Should return score details with all referenced data populated correctly', async () => {
+            const userOne = await new UserModel(createUserData(0)).save();
+            const userTwo = await new UserModel(createUserData(1)).save();
+
+            const players = await PlayersModel.create([
+                { extraligaPlayerName: 'Player One' },
+                { extraligaPlayerName: 'Player Two' },
+                { extraligaPlayerName: 'Player Three' },
+                { extraligaPlayerName: 'Player Four' },
+                { extraligaPlayerName: 'Player Five' },
+                { extraligaPlayerName: 'Player Six' },
+                { extraligaPlayerName: 'Player Seven' },
+                { extraligaPlayerName: 'Player Eight' },
+                { extraligaPlayerName: 'Player Nine' },
+                { extraligaPlayerName: 'Player Ten' }
+            ]);
+
+            const startingLineupOne = await new StartingLineupModel({
                 userId: userOne._id.toString(),
-                players: [
-                    {
-                        playerId: players[0]._id.toString(),
-                        heatOne: 3,
-                        heatTwo: 2,
-                        setPlay: 1,
-                        comment: 'Solid ride'
-                    },
-                    {
-                        playerId: players[1]._id.toString(),
-                        heatOne: 1,
-                        heatTwo: 3,
-                        setPlay: 0,
-                        comment: 'Good finish'
-                    }
-                ],
-                trainer: {
-                    heatOne: 1,
-                    setPlay: 0,
-                    comment: 'Trainer one'
-                },
-                startingLineupId: startingLineupOne._id.toString()
-            },
-            teamTwo: {
+                roundNumber: 3,
+                playerOne: players[0]._id.toString(),
+                playerTwo: players[1]._id.toString(),
+                playerThree: players[2]._id.toString(),
+                playerFour: players[3]._id.toString(),
+                playerFive: players[4]._id.toString(),
+                roles: {
+                    pn: players[0]._id.toString(),
+                    kb: players[1]._id.toString(),
+                    p: players[2]._id.toString()
+                }
+            }).save();
+
+            const startingLineupTwo = await new StartingLineupModel({
                 userId: userTwo._id.toString(),
-                players: [
+                roundNumber: 3,
+                playerOne: players[5]._id.toString(),
+                playerTwo: players[6]._id.toString(),
+                playerThree: players[7]._id.toString(),
+                playerFour: players[8]._id.toString(),
+                playerFive: players[9]._id.toString(),
+                roles: {
+                    pn: players[5]._id.toString(),
+                    kb: players[6]._id.toString(),
+                    p: players[7]._id.toString()
+                }
+            }).save();
+
+            const [gwarancjaStartow, spartacus, muchomor] =
+                await SetPlaysModel.create([
                     {
-                        playerId: players[2]._id.toString(),
-                        heatOne: 2,
-                        heatTwo: 3,
-                        setPlay: 1,
-                        comment: 'Strong start'
+                        name: 'Gwarancja startów',
+                        type: SetPlayEnumType.GwarancjaStartow
                     },
-                    {
-                        playerId: players[3]._id.toString(),
-                        heatOne: 0,
-                        heatTwo: 1,
-                        setPlay: 0,
-                        comment: 'Needs improvement'
-                    }
-                ],
-                trainer: {
-                    heatOne: 0,
-                    setPlay: 1,
-                    comment: 'Trainer two'
+                    { name: 'Spartacus', type: SetPlayEnumType.Spartacus },
+                    { name: 'Muchomor', type: SetPlayEnumType.Muchomor }
+                ]);
+            await SetPlaysDataModel.create([
+                {
+                    startingLineupId: startingLineupOne._id,
+                    setPlayList: [
+                        {
+                            setPlayId: gwarancjaStartow._id,
+                            userData: { playerId: players[0]._id.toString() }
+                        },
+                        {
+                            setPlayId: spartacus._id,
+                            userData: {
+                                ownPlayerId: players[1]._id.toString(),
+                                opponentPlayerId: players[5]._id.toString()
+                            },
+                            adminData: { ownAverage: 2, opponentAverage: 1.5 }
+                        }
+                    ]
                 },
-                startingLineupId: startingLineupTwo._id.toString()
-            }
-        };
+                {
+                    startingLineupId: startingLineupTwo._id,
+                    setPlayList: [{ setPlayId: muchomor._id }]
+                }
+            ]);
 
-        await new ScoreDetailsModel(scoreDetailsToCreate).save();
+            const schedule = await new ScheduleModel({
+                userOneId: userOne._id.toString(),
+                userTwoId: userTwo._id.toString(),
+                roundNumber: 3,
+                ligueGroupsId: new mongoose.Types.ObjectId().toString(),
+                userOneScore: 46,
+                userTwoScore: 44
+            }).save();
 
-        const result: ScoreDetailsReturnType =
-            await ScoreDetailsModel.getScoreDetailsByScheduleAndRoundId(
-                schedule._id.toString(),
-                3
+            const scoreDetailsToCreate: ScoreDetailsInputType = {
+                scheduleId: schedule._id.toString(),
+                roundNumber: 3,
+                teamOne: {
+                    userId: userOne._id.toString(),
+                    players: [
+                        {
+                            playerId: players[0]._id.toString(),
+                            heatOne: 3,
+                            heatTwo: 2,
+                            setPlay: 1,
+                            comment: 'Solid ride'
+                        },
+                        {
+                            playerId: players[1]._id.toString(),
+                            heatOne: 1,
+                            heatTwo: 3,
+                            setPlay: 0,
+                            comment: 'Good finish'
+                        }
+                    ],
+                    trainer: {
+                        heatOne: 1,
+                        setPlay: 0,
+                        comment: 'Trainer one'
+                    },
+                    startingLineupId: startingLineupOne._id.toString()
+                },
+                teamTwo: {
+                    userId: userTwo._id.toString(),
+                    players: [
+                        {
+                            playerId: players[2]._id.toString(),
+                            heatOne: 2,
+                            heatTwo: 3,
+                            setPlay: 1,
+                            comment: 'Strong start'
+                        },
+                        {
+                            playerId: players[3]._id.toString(),
+                            heatOne: 0,
+                            heatTwo: 1,
+                            setPlay: 0,
+                            comment: 'Needs improvement'
+                        }
+                    ],
+                    trainer: {
+                        heatOne: 0,
+                        setPlay: 1,
+                        comment: 'Trainer two'
+                    },
+                    startingLineupId: startingLineupTwo._id.toString()
+                }
+            };
+
+            await new ScoreDetailsModel(scoreDetailsToCreate).save();
+
+            const result: ScoreDetailsReturnType =
+                await ScoreDetailsModel.getScoreDetailsByScheduleAndRoundId(
+                    schedule._id.toString(),
+                    3
+                );
+
+            expect(result.roundNumber).toBe(3);
+            expect(result.userOneScore).toBe(46);
+            expect(result.userTwoScore).toBe(44);
+
+            expect(result.teamOne.teamName).toBe(userOne.teamName);
+            expect(result.teamTwo.teamName).toBe(userTwo.teamName);
+
+            expect(result.teamOne.setPlays).toEqual([
+                {
+                    name: 'Gwarancja startów',
+                    type: SetPlayEnumType.GwarancjaStartow,
+                    userData: { playerId: players[0]._id.toString() }
+                },
+                {
+                    name: 'Spartacus',
+                    type: SetPlayEnumType.Spartacus,
+                    userData: {
+                        ownPlayerId: players[1]._id.toString(),
+                        opponentPlayerId: players[5]._id.toString()
+                    }
+                }
+            ]);
+            expect(result.teamTwo.setPlays).toEqual([
+                {
+                    name: 'Muchomor',
+                    type: SetPlayEnumType.Muchomor,
+                    userData: null
+                }
+            ]);
+
+            expect(result.teamOne.players).toHaveLength(2);
+            expect(result.teamTwo.players).toHaveLength(2);
+
+            expect(result.teamOne.players[0].extraligaPlayerName).toBe(
+                'Player One'
+            );
+            expect(result.teamOne.players[1].extraligaPlayerName).toBe(
+                'Player Two'
+            );
+            expect(result.teamTwo.players[0].extraligaPlayerName).toBe(
+                'Player Three'
+            );
+            expect(result.teamTwo.players[1].extraligaPlayerName).toBe(
+                'Player Four'
             );
 
-        expect(result.roundNumber).toBe(3);
-        expect(result.userOneScore).toBe(46);
-        expect(result.userTwoScore).toBe(44);
+            expect(result.teamOne.players[0].heatOne).toBe(3);
+            expect(result.teamOne.players[0].comment).toBe('Solid ride');
+            expect(result.teamTwo.players[0].heatTwo).toBe(3);
 
-        expect(result.teamOne.teamName).toBe(userOne.teamName);
-        expect(result.teamTwo.teamName).toBe(userTwo.teamName);
+            expect(
+                (result.teamOne.players[0] as Record<string, unknown>).playerId
+            ).toBeUndefined();
+            expect(
+                (result.teamOne as Record<string, unknown>).userId
+            ).toBeUndefined();
+            expect(
+                (result.teamOne as Record<string, unknown>).startingLineupId
+            ).toBeUndefined();
+        });
 
-        expect(result.teamOne.setPlays).toBe(startingLineupOne.setPlays);
-        expect(result.teamTwo.setPlays).toBe(startingLineupTwo.setPlays);
+        test('Should return score details with empty set play lists for a missing lineup reference or a lineup without selections', async () => {
+            const userOne = await UserModel.create(createUserData(40));
+            const userTwo = await UserModel.create(createUserData(41));
+            const playerIds = Array.from({ length: 5 }, () => {
+                return new mongoose.Types.ObjectId().toString();
+            });
+            const startingLineup = await StartingLineupModel.create({
+                userId: userTwo._id,
+                roundNumber: 1,
+                playerOne: playerIds[0],
+                playerTwo: playerIds[1],
+                playerThree: playerIds[2],
+                playerFour: playerIds[3],
+                playerFive: playerIds[4],
+                roles: { pn: playerIds[0], kb: playerIds[1], p: playerIds[2] }
+            });
+            const schedule = await ScheduleModel.create({
+                userOneId: userOne._id,
+                userTwoId: userTwo._id,
+                roundNumber: 1,
+                ligueGroupsId: new mongoose.Types.ObjectId()
+            });
+            await ScoreDetailsModel.create({
+                scheduleId: schedule._id,
+                roundNumber: 1,
+                teamOne: { userId: userOne._id },
+                teamTwo: {
+                    userId: userTwo._id,
+                    startingLineupId: startingLineup._id
+                }
+            });
 
-        expect(result.teamOne.players).toHaveLength(2);
-        expect(result.teamTwo.players).toHaveLength(2);
-
-        expect(result.teamOne.players[0].extraligaPlayerName).toBe(
-            'Player One'
-        );
-        expect(result.teamOne.players[1].extraligaPlayerName).toBe(
-            'Player Two'
-        );
-        expect(result.teamTwo.players[0].extraligaPlayerName).toBe(
-            'Player Three'
-        );
-        expect(result.teamTwo.players[1].extraligaPlayerName).toBe(
-            'Player Four'
-        );
-
-        expect(result.teamOne.players[0].heatOne).toBe(3);
-        expect(result.teamOne.players[0].comment).toBe('Solid ride');
-        expect(result.teamTwo.players[0].heatTwo).toBe(3);
-
-        expect(
-            (result.teamOne.players[0] as Record<string, unknown>).playerId
-        ).toBeUndefined();
-        expect(
-            (result.teamOne as Record<string, unknown>).userId
-        ).toBeUndefined();
-        expect(
-            (result.teamOne as Record<string, unknown>).startingLineupId
-        ).toBeUndefined();
-    });
-
-    test('Should throw error if invalid scheduleId is provided', async () => {
-        const invalidScheduleId = new mongoose.Types.ObjectId().toString();
-
-        await expect(
-            ScoreDetailsModel.getScoreDetailsByScheduleAndRoundId(
-                invalidScheduleId,
-                1
-            )
-        ).rejects.toThrow(`Invalid scheduleId: ${invalidScheduleId}`);
-    });
-
-    test('Should throw error if score details document not found', async () => {
-        const userOne = await new UserModel(createUserData(10)).save();
-        const userTwo = await new UserModel(createUserData(11)).save();
-
-        const schedule = await new ScheduleModel({
-            userOneId: userOne._id.toString(),
-            userTwoId: userTwo._id.toString(),
-            roundNumber: 4,
-            ligueGroupsId: new mongoose.Types.ObjectId().toString(),
-            userOneScore: 50,
-            userTwoScore: 40
-        }).save();
-
-        const missingRoundNumber = 99;
-
-        await expect(
-            ScoreDetailsModel.getScoreDetailsByScheduleAndRoundId(
-                schedule._id.toString(),
-                missingRoundNumber
-            )
-        ).rejects.toThrow(
-            `Score details for scheduleId: ${schedule._id.toString()} and roundNumber: ${missingRoundNumber} not found`
-        );
+            const result =
+                await ScoreDetailsModel.getScoreDetailsByScheduleAndRoundId(
+                    schedule._id.toString(),
+                    1
+                );
+            expect(result.teamOne.setPlays).toEqual([]);
+            expect(result.teamTwo.setPlays).toEqual([]);
+        });
     });
 
     describe('getScoreDetailsForHistory', () => {
-        test('Should return all score details documents with players, trainer and setPlays populated for both teams', async () => {
+        test('Should throw error when there is no score details data', async () => {
+            await expect(
+                ScoreDetailsModel.getScoreDetailsForHistory()
+            ).rejects.toThrow('Score details not found');
+        });
+
+        test('Should return score details with selected set play names for both teams', async () => {
             const userOne = await new UserModel(createUserData(20)).save();
             const userTwo = await new UserModel(createUserData(21)).save();
 
@@ -272,7 +379,6 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             const startingLineupOne = await new StartingLineupModel({
                 userId: userOne._id.toString(),
                 roundNumber: 3,
-                setPlays: 'team-one-setplay',
                 playerOne: players[0]._id.toString(),
                 playerTwo: players[1]._id.toString(),
                 playerThree: players[2]._id.toString(),
@@ -288,7 +394,6 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             const startingLineupTwo = await new StartingLineupModel({
                 userId: userTwo._id.toString(),
                 roundNumber: 3,
-                setPlays: 'team-two-setplay',
                 playerOne: players[5]._id.toString(),
                 playerTwo: players[6]._id.toString(),
                 playerThree: players[7]._id.toString(),
@@ -300,6 +405,35 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                     p: players[7]._id.toString()
                 }
             }).save();
+
+            const [gwarancjaStartow, muchomor, mortalKombatCombo] =
+                await SetPlaysModel.create([
+                    {
+                        name: 'Gwarancja startów',
+                        type: SetPlayEnumType.GwarancjaStartow
+                    },
+                    { name: 'Muchomor', type: SetPlayEnumType.Muchomor },
+                    {
+                        name: 'Mortal Kombat Combo',
+                        type: SetPlayEnumType.MortalKombatCombo
+                    }
+                ]);
+            await SetPlaysDataModel.create([
+                {
+                    startingLineupId: startingLineupOne._id,
+                    setPlayList: [
+                        {
+                            setPlayId: gwarancjaStartow._id,
+                            userData: { playerId: players[0]._id.toString() }
+                        },
+                        { setPlayId: muchomor._id }
+                    ]
+                },
+                {
+                    startingLineupId: startingLineupTwo._id,
+                    setPlayList: [{ setPlayId: mortalKombatCombo._id }]
+                }
+            ]);
 
             const schedule = await new ScheduleModel({
                 userOneId: userOne._id.toString(),
@@ -357,12 +491,13 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
 
             const [scoreDetails] = result;
 
-            expect(scoreDetails.teamOne.setPlays).toBe(
-                startingLineupOne.setPlays
-            );
-            expect(scoreDetails.teamTwo.setPlays).toBe(
-                startingLineupTwo.setPlays
-            );
+            expect(scoreDetails.teamOne.setPlays).toEqual([
+                'Gwarancja startów',
+                'Muchomor'
+            ]);
+            expect(scoreDetails.teamTwo.setPlays).toEqual([
+                'Mortal Kombat Combo'
+            ]);
 
             expect(scoreDetails.teamOne.trainer?.heatOne).toBe(1);
             expect(scoreDetails.teamOne.trainer?.setPlay).toBe(0);
@@ -391,10 +526,41 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             );
         });
 
-        test('Should throw error when there is no score details data', async () => {
-            await expect(
-                ScoreDetailsModel.getScoreDetailsForHistory()
-            ).rejects.toThrow('Score details not found');
+        test('Should export history with empty set play lists for a missing lineup reference or a lineup without selections', async () => {
+            const userOne = await UserModel.create(createUserData(40));
+            const userTwo = await UserModel.create(createUserData(41));
+            const playerIds = Array.from({ length: 5 }, () => {
+                return new mongoose.Types.ObjectId().toString();
+            });
+            const startingLineup = await StartingLineupModel.create({
+                userId: userTwo._id,
+                roundNumber: 1,
+                playerOne: playerIds[0],
+                playerTwo: playerIds[1],
+                playerThree: playerIds[2],
+                playerFour: playerIds[3],
+                playerFive: playerIds[4],
+                roles: { pn: playerIds[0], kb: playerIds[1], p: playerIds[2] }
+            });
+            const schedule = await ScheduleModel.create({
+                userOneId: userOne._id,
+                userTwoId: userTwo._id,
+                roundNumber: 1,
+                ligueGroupsId: new mongoose.Types.ObjectId()
+            });
+            await ScoreDetailsModel.create({
+                scheduleId: schedule._id,
+                roundNumber: 1,
+                teamOne: { userId: userOne._id },
+                teamTwo: {
+                    userId: userTwo._id,
+                    startingLineupId: startingLineup._id
+                }
+            });
+
+            const [result] = await ScoreDetailsModel.getScoreDetailsForHistory();
+            expect(result.teamOne.setPlays).toEqual([]);
+            expect(result.teamTwo.setPlays).toEqual([]);
         });
     });
 

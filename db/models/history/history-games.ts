@@ -232,18 +232,14 @@ historyGamesSchema.static(
                         teamOne: {
                             players: matchingScoreDetails.teamOne.players,
                             trainer: matchingScoreDetails.teamOne.trainer,
-                            setPlays: matchingScoreDetails.teamOne.setPlays
-                                ? [matchingScoreDetails.teamOne.setPlays]
-                                : undefined,
+                            setPlays: matchingScoreDetails.teamOne.setPlays,
                             teamId: teamOneId,
                             score: schedule.userOneScore ?? 0
                         },
                         teamTwo: {
                             players: matchingScoreDetails.teamTwo.players,
                             trainer: matchingScoreDetails.teamTwo.trainer,
-                            setPlays: matchingScoreDetails.teamTwo.setPlays
-                                ? [matchingScoreDetails.teamTwo.setPlays]
-                                : undefined,
+                            setPlays: matchingScoreDetails.teamTwo.setPlays,
                             teamId: teamTwoId,
                             score: schedule.userTwoScore ?? 0
                         }

@@ -3,8 +3,7 @@ import { z } from 'zod';
 
 import {
     objectIdSchema,
-    roundNumberSchema,
-    standardStringSchema
+    roundNumberSchema
 } from '@/db/models/schema.types';
 import UserModel from '@/db/models/user';
 
@@ -25,7 +24,6 @@ const playerRolesZodSchema = z
 export const startingLineupZodSchema = z.object({
     userId: objectIdSchema, //Reference to User model, to know to whom this lineup belongs
     roundNumber: roundNumberSchema,
-    setPlays: standardStringSchema.optional(), //TODOKP: for now it will be string, until business logic for setplays will be defined
     playerOne: objectIdSchema,
     playerTwo: objectIdSchema,
     playerThree: objectIdSchema,
@@ -37,7 +35,7 @@ export const startingLineupZodSchema = z.object({
 export type StartingLineupType = z.infer<typeof startingLineupZodSchema>;
 
 const playerPositionsAndRolesZodSchema = startingLineupZodSchema
-    .omit({ userId: true, roundNumber: true, setPlays: true })
+    .omit({ userId: true, roundNumber: true })
     .required();
 
 export type PlayerPositionsAndRolesType = z.infer<
@@ -106,7 +104,6 @@ const startingLineupSchema = new Schema<
 >({
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     roundNumber: { type: Number, required: true },
-    setPlays: { type: String },
     playerOne: { type: Schema.Types.ObjectId, ref: 'Players', required: true },
     playerTwo: { type: Schema.Types.ObjectId, ref: 'Players', required: true },
     playerThree: {

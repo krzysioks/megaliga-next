@@ -5,6 +5,7 @@ import ScheduleModel from '@/db/models/games/schedule';
 import SchedulePlayoffModel from '@/db/models/games/schedule-playoff';
 import ScoreDetailsModel from '@/db/models/games/score-details';
 import ScoreDetailsPlayoffModel from '@/db/models/games/score-details-playoff';
+import SetPlaysDataModel from '@/db/models/games/set-plays-data';
 import StartingLineupModel from '@/db/models/games/starting-lineup';
 import StartingLineupPlayoffModel from '@/db/models/games/starting-lineup-playoff';
 import HistoryGamesModel, {
@@ -17,7 +18,9 @@ import HistoryTeamModel, {
 } from '@/db/models/history/history-team';
 import LigueGroupsModel from '@/db/models/ligue-groups';
 import PlayersModel from '@/db/models/players';
+import { SetPlayEnumType } from '@/db/models/schema.types';
 import SeasonOpsModel, { SeasonOpsType } from '@/db/models/season-ops';
+import SetPlaysModel from '@/db/models/set-plays';
 import UserModel, { UserType } from '@/db/models/user';
 
 beforeAll(async () => {
@@ -32,6 +35,8 @@ beforeEach(async () => {
     await SeasonOpsModel.deleteMany();
     await ScheduleModel.deleteMany();
     await SchedulePlayoffModel.deleteMany();
+    await SetPlaysDataModel.deleteMany();
+    await SetPlaysModel.deleteMany();
     await ScoreDetailsModel.deleteMany();
     await ScoreDetailsPlayoffModel.deleteMany();
     await StartingLineupModel.deleteMany();
@@ -48,6 +53,8 @@ afterAll(async () => {
     await SeasonOpsModel.deleteMany();
     await ScheduleModel.deleteMany();
     await SchedulePlayoffModel.deleteMany();
+    await SetPlaysDataModel.deleteMany();
+    await SetPlaysModel.deleteMany();
     await ScoreDetailsModel.deleteMany();
     await ScoreDetailsPlayoffModel.deleteMany();
     await StartingLineupModel.deleteMany();
@@ -265,7 +272,7 @@ describe('Test HistoryGamesModel methods and static functions', () => {
     });
 
     describe('saveScheduleToHistory', () => {
-        test('should throw error if await ScheduleModel.getScheduleForHistory() will not return data', async () => {
+        test('Should throw error if await ScheduleModel.getScheduleForHistory() will not return data', async () => {
             const seasonId = new mongoose.Types.ObjectId().toString();
 
             await expect(
@@ -273,7 +280,7 @@ describe('Test HistoryGamesModel methods and static functions', () => {
             ).rejects.toThrow('Schedule not found');
         });
 
-        test('should throw error if await HistoryTeamModel.getHistoryTeamIdByNameAndCoachName will not return data', async () => {
+        test('Should throw error if await HistoryTeamModel.getHistoryTeamIdByNameAndCoachName will not return data', async () => {
             const ligueGroup = await new LigueGroupsModel({
                 groupName: 'dolce'
             }).save();
@@ -309,7 +316,7 @@ describe('Test HistoryGamesModel methods and static functions', () => {
             );
         });
 
-        test('should properly create a document with history games data with correct type and values', async () => {
+        test('Should properly create a document with history games data with correct type and values', async () => {
             const ligueGroup = await new LigueGroupsModel({
                 groupName: 'dolce'
             }).save();
@@ -364,7 +371,6 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                     {
                         userId: userOne._id.toString(),
                         roundNumber: 1,
-                        setPlays: 'team-one-setplay',
                         playerOne: players[0]._id.toString(),
                         playerTwo: players[1]._id.toString(),
                         playerThree: players[2]._id.toString(),
@@ -379,7 +385,6 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                     {
                         userId: userTwo._id.toString(),
                         roundNumber: 1,
-                        setPlays: 'team-two-setplay',
                         playerOne: players[0]._id.toString(),
                         playerTwo: players[1]._id.toString(),
                         playerThree: players[2]._id.toString(),
@@ -397,7 +402,6 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                     {
                         userId: userThree._id.toString(),
                         roundNumber: 2,
-                        setPlays: 'team-three-setplay',
                         playerOne: players[0]._id.toString(),
                         playerTwo: players[1]._id.toString(),
                         playerThree: players[2]._id.toString(),
@@ -412,7 +416,6 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                     {
                         userId: userOne._id.toString(),
                         roundNumber: 2,
-                        setPlays: 'team-one-second-setplay',
                         playerOne: players[0]._id.toString(),
                         playerTwo: players[1]._id.toString(),
                         playerThree: players[2]._id.toString(),
@@ -425,6 +428,43 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                         }
                     }
                 ]);
+
+            const [gwarancjaStartow, muchomor, mortalKombatCombo] =
+                await SetPlaysModel.create([
+                    {
+                        name: 'Gwarancja startów',
+                        type: SetPlayEnumType.GwarancjaStartow
+                    },
+                    { name: 'Muchomor', type: SetPlayEnumType.Muchomor },
+                    {
+                        name: 'Mortal Kombat Combo',
+                        type: SetPlayEnumType.MortalKombatCombo
+                    }
+                ]);
+            await SetPlaysDataModel.create([
+                {
+                    startingLineupId: startingLineupOne._id,
+                    setPlayList: [
+                        {
+                            setPlayId: gwarancjaStartow._id,
+                            userData: { playerId: players[0]._id.toString() }
+                        },
+                        { setPlayId: muchomor._id }
+                    ]
+                },
+                {
+                    startingLineupId: startingLineupTwo._id,
+                    setPlayList: [{ setPlayId: mortalKombatCombo._id }]
+                },
+                {
+                    startingLineupId: startingLineupThree._id,
+                    setPlayList: [{ setPlayId: muchomor._id }]
+                },
+                {
+                    startingLineupId: startingLineupFour._id,
+                    setPlayList: [{ setPlayId: mortalKombatCombo._id }]
+                }
+            ]);
 
             await ScoreDetailsModel.create([
                 {
@@ -552,10 +592,22 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                     .exec();
 
             expect(firstScoreDetails?.teamOne.setPlays).toEqual([
-                'team-one-setplay'
+                'Gwarancja startów',
+                'Muchomor'
             ]);
             expect(firstScoreDetails?.teamTwo.setPlays).toEqual([
-                'team-two-setplay'
+                'Mortal Kombat Combo'
+            ]);
+
+            const secondScoreDetails =
+                await HistoryGamesScoreDetailsModel.findById(
+                    secondGame?.scoreDetails
+                )
+                    .lean()
+                    .exec();
+            expect(secondScoreDetails?.teamOne.setPlays).toEqual(['Muchomor']);
+            expect(secondScoreDetails?.teamTwo.setPlays).toEqual([
+                'Mortal Kombat Combo'
             ]);
 
             expect(firstScoreDetails?.teamOne.score).toBe(44);
