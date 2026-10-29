@@ -226,7 +226,12 @@ export type SetPlaysDataSelectionReturnType = SetPlayPayloadType & {
     setPlayId: string;
     selectedSetPlayId: string;
 };
-export type SetPlaysDataForUserReturnType = Pick<SetPlaysType, 'name'> & {
+export type SetPlaysDataForUserReturnType = Pick<
+    SetPlaysType,
+    'name' | 'type'
+> & {
+    selectedSetPlayId: string;
+    setPlayId: string;
     userData: SetPlayUserDataType | null;
 };
 export type SetPlaysDataForAdminReturnType = Pick<
@@ -470,7 +475,9 @@ setPlaysDataSchema.static(
                 await this.findOne({
                     startingLineupId
                 })
-                    .select('setPlayList.setPlayId setPlayList.userData')
+                    .select(
+                        'setPlayList._id setPlayList.setPlayId setPlayList.userData'
+                    )
                     .populate<PopulatedFindType>({
                         path: 'setPlayList.setPlayId',
                         select: 'name type'
@@ -490,7 +497,10 @@ setPlaysDataSchema.static(
                         );
                     }
                     return {
+                        selectedSetPlayId: setPlay._id.toString(),
+                        setPlayId: setPlay.setPlayId._id.toString(),
                         name: setPlay.setPlayId.name,
+                        type: setPlay.setPlayId.type,
                         userData: setPlay.userData ?? null
                     };
                 });

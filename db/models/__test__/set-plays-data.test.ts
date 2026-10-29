@@ -926,12 +926,16 @@ describe('getSetPlaysForUser', () => {
         ).toEqual([]);
     });
 
-    test('Should return only user-facing names and inputs for the requested startingLineupId', async () => {
+    test('Should return selected set play IDs, types, names and user inputs for the requested startingLineupId', async () => {
         const saved = await addSelectedSetPlays(startingLineupId, [
             { setPlayId: getSetPlayId(SetPlayEnumType.Remis) },
             {
                 setPlayId: getSetPlayId(SetPlayEnumType.GwarancjaStartow),
                 userData: { playerId: ownPlayerIds[0] }
+            },
+            {
+                setPlayId: getSetPlayId(SetPlayEnumType.GwarancjaStartow),
+                userData: { playerId: ownPlayerIds[1] }
             },
             {
                 setPlayId: getSetPlayId(SetPlayEnumType.BrudnaPala),
@@ -952,19 +956,39 @@ describe('getSetPlaysForUser', () => {
                 }
             }
         );
-        expect(
-            await SetPlaysDataModel.getSetPlaysForUser(startingLineupId)
-        ).toEqual([
-            { name: 'Remis', userData: null },
+        const result =
+            await SetPlaysDataModel.getSetPlaysForUser(startingLineupId);
+        expect(result).toEqual([
             {
+                selectedSetPlayId: saved[0].selectedSetPlayId,
+                setPlayId: getSetPlayId(SetPlayEnumType.Remis),
+                type: SetPlayEnumType.Remis,
+                name: 'Remis',
+                userData: null
+            },
+            {
+                selectedSetPlayId: saved[1].selectedSetPlayId,
+                setPlayId: getSetPlayId(SetPlayEnumType.GwarancjaStartow),
+                type: SetPlayEnumType.GwarancjaStartow,
                 name: 'Gwarancja startów',
                 userData: { playerId: ownPlayerIds[0] }
             },
             {
+                selectedSetPlayId: saved[2].selectedSetPlayId,
+                setPlayId: getSetPlayId(SetPlayEnumType.GwarancjaStartow),
+                type: SetPlayEnumType.GwarancjaStartow,
+                name: 'Gwarancja startów',
+                userData: { playerId: ownPlayerIds[1] }
+            },
+            {
+                selectedSetPlayId: saved[3].selectedSetPlayId,
+                setPlayId: getSetPlayId(SetPlayEnumType.BrudnaPala),
+                type: SetPlayEnumType.BrudnaPala,
                 name: 'Brudna pała',
                 userData: { leaderIdList: ownPlayerIds.slice(0, 4) }
             }
         ]);
+        expect(result[1].selectedSetPlayId).not.toBe(result[2].selectedSetPlayId);
     });
 });
 
