@@ -1,11 +1,6 @@
 import { HydratedDocument, model, Model, Schema } from 'mongoose';
 import { z } from 'zod';
 
-import {
-    DEFAULT_PLAYER_SCORE_DETAILS,
-    PlayerScoreDetailsType,
-    PlayerScoreDetailsInputType
-} from '@/db/db.types';
 import ScheduleModel, { ScheduleType } from '@/db/models/games/schedule';
 import SetPlaysDataModel, {
     SetPlayUserDataType
@@ -13,25 +8,33 @@ import SetPlaysDataModel, {
 import { StartingLineupPlayersByRoundReturnType } from '@/db/models/games/starting-lineup';
 import PlayersModel, { PlayersType } from '@/db/models/players';
 import {
-    heatScoresSchema,
-    playerSchema,
+    HistoryPlayerType,
+    historyPlayerSchema,
+    playerScoresZodSchema,
+    regularSeasonPlayerSchema,
+    regularSeasonTeamSchema,
     trainerSchema,
     objectIdSchema,
-    roundNumberSchema,
-    teamSchema
+    roundNumberSchema
 } from '@/db/models/schema.types';
 import { SetPlaysType } from '@/db/models/set-plays';
 import UserModel, { UserType } from '@/db/models/user';
 
-export type { PlayerScoreDetailsType };
+export type RegularSeasonPlayerScoreDetailsType = z.infer<
+    typeof playerScoresZodSchema
+>;
+
+export type RegularSeasonPlayerScoreDetailsInputType = z.input<
+    typeof playerScoresZodSchema
+>;
 
 //ScoreDetails is representation of megaliga_scores of old megaliga database. Will be used for displaying detailed scores of given match.
 
 export const scoreDetailsZodSchema = z.object({
     scheduleId: objectIdSchema, //Reference to Schedule model, from which we will populate main scores
     roundNumber: roundNumberSchema, //needed to properly identify document for different use cases
-    teamOne: teamSchema,
-    teamTwo: teamSchema
+    teamOne: regularSeasonTeamSchema,
+    teamTwo: regularSeasonTeamSchema
 });
 
 export type ScoreDetailsType = z.infer<typeof scoreDetailsZodSchema>;
@@ -88,7 +91,7 @@ export type ScoreDetailsReturnType = {
 };
 
 type ScoreDetailsForHistoryTeamReturnType = {
-    players: NonNullable<ScoreDetailsType['teamOne']['players']>;
+    players: HistoryPlayerType[];
     trainer: ScoreDetailsType['teamOne']['trainer'];
     setPlays: string[];
 };
@@ -104,7 +107,7 @@ type ScoreDetailsTeamType = 'teamOne' | 'teamTwo';
 export type PlayerScoreDetailsReturnType = {
     scoreDetailsId: string | null;
     teamType: ScoreDetailsTeamType | null;
-    playerScoreDetails: PlayerScoreDetailsType;
+    playerScoreDetails: RegularSeasonPlayerScoreDetailsType;
 };
 
 export type SavePlayerScoreDetailsReturnType = {
@@ -127,7 +130,7 @@ interface ScoreDetailsModelType extends Model<ScoreDetailsType> {
     savePlayerScoreDetails: (
         playerData: StartingLineupPlayersByRoundReturnType,
         roundNumber: number,
-        playerScore: PlayerScoreDetailsInputType
+        playerScore: RegularSeasonPlayerScoreDetailsInputType
     ) => Promise<SavePlayerScoreDetailsReturnType>;
     isScoreCalculationsEnabled: (roundNumber: number) => Promise<boolean>;
     deleteAll: () => Promise<void>;
@@ -140,18 +143,48 @@ const scoreDetailsSchema = new Schema<ScoreDetailsType, ScoreDetailsModelType>({
         userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
         players: [
             {
+                _id: false,
                 playerId: {
                     type: Schema.Types.ObjectId,
                     ref: 'Players',
                     required: true
                 },
-                heatOne: { type: Number },
-                heatTwo: { type: Number },
-                heatThree: { type: Number },
-                heatFour: { type: Number },
-                heatFive: { type: Number },
-                heatSix: { type: Number },
-                heatSeven: { type: Number },
+                heatOne: {
+                    // For all heats: undefined means not submitted; null means saved with no start.
+                    value: { type: Number },
+                    bonus: { type: Boolean, default: false },
+                    isNominated: { type: Boolean, default: false }
+                },
+                heatTwo: {
+                    value: { type: Number },
+                    bonus: { type: Boolean, default: false },
+                    isNominated: { type: Boolean, default: false }
+                },
+                heatThree: {
+                    value: { type: Number },
+                    bonus: { type: Boolean, default: false },
+                    isNominated: { type: Boolean, default: false }
+                },
+                heatFour: {
+                    value: { type: Number },
+                    bonus: { type: Boolean, default: false },
+                    isNominated: { type: Boolean, default: false }
+                },
+                heatFive: {
+                    value: { type: Number },
+                    bonus: { type: Boolean, default: false },
+                    isNominated: { type: Boolean, default: false }
+                },
+                heatSix: {
+                    value: { type: Number },
+                    bonus: { type: Boolean, default: false },
+                    isNominated: { type: Boolean, default: false }
+                },
+                heatSeven: {
+                    value: { type: Number },
+                    bonus: { type: Boolean, default: false },
+                    isNominated: { type: Boolean, default: false }
+                },
                 setPlay: { type: Number },
                 comment: { type: String }
             }
@@ -173,18 +206,48 @@ const scoreDetailsSchema = new Schema<ScoreDetailsType, ScoreDetailsModelType>({
         userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
         players: [
             {
+                _id: false,
                 playerId: {
                     type: Schema.Types.ObjectId,
                     ref: 'Players',
                     required: true
                 },
-                heatOne: { type: Number },
-                heatTwo: { type: Number },
-                heatThree: { type: Number },
-                heatFour: { type: Number },
-                heatFive: { type: Number },
-                heatSix: { type: Number },
-                heatSeven: { type: Number },
+                heatOne: {
+                    // For all heats: undefined means not submitted; null means saved with no start.
+                    value: { type: Number },
+                    bonus: { type: Boolean, default: false },
+                    isNominated: { type: Boolean, default: false }
+                },
+                heatTwo: {
+                    value: { type: Number },
+                    bonus: { type: Boolean, default: false },
+                    isNominated: { type: Boolean, default: false }
+                },
+                heatThree: {
+                    value: { type: Number },
+                    bonus: { type: Boolean, default: false },
+                    isNominated: { type: Boolean, default: false }
+                },
+                heatFour: {
+                    value: { type: Number },
+                    bonus: { type: Boolean, default: false },
+                    isNominated: { type: Boolean, default: false }
+                },
+                heatFive: {
+                    value: { type: Number },
+                    bonus: { type: Boolean, default: false },
+                    isNominated: { type: Boolean, default: false }
+                },
+                heatSix: {
+                    value: { type: Number },
+                    bonus: { type: Boolean, default: false },
+                    isNominated: { type: Boolean, default: false }
+                },
+                heatSeven: {
+                    value: { type: Number },
+                    bonus: { type: Boolean, default: false },
+                    isNominated: { type: Boolean, default: false }
+                },
                 setPlay: { type: Number },
                 comment: { type: String }
             }
@@ -264,7 +327,9 @@ scoreDetailsSchema.static(
                     teamName: team.userId?.teamName ?? '',
                     players: (team.players ?? []).map(player => {
                         return {
-                            ...trainerSchema.parse(player),
+                            ...regularSeasonPlayerSchema
+                                .omit({ playerId: true })
+                                .parse(player),
                             extraligaPlayerName:
                                 player.playerId?.extraligaPlayerName ?? ''
                         };
@@ -321,10 +386,18 @@ scoreDetailsSchema.static(
 
                 return {
                     players: (team.players ?? []).map(player => {
-                        return {
-                            ...trainerSchema.parse(player),
-                            playerId: player.playerId?.toString()
-                        };
+                        return historyPlayerSchema.parse({
+                            playerId: player.playerId?.toString(),
+                            heatOne: player.heatOne.value,
+                            heatTwo: player.heatTwo.value,
+                            heatThree: player.heatThree.value,
+                            heatFour: player.heatFour.value,
+                            heatFive: player.heatFive.value,
+                            heatSix: player.heatSix.value,
+                            heatSeven: player.heatSeven.value,
+                            setPlay: player.setPlay,
+                            comment: player.comment
+                        });
                     }),
                     trainer: team.trainer
                         ? trainerSchema.parse(team.trainer)
@@ -404,7 +477,7 @@ scoreDetailsSchema.static(
                 return {
                     scoreDetailsId: null,
                     teamType: null,
-                    playerScoreDetails: DEFAULT_PLAYER_SCORE_DETAILS
+                    playerScoreDetails: playerScoresZodSchema.parse({})
                 };
             }
 
@@ -417,9 +490,8 @@ scoreDetailsSchema.static(
                 player => player.playerId?.toString() === playerId
             );
 
-            const playerScoreDetails: PlayerScoreDetailsType = playerEntry
-                ? heatScoresSchema.parse(playerEntry)
-                : DEFAULT_PLAYER_SCORE_DETAILS;
+            const playerScoreDetails: RegularSeasonPlayerScoreDetailsType =
+                playerScoresZodSchema.parse(playerEntry ?? {});
 
             return {
                 scoreDetailsId: document._id.toString(),
@@ -438,10 +510,10 @@ scoreDetailsSchema.static(
     async function savePlayerScoreDetails(
         playerData: StartingLineupPlayersByRoundReturnType,
         roundNumber: number,
-        playerScore: PlayerScoreDetailsInputType
+        playerScore: RegularSeasonPlayerScoreDetailsInputType
     ) {
         try {
-            const normalizedPlayerScore = heatScoresSchema.parse(playerScore);
+            const normalizedPlayerScore = playerScoresZodSchema.parse(playerScore);
 
             for (let index = 0; index < playerData.userId.length; index++) {
                 const userId = playerData.userId[index];
@@ -480,7 +552,7 @@ scoreDetailsSchema.static(
                     };
                 } else {
                     players.push(
-                        playerSchema.parse({
+                        regularSeasonPlayerSchema.parse({
                             playerId: playerData.playerId,
                             ...normalizedPlayerScore
                         })
@@ -535,13 +607,13 @@ scoreDetailsSchema.static(
 
                 return players.every(player => {
                     return (
-                        player.heatOne != null &&
-                        player.heatTwo != null &&
-                        player.heatThree != null &&
-                        player.heatFour != null &&
-                        player.heatFive != null &&
-                        player.heatSix != null &&
-                        player.heatSeven != null
+                        player.heatOne?.value !== undefined &&
+                        player.heatTwo?.value !== undefined &&
+                        player.heatThree?.value !== undefined &&
+                        player.heatFour?.value !== undefined &&
+                        player.heatFive?.value !== undefined &&
+                        player.heatSix?.value !== undefined &&
+                        player.heatSeven?.value !== undefined
                     );
                 });
             };

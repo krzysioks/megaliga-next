@@ -476,7 +476,11 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                         players: [
                             {
                                 playerId: players[0]._id.toString(),
-                                heatOne: 3,
+                                heatOne: {
+                                    value: 3,
+                                    bonus: false,
+                                    isNominated: false
+                                },
                                 setPlay: 1,
                                 comment: 'Solid ride'
                             }
@@ -493,7 +497,11 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                         players: [
                             {
                                 playerId: players[1]._id.toString(),
-                                heatOne: 2,
+                                heatOne: {
+                                    value: 2,
+                                    bonus: false,
+                                    isNominated: false
+                                },
                                 setPlay: 0,
                                 comment: 'Strong start'
                             }
@@ -635,6 +643,7 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                 firstScoreDetails?.teamOne.players?.[0].playerId?.toString()
             ).toBe(players[0]._id.toString());
             expect(firstScoreDetails?.teamOne.players?.[0].heatOne).toBe(3);
+            expect(firstScoreDetails?.teamOne.players?.[0].heatTwo).toBeNull();
             expect(firstScoreDetails?.teamOne.players?.[0].comment).toBe(
                 'Solid ride'
             );

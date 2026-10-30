@@ -3,7 +3,11 @@ import { z } from 'zod';
 
 import { HistoryTeamType } from '@/db/models/history/history-team';
 import { PlayersType } from '@/db/models/players';
-import { trainerSchema, historyTeamSchema } from '@/db/models/schema.types';
+import {
+    historyPlayerSchema,
+    historyTeamSchema,
+    trainerSchema
+} from '@/db/models/schema.types';
 
 //HistoryGames collection represent in each document game played in megaliga
 // We will identify all games for given team in given season by finding all documents by teamId and season in historyGames collection
@@ -197,7 +201,9 @@ historyGamesScoreDetails.static(
                     score: team.score,
                     players: (team.players ?? []).map(player => {
                         return {
-                            ...trainerSchema.parse(player),
+                            ...historyPlayerSchema
+                                .omit({ playerId: true })
+                                .parse(player),
                             extraligaPlayerName:
                                 player.playerId?.extraligaPlayerName ?? ''
                         };

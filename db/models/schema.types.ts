@@ -44,7 +44,27 @@ export const uniquePlayerIdList = z
         );
     }, 'Player IDs must be present and distinct');
 
-// Seven heat results, with unreported heats defaulting to zero.
+export const booleanDefaultFalseSchema = z.boolean().default(false);
+
+export const playerHeatZodSchema = z
+    .object({
+        value: heatSchema.nullable().default(null),
+        bonus: booleanDefaultFalseSchema,
+        isNominated: booleanDefaultFalseSchema
+    })
+    .default({});
+
+export const playerScoresZodSchema = z.object({
+    heatOne: playerHeatZodSchema,
+    heatTwo: playerHeatZodSchema,
+    heatThree: playerHeatZodSchema,
+    heatFour: playerHeatZodSchema,
+    heatFive: playerHeatZodSchema,
+    heatSix: playerHeatZodSchema,
+    heatSeven: playerHeatZodSchema
+});
+
+// Numeric heat scores are used by trainers, Typer, history, and playoff views.
 export const heatScoresSchema = z.object({
     heatOne: heatSchema,
     heatTwo: heatSchema,
@@ -70,15 +90,39 @@ export const playerSchema = heatScoresSchema.extend({
     comment: standardStringSchema.optional()
 });
 
+export const regularSeasonPlayerSchema = playerScoresZodSchema.extend({
+    playerId: objectIdSchema,
+    setPlay: heatSchema,
+    comment: standardStringSchema.optional()
+});
+
 // Trainer schema for trainer stats in a game
 export const trainerSchema = playerSchema.omit({ playerId: true });
+
+const historyHeatScoresSchema = z.object({
+    heatOne: heatSchema.nullable().default(null),
+    heatTwo: heatSchema.nullable().default(null),
+    heatThree: heatSchema.nullable().default(null),
+    heatFour: heatSchema.nullable().default(null),
+    heatFive: heatSchema.nullable().default(null),
+    heatSix: heatSchema.nullable().default(null),
+    heatSeven: heatSchema.nullable().default(null)
+});
+
+export const historyPlayerSchema = historyHeatScoresSchema.extend({
+    playerId: objectIdSchema,
+    setPlay: heatSchema,
+    comment: standardStringSchema.optional()
+});
+
+export type HistoryPlayerType = z.infer<typeof historyPlayerSchema>;
 
 // Team schema for team details in a game (used for both teamOne and teamTwo)
 export const historyTeamSchema = z.object({
     teamId: objectIdSchema, // Reference to team in HistoryTeam collection
     score: z.number(),
     setPlays: z.array(standardStringSchema).optional(),
-    players: z.array(playerSchema).optional(),
+    players: z.array(historyPlayerSchema).optional(),
     trainer: trainerSchema.optional()
 });
 
@@ -87,6 +131,10 @@ export const teamSchema = z.object({
     players: z.array(playerSchema).optional(),
     trainer: trainerSchema.optional(),
     startingLineupId: objectIdSchema.optional() // Reference to StartingLineup model, from which we will populate setplays
+});
+
+export const regularSeasonTeamSchema = teamSchema.extend({
+    players: z.array(regularSeasonPlayerSchema).optional()
 });
 
 // Shared schemas for common patterns
@@ -141,7 +189,6 @@ export const standingsGrandPrixSchema = z.object({
     points: z.number().min(0).max(200)
 });
 
-export const booleanDefaultFalseSchema = z.boolean().default(false);
 export const numberDefaultZeroSchema = z.number().min(0).default(0);
 export const numberSchema = z.number().min(0);
 export const optionalStringSchema = z.string().optional();

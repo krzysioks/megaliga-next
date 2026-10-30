@@ -158,6 +158,7 @@ describe('Test HistoryGamesScoreDetailsModel methods and static functions', () =
         );
 
         expect(result.teamOne.players[0].heatOne).toBe(3);
+        expect(result.teamOne.players[0].heatThree).toBeNull();
         expect(result.teamOne.players[0].comment).toBe('Solid ride');
         expect(result.teamTwo.players[0].heatTwo).toBe(3);
 

@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import { DBClient } from '@/db/db-client';
 import ScheduleModel from '@/db/models/games/schedule';
 import ScoreDetailsModel, {
-    PlayerScoreDetailsType,
+    RegularSeasonPlayerScoreDetailsType,
     ScoreDetailsReturnType,
     ScoreDetailsInputType
 } from '@/db/models/games/score-details';
@@ -13,6 +13,21 @@ import PlayersModel from '@/db/models/players';
 import { SetPlayEnumType } from '@/db/models/schema.types';
 import SetPlaysModel from '@/db/models/set-plays';
 import UserModel, { UserType } from '@/db/models/user';
+
+const playerHeat = (
+    value: number | null,
+    bonus = false,
+    isNominated = false
+) => ({ value, bonus, isNominated });
+
+const expectPlayerHeat = (
+    actual: RegularSeasonPlayerScoreDetailsType['heatOne'] | undefined,
+    expected: ReturnType<typeof playerHeat>
+) => {
+    expect(actual?.value).toBe(expected.value);
+    expect(actual?.bonus).toBe(expected.bonus);
+    expect(actual?.isNominated).toBe(expected.isNominated);
+};
 
 const createUserData = (index: number): UserType => ({
     username: `user-${index + 1}`,
@@ -194,15 +209,15 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                     players: [
                         {
                             playerId: players[0]._id.toString(),
-                            heatOne: 3,
-                            heatTwo: 2,
+                            heatOne: playerHeat(3),
+                            heatTwo: playerHeat(2),
                             setPlay: 1,
                             comment: 'Solid ride'
                         },
                         {
                             playerId: players[1]._id.toString(),
-                            heatOne: 1,
-                            heatTwo: 3,
+                            heatOne: playerHeat(1),
+                            heatTwo: playerHeat(3),
                             setPlay: 0,
                             comment: 'Good finish'
                         }
@@ -219,15 +234,15 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                     players: [
                         {
                             playerId: players[2]._id.toString(),
-                            heatOne: 2,
-                            heatTwo: 3,
+                            heatOne: playerHeat(2),
+                            heatTwo: playerHeat(3),
                             setPlay: 1,
                             comment: 'Strong start'
                         },
                         {
                             playerId: players[3]._id.toString(),
-                            heatOne: 0,
-                            heatTwo: 1,
+                            heatOne: playerHeat(0),
+                            heatTwo: playerHeat(1),
                             setPlay: 0,
                             comment: 'Needs improvement'
                         }
@@ -295,9 +310,9 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 'Player Four'
             );
 
-            expect(result.teamOne.players[0].heatOne).toBe(3);
+            expect(result.teamOne.players[0].heatOne).toEqual(playerHeat(3));
             expect(result.teamOne.players[0].comment).toBe('Solid ride');
-            expect(result.teamTwo.players[0].heatTwo).toBe(3);
+            expect(result.teamTwo.players[0].heatTwo).toEqual(playerHeat(3));
 
             expect(
                 (result.teamOne.players[0] as Record<string, unknown>).playerId
@@ -452,7 +467,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                     players: [
                         {
                             playerId: players[0]._id.toString(),
-                            heatOne: 3,
+                            heatOne: playerHeat(3),
                             setPlay: 1,
                             comment: 'Solid ride'
                         }
@@ -469,7 +484,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                     players: [
                         {
                             playerId: players[1]._id.toString(),
-                            heatOne: 2,
+                            heatOne: playerHeat(2),
                             setPlay: 0,
                             comment: 'Strong start'
                         }
@@ -512,6 +527,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 players[0]._id.toString()
             );
             expect(scoreDetails.teamOne.players[0].heatOne).toBe(3);
+            expect(scoreDetails.teamOne.players[0].heatTwo).toBeNull();
             expect(scoreDetails.teamOne.players[0].setPlay).toBe(1);
             expect(scoreDetails.teamOne.players[0].comment).toBe('Solid ride');
 
@@ -655,8 +671,8 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                     players: [
                         {
                             playerId: playerOne._id.toString(),
-                            heatOne: 3,
-                            heatTwo: 2,
+                            heatOne: playerHeat(3, true, true),
+                            heatTwo: playerHeat(0),
                             setPlay: 1,
                             comment: 'Solid ride'
                         }
@@ -667,8 +683,8 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                     players: [
                         {
                             playerId: playerTwo._id.toString(),
-                            heatOne: 1,
-                            heatTwo: 1,
+                            heatOne: playerHeat(1),
+                            heatTwo: playerHeat(1),
                             setPlay: 0,
                             comment: 'Weak ride'
                         }
@@ -686,11 +702,11 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             expect(result.scoreDetailsId).toBe(scoreDetails._id.toString());
             expect(result.teamType).toBe('teamOne');
 
-            const playerScoreDetails: PlayerScoreDetailsType =
+            const playerScoreDetails: RegularSeasonPlayerScoreDetailsType =
                 result.playerScoreDetails;
 
-            expect(playerScoreDetails.heatOne).toBe(3);
-            expect(playerScoreDetails.heatTwo).toBe(2);
+            expect(playerScoreDetails.heatOne).toEqual(playerHeat(3, true, true));
+            expect(playerScoreDetails.heatTwo).toEqual(playerHeat(0));
             expect(
                 (playerScoreDetails as Record<string, unknown>).setPlay
             ).toBeUndefined();
@@ -715,16 +731,16 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             expect(result.scoreDetailsId).toBeNull();
             expect(result.teamType).toBeNull();
 
-            const playerScoreDetails: PlayerScoreDetailsType =
+            const playerScoreDetails: RegularSeasonPlayerScoreDetailsType =
                 result.playerScoreDetails;
 
-            expect(playerScoreDetails.heatOne).toBe(0);
-            expect(playerScoreDetails.heatTwo).toBe(0);
-            expect(playerScoreDetails.heatThree).toBe(0);
-            expect(playerScoreDetails.heatFour).toBe(0);
-            expect(playerScoreDetails.heatFive).toBe(0);
-            expect(playerScoreDetails.heatSix).toBe(0);
-            expect(playerScoreDetails.heatSeven).toBe(0);
+            expect(playerScoreDetails.heatOne).toEqual(playerHeat(null));
+            expect(playerScoreDetails.heatTwo).toEqual(playerHeat(null));
+            expect(playerScoreDetails.heatThree).toEqual(playerHeat(null));
+            expect(playerScoreDetails.heatFour).toEqual(playerHeat(null));
+            expect(playerScoreDetails.heatFive).toEqual(playerHeat(null));
+            expect(playerScoreDetails.heatSix).toEqual(playerHeat(null));
+            expect(playerScoreDetails.heatSeven).toEqual(playerHeat(null));
         });
     });
 
@@ -744,14 +760,14 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
 
             await expect(
                 ScoreDetailsModel.savePlayerScoreDetails(playerData, 7, {
-                    heatOne: 3
+                    heatOne: playerHeat(3)
                 })
             ).rejects.toThrow(
                 `Schedule not found for userId: ${userOne._id.toString()} and roundNumber: 7`
             );
         });
 
-        test('Should fill in all missing heats with 0', async () => {
+        test('Should save heat values and flags while defaulting unused heats to null', async () => {
             const userOne = await new UserModel(createUserData(61)).save();
             const userTwo = await new UserModel(createUserData(62)).save();
             const [player] = await PlayersModel.create([
@@ -773,7 +789,8 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             };
 
             await ScoreDetailsModel.savePlayerScoreDetails(playerData, 12, {
-                heatFour: 2
+                heatTwo: playerHeat(0),
+                heatFour: playerHeat(2, true, true)
             });
 
             const savedDocument = await ScoreDetailsModel.findOne({
@@ -781,13 +798,25 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             }).exec();
             const savedPlayer = savedDocument?.teamOne.players?.[0];
 
-            expect(savedPlayer?.heatOne).toBe(0);
-            expect(savedPlayer?.heatTwo).toBe(0);
-            expect(savedPlayer?.heatThree).toBe(0);
-            expect(savedPlayer?.heatFour).toBe(2);
-            expect(savedPlayer?.heatFive).toBe(0);
-            expect(savedPlayer?.heatSix).toBe(0);
-            expect(savedPlayer?.heatSeven).toBe(0);
+            expectPlayerHeat(savedPlayer?.heatOne, playerHeat(null));
+            expectPlayerHeat(savedPlayer?.heatTwo, playerHeat(0));
+            expectPlayerHeat(savedPlayer?.heatThree, playerHeat(null));
+            expectPlayerHeat(savedPlayer?.heatFour, playerHeat(2, true, true));
+            expectPlayerHeat(savedPlayer?.heatFive, playerHeat(null));
+            expectPlayerHeat(savedPlayer?.heatSix, playerHeat(null));
+            expectPlayerHeat(savedPlayer?.heatSeven, playerHeat(null));
+
+            const result =
+                await ScoreDetailsModel.getPlayerScoreDetailsByRoundAndUserId(
+                    12,
+                    userOne._id.toString(),
+                    player!._id.toString()
+                );
+
+            expect(result.playerScoreDetails.heatTwo).toEqual(playerHeat(0));
+            expect(result.playerScoreDetails.heatFour).toEqual(
+                playerHeat(2, true, true)
+            );
         });
 
         test('Should create score details document and save player under teamOne when userId matches schedule userOneId', async () => {
@@ -815,7 +844,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             const result = await ScoreDetailsModel.savePlayerScoreDetails(
                 playerData,
                 8,
-                { heatOne: 3, heatTwo: 2 }
+                { heatOne: playerHeat(3), heatTwo: playerHeat(2) }
             );
 
             expect(result).toEqual({ success: true });
@@ -835,10 +864,11 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             expect(
                 savedDocument?.teamOne.players?.[0]?.playerId?.toString()
             ).toBe(player!._id.toString());
-            expect(savedDocument?.teamOne.players?.[0]?.heatOne).toBe(3);
-            expect(savedDocument?.teamOne.players?.[0]?.heatTwo).toBe(2);
-            expect(savedDocument?.teamOne.players?.[0]?.heatThree).toBe(0);
-            expect(savedDocument?.teamOne.players?.[0]?.heatSeven).toBe(0);
+            const savedPlayer = savedDocument?.teamOne.players?.[0];
+            expectPlayerHeat(savedPlayer?.heatOne, playerHeat(3));
+            expectPlayerHeat(savedPlayer?.heatTwo, playerHeat(2));
+            expectPlayerHeat(savedPlayer?.heatThree, playerHeat(null));
+            expectPlayerHeat(savedPlayer?.heatSeven, playerHeat(null));
         });
 
         test('Should save player under teamTwo when userId matches schedule userTwoId', async () => {
@@ -864,7 +894,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             };
 
             await ScoreDetailsModel.savePlayerScoreDetails(playerData, 9, {
-                heatThree: 1
+                heatThree: playerHeat(1)
             });
 
             const savedDocument = await ScoreDetailsModel.findOne({
@@ -874,9 +904,10 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             expect(savedDocument?.teamTwo.userId?.toString()).toBe(
                 userTwo._id.toString()
             );
-            expect(savedDocument?.teamTwo.players?.[0]?.heatThree).toBe(1);
-            expect(savedDocument?.teamTwo.players?.[0]?.heatOne).toBe(0);
-            expect(savedDocument?.teamTwo.players?.[0]?.heatTwo).toBe(0);
+            const savedPlayer = savedDocument?.teamTwo.players?.[0];
+            expectPlayerHeat(savedPlayer?.heatThree, playerHeat(1));
+            expectPlayerHeat(savedPlayer?.heatOne, playerHeat(null));
+            expectPlayerHeat(savedPlayer?.heatTwo, playerHeat(null));
         });
 
         test('Should update existing player entry instead of duplicating it', async () => {
@@ -901,11 +932,12 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             };
 
             await ScoreDetailsModel.savePlayerScoreDetails(playerData, 10, {
-                heatOne: 1
+                heatOne: playerHeat(4, true, true),
+                heatTwo: playerHeat(3)
             });
             await ScoreDetailsModel.savePlayerScoreDetails(playerData, 10, {
-                heatOne: 4,
-                heatTwo: 3
+                heatOne: playerHeat(4),
+                heatTwo: playerHeat(null)
             });
 
             const savedDocument = await ScoreDetailsModel.findOne({
@@ -913,9 +945,10 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             }).exec();
 
             expect(savedDocument?.teamOne.players).toHaveLength(1);
-            expect(savedDocument?.teamOne.players?.[0]?.heatOne).toBe(4);
-            expect(savedDocument?.teamOne.players?.[0]?.heatTwo).toBe(3);
-            expect(savedDocument?.teamOne.players?.[0]?.heatThree).toBe(0);
+            const savedPlayer = savedDocument?.teamOne.players?.[0];
+            expectPlayerHeat(savedPlayer?.heatOne, playerHeat(4));
+            expectPlayerHeat(savedPlayer?.heatTwo, playerHeat(null));
+            expectPlayerHeat(savedPlayer?.heatThree, playerHeat(null));
         });
 
         test('Should save score details for a player assigned to two different users across two schedules', async () => {
@@ -953,7 +986,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             const result = await ScoreDetailsModel.savePlayerScoreDetails(
                 playerData,
                 11,
-                { heatOne: 5 }
+                { heatOne: playerHeat(5) }
             );
 
             expect(result).toEqual({ success: true });
@@ -975,23 +1008,25 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                     userFour._id.toString()
             );
 
-            expect(documentForUserOne?.teamOne.players?.[0]?.heatOne).toBe(5);
-            expect(documentForUserFour?.teamTwo.players?.[0]?.heatOne).toBe(5);
-            expect(documentForUserOne?.teamOne.players?.[0]?.heatTwo).toBe(0);
-            expect(documentForUserFour?.teamTwo.players?.[0]?.heatTwo).toBe(0);
+            const userOnePlayer = documentForUserOne?.teamOne.players?.[0];
+            const userFourPlayer = documentForUserFour?.teamTwo.players?.[0];
+            expectPlayerHeat(userOnePlayer?.heatOne, playerHeat(5));
+            expectPlayerHeat(userFourPlayer?.heatOne, playerHeat(5));
+            expectPlayerHeat(userOnePlayer?.heatTwo, playerHeat(null));
+            expectPlayerHeat(userFourPlayer?.heatTwo, playerHeat(null));
         });
     });
 
     describe('isScoreCalculationsEnabled', () => {
         const createCompletePlayer = () => ({
             playerId: new mongoose.Types.ObjectId().toString(),
-            heatOne: 1,
-            heatTwo: 1,
-            heatThree: 1,
-            heatFour: 1,
-            heatFive: 1,
-            heatSix: 1,
-            heatSeven: 1
+            heatOne: playerHeat(1),
+            heatTwo: playerHeat(1),
+            heatThree: playerHeat(1),
+            heatFour: playerHeat(1),
+            heatFive: playerHeat(1),
+            heatSix: playerHeat(1),
+            heatSeven: playerHeat(1)
         });
 
         const createCompletePlayers = () =>
@@ -1040,7 +1075,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 createCompleteScoreDetails(2)
             ];
             const incompletePlayer = createCompletePlayer();
-            delete (incompletePlayer as Record<string, unknown>).heatSeven;
+            delete (incompletePlayer.heatSeven as Record<string, unknown>).value;
             scoreDetailsData[5]!.teamTwo.players = [
                 incompletePlayer,
                 ...createCompletePlayers().slice(1)
@@ -1075,14 +1110,18 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
         });
 
         test('Should return true if 6 documents exist and all players have heats filled in', async () => {
-            await ScoreDetailsModel.create([
+            const scoreDetailsData = [
                 createCompleteScoreDetails(3),
                 createCompleteScoreDetails(3),
                 createCompleteScoreDetails(3),
                 createCompleteScoreDetails(3),
                 createCompleteScoreDetails(3),
                 createCompleteScoreDetails(3)
-            ]);
+            ];
+            scoreDetailsData[5]!.teamTwo.players[0]!.heatSix = playerHeat(0);
+            scoreDetailsData[5]!.teamTwo.players[0]!.heatSeven = playerHeat(null);
+
+            await ScoreDetailsModel.create(scoreDetailsData);
 
             const result =
                 await ScoreDetailsModel.isScoreCalculationsEnabled(3);
