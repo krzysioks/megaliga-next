@@ -14,7 +14,7 @@ import { normalizeSetPlayData } from '@/db/db.utils';
 import StartingLineupModel from '@/db/models/games/starting-lineup';
 import {
     attemptZodSchema,
-    heatScoresSchema,
+    playerScoresZodSchema,
     numberSchema,
     objectIdSchema,
     SetPlayEnumType,
@@ -48,12 +48,12 @@ const setPlayPayloadZodSchema = z.discriminatedUnion('type', [
     z.object({
         type: z.literal(SetPlayEnumType.Rezerwa),
         userData: z.object({ playerId: objectIdSchema }).required(),
-        adminData: heatScoresSchema.default({})
+        adminData: playerScoresZodSchema.default({})
     }),
     z.object({
         type: z.literal(SetPlayEnumType.RezerwaGielda),
         userData: z.object({ playerId: objectIdSchema }).required(),
-        adminData: heatScoresSchema.default({})
+        adminData: playerScoresZodSchema.default({})
     }),
     z.object({
         type: z.literal(SetPlayEnumType.MortalKombatCombo)
@@ -141,7 +141,7 @@ const setPlayPayloadZodSchema = z.discriminatedUnion('type', [
     z.object({
         type: z.literal(SetPlayEnumType.Awatar),
         userData: z.object({ playerId: objectIdSchema }).required(),
-        adminData: heatScoresSchema.default({})
+        adminData: playerScoresZodSchema.default({})
     }),
     z.object({
         type: z.literal(SetPlayEnumType.KoloFortunyNorbiego),

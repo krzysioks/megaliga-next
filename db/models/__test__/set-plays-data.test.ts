@@ -487,7 +487,12 @@ describe('updateSetPlay', () => {
                 { setPlayId: getSetPlayId(SetPlayEnumType.Ncd6) },
                 {
                     setPlayId: getSetPlayId(SetPlayEnumType.Rezerwa),
-                    userData: { playerId: ownPlayerIds[5] }
+                    userData: { playerId: ownPlayerIds[5] },
+                    adminData: {
+                        heatOne: { value: 3, bonus: true, isNominated: true },
+                        heatTwo: { value: 0 },
+                        heatSeven: { value: null }
+                    }
                 },
                 {
                     setPlayId: getSetPlayId(SetPlayEnumType.RezerwaGielda),
@@ -1000,13 +1005,13 @@ describe('saveAdminSetPlay', () => {
     ];
 
     const fullScores = {
-        heatOne: 1,
-        heatTwo: 2,
-        heatThree: 3,
-        heatFour: 4,
-        heatFive: 5,
-        heatSix: 6,
-        heatSeven: 7
+        heatOne: { value: 1, bonus: false, isNominated: false },
+        heatTwo: { value: 2, bonus: false, isNominated: false },
+        heatThree: { value: 3, bonus: false, isNominated: false },
+        heatFour: { value: 4, bonus: false, isNominated: false },
+        heatFive: { value: 5, bonus: false, isNominated: false },
+        heatSix: { value: 6, bonus: false, isNominated: false },
+        heatSeven: { value: 7, bonus: false, isNominated: false }
     };
 
     function adminSetPlayData(type: SetPlayEnumType): SetPlayDataType {
@@ -1315,13 +1320,13 @@ describe('saveAdminSetPlay', () => {
             });
             const before = await getStoredSetPlays(startingLineupId);
             const adminData = {
-                heatOne: score,
-                heatTwo: score,
-                heatThree: score,
-                heatFour: score,
-                heatFive: score,
-                heatSix: score,
-                heatSeven: score
+                heatOne: { value: score, bonus: false, isNominated: false },
+                heatTwo: { value: score, bonus: false, isNominated: false },
+                heatThree: { value: score, bonus: false, isNominated: false },
+                heatFour: { value: score, bonus: false, isNominated: false },
+                heatFive: { value: score, bonus: false, isNominated: false },
+                heatSix: { value: score, bonus: false, isNominated: false },
+                heatSeven: { value: score, bonus: false, isNominated: false }
             };
             await SetPlaysDataModel.saveAdminSetPlay('2', ownUserId, [
                 {
@@ -1339,39 +1344,73 @@ describe('saveAdminSetPlay', () => {
     );
 
     test.each(heatTypes)(
-        'Should default %s heats to zero and save complete seven-heat submissions',
+        'Should preserve %s heat values and flags through saving, editing and resubmitting',
         async type => {
-            await SetPlaysDataModel.create({
+            const before = await SetPlaysDataModel.saveSetPlay(
                 startingLineupId,
-                setPlayList: [
-                    {
-                        setPlayId: getSetPlayId(type),
-                        userData: { playerId: ownPlayerIds[0] }
-                    }
-                ]
-            });
-            const before = await getStoredSetPlays(startingLineupId);
-            const zeroScores = {
-                heatOne: 0,
-                heatTwo: 0,
-                heatThree: 0,
-                heatFour: 0,
-                heatFive: 0,
-                heatSix: 0,
-                heatSeven: 0
+                {
+                    setPlayId: getSetPlayId(type),
+                    userData: { playerId: ownPlayerIds[0] }
+                },
+                type
+            );
+            const unusedHeat = {
+                value: null,
+                bonus: false,
+                isNominated: false
             };
-            expect(before[0]).toHaveProperty('adminData', zeroScores);
+            const unusedScores = {
+                heatOne: unusedHeat,
+                heatTwo: unusedHeat,
+                heatThree: unusedHeat,
+                heatFour: unusedHeat,
+                heatFive: unusedHeat,
+                heatSix: unusedHeat,
+                heatSeven: unusedHeat
+            };
+            expect(before[0]).toHaveProperty('adminData', unusedScores);
 
-            for (const adminData of [
-                { ...zeroScores, heatTwo: 3 },
-                { ...fullScores }
-            ]) {
+            const submittedScores = {
+                heatOne: { value: 3, bonus: true, isNominated: true },
+                heatTwo: { value: 0 },
+                heatThree: { value: 1.5 }
+            };
+            await SetPlaysDataModel.saveAdminSetPlay('2', ownUserId, [
+                { ...before[0], adminData: submittedScores }
+            ]);
+            const expectedScores = {
+                ...unusedScores,
+                heatOne: { value: 3, bonus: true, isNominated: true },
+                heatTwo: { value: 0, bonus: false, isNominated: false },
+                heatThree: { value: 1.5, bonus: false, isNominated: false }
+            };
+            expect(await getStoredSetPlays(startingLineupId)).toEqual([
+                { ...before[0], adminData: expectedScores }
+            ]);
+            expect(
+                await SetPlaysDataModel.getSetPlaysForAdmin(2, ownUserId)
+            ).toEqual([
+                {
+                    selectedSetPlayId: before[0].selectedSetPlayId,
+                    setPlayId: before[0].setPlayId,
+                    name: catalogNames[type],
+                    type,
+                    adminData: expectedScores
+                }
+            ]);
+
+            const editedScores = { ...fullScores, heatOne: unusedHeat };
+            // Another set-play form may trigger resubmission of this unchanged payload.
+            for (const adminData of [editedScores, editedScores]) {
                 await SetPlaysDataModel.saveAdminSetPlay('2', ownUserId, [
                     { ...before[0], adminData }
                 ]);
                 expect(await getStoredSetPlays(startingLineupId)).toEqual([
-                    { ...before[0], adminData }
+                    { ...before[0], adminData: editedScores }
                 ]);
+                expect(
+                    (await SetPlaysDataModel.getSetPlaysForAdmin(2, ownUserId))[0]
+                ).toHaveProperty('adminData', editedScores);
             }
         }
     );
@@ -1519,11 +1558,17 @@ describe('saveAdminSetPlay', () => {
             },
             {
                 ...before[1],
-                adminData: { ...fullScores, heatOne: 11 }
+                adminData: {
+                    ...fullScores,
+                    heatOne: { value: 11, bonus: true, isNominated: false }
+                }
             },
             {
                 ...before[2],
-                adminData: { ...fullScores, heatTwo: 22 }
+                adminData: {
+                    ...fullScores,
+                    heatTwo: { value: 22, bonus: false, isNominated: true }
+                }
             },
             {
                 ...before[3],
@@ -1535,7 +1580,10 @@ describe('saveAdminSetPlay', () => {
             },
             {
                 ...before[5],
-                adminData: { ...fullScores, heatSeven: 77 }
+                adminData: {
+                    ...fullScores,
+                    heatSeven: { value: 77, bonus: true, isNominated: true }
+                }
             }
         ];
         expect(

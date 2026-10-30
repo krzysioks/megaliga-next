@@ -478,6 +478,16 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                                 playerId: players[0]._id.toString(),
                                 heatOne: {
                                     value: 3,
+                                    bonus: true,
+                                    isNominated: true
+                                },
+                                heatTwo: {
+                                    value: 0,
+                                    bonus: false,
+                                    isNominated: false
+                                },
+                                heatSeven: {
+                                    value: null,
                                     bonus: false,
                                     isNominated: false
                                 },
@@ -643,7 +653,15 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                 firstScoreDetails?.teamOne.players?.[0].playerId?.toString()
             ).toBe(players[0]._id.toString());
             expect(firstScoreDetails?.teamOne.players?.[0].heatOne).toBe(3);
-            expect(firstScoreDetails?.teamOne.players?.[0].heatTwo).toBeNull();
+            expect(firstScoreDetails?.teamOne.players?.[0].heatTwo).toBe(0);
+            expect(firstScoreDetails?.teamOne.players?.[0].heatThree).toBeNull();
+            expect(firstScoreDetails?.teamOne.players?.[0].heatSeven).toBeNull();
+            expect(firstScoreDetails?.teamOne.players?.[0]).not.toHaveProperty(
+                'heatOne.bonus'
+            );
+            expect(firstScoreDetails?.teamOne.players?.[0]).not.toHaveProperty(
+                'heatOne.isNominated'
+            );
             expect(firstScoreDetails?.teamOne.players?.[0].comment).toBe(
                 'Solid ride'
             );
@@ -656,6 +674,23 @@ describe('Test HistoryGamesModel methods and static functions', () => {
             expect(firstScoreDetails?.teamTwo.players?.[0].comment).toBe(
                 'Strong start'
             );
+
+            const historyScoreDetails =
+                await HistoryGamesScoreDetailsModel.getHistoryScoreDetailsById(
+                    firstGame!.scoreDetails!.toString()
+                );
+            expect(historyScoreDetails.teamOne.players[0]).toEqual({
+                extraligaPlayerName: 'Player One',
+                heatOne: 3,
+                heatTwo: 0,
+                heatThree: null,
+                heatFour: null,
+                heatFive: null,
+                heatSix: null,
+                heatSeven: null,
+                setPlay: 1,
+                comment: 'Solid ride'
+            });
         });
     });
 
