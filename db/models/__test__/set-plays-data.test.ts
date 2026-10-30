@@ -194,10 +194,22 @@ describe('saveSetPlay', () => {
 
     test('Should throw when six plays are already selected without changing saved selections', async () => {
         const six: SetPlayDataType[] = [
-            { setPlayId: getSetPlayId(SetPlayEnumType.Ncd), userData: null },
-            { setPlayId: getSetPlayId(SetPlayEnumType.Ncd), userData: null },
-            { setPlayId: getSetPlayId(SetPlayEnumType.Ncd6), userData: null },
-            { setPlayId: getSetPlayId(SetPlayEnumType.Ncd6), userData: null },
+            {
+                setPlayId: getSetPlayId(SetPlayEnumType.Ncd),
+                userData: { playerId: ownPlayerIds[0] }
+            },
+            {
+                setPlayId: getSetPlayId(SetPlayEnumType.Ncd),
+                userData: { playerId: ownPlayerIds[0] }
+            },
+            {
+                setPlayId: getSetPlayId(SetPlayEnumType.Ncd6),
+                userData: { playerId: ownPlayerIds[1] }
+            },
+            {
+                setPlayId: getSetPlayId(SetPlayEnumType.Ncd6),
+                userData: { playerId: ownPlayerIds[1] }
+            },
             {
                 setPlayId: getSetPlayId(SetPlayEnumType.Rezerwa),
                 userData: { playerId: ownPlayerIds[5] }
@@ -283,6 +295,26 @@ describe('saveSetPlay', () => {
                 startingLineupId,
                 { setPlayId: getSetPlayId(SetPlayEnumType.Rezerwa) },
                 SetPlayEnumType.Rezerwa
+            )
+        ).rejects.toThrow(ZodError);
+        expect(await getStoredSetPlays(startingLineupId)).toEqual([]);
+    });
+
+    test.each([
+        SetPlayEnumType.Ncd,
+        SetPlayEnumType.Ncd6,
+        SetPlayEnumType.Awatar
+    ])('Should reject %s without its required rider selection', async type => {
+        await expect(
+            SetPlaysDataModel.saveSetPlay(
+                startingLineupId,
+                {
+                    setPlayId: getSetPlayId(type),
+                    ...(type === SetPlayEnumType.Awatar
+                        ? { userData: { playerId: marketPlayerId } }
+                        : {})
+                },
+                type
             )
         ).rejects.toThrow(ZodError);
         expect(await getStoredSetPlays(startingLineupId)).toEqual([]);
@@ -477,14 +509,105 @@ describe('updateSetPlay', () => {
         }
     );
 
+    test.each([
+        SetPlayEnumType.Ncd,
+        SetPlayEnumType.Ncd6,
+        SetPlayEnumType.Awatar
+    ])(
+        'Should update %s rider selections while preserving the selected ID and admin data',
+        async type => {
+            const playerId =
+                type === SetPlayEnumType.Awatar
+                    ? marketPlayerId
+                    : ownPlayerIds[0];
+            const userData = {
+                playerId,
+                ...(type === SetPlayEnumType.Awatar
+                    ? { replacedPlayerId: ownPlayerIds[1] }
+                    : {})
+            };
+            const saved = await SetPlaysDataModel.saveSetPlay(
+                startingLineupId,
+                {
+                    setPlayId: getSetPlayId(type),
+                    userData: {
+                        playerId: playerId.toUpperCase(),
+                        ...(type === SetPlayEnumType.Awatar
+                            ? { replacedPlayerId: ownPlayerIds[1].toUpperCase() }
+                            : {})
+                    }
+                },
+                type
+            );
+            expect(saved[0]).toMatchObject({ userData });
+
+            const adminData =
+                type === SetPlayEnumType.Awatar
+                    ? { heatOne: { value: 3, bonus: true, isNominated: true } }
+                    : { playerIdList: opponentPlayerIds.slice(0, 4) };
+            await SetPlaysDataModel.saveAdminSetPlay('2', ownUserId, [
+                { ...saved[0], adminData }
+            ]);
+            const before = await getStoredSetPlays(startingLineupId);
+            expect(before[0]).toMatchObject({ userData, adminData });
+            const updatedUserData = {
+                playerId: ownPlayerIds[2],
+                ...(type === SetPlayEnumType.Awatar
+                    ? { replacedPlayerId: ownPlayerIds[3] }
+                    : {})
+            };
+            const updated = await SetPlaysDataModel.updateSetPlay(
+                startingLineupId,
+                saved[0].selectedSetPlayId,
+                {
+                    setPlayId: getSetPlayId(type),
+                    userData: {
+                        playerId: ownPlayerIds[2].toUpperCase(),
+                        ...(type === SetPlayEnumType.Awatar
+                            ? { replacedPlayerId: ownPlayerIds[3].toUpperCase() }
+                            : {})
+                    }
+                }
+            );
+
+            expect(updated).toEqual([
+                { ...before[0], userData: updatedUserData }
+            ]);
+            expect(await getStoredSetPlays(startingLineupId)).toEqual(updated);
+            expect(
+                await SetPlaysDataModel.getSetPlaysForUser(startingLineupId)
+            ).toEqual([
+                {
+                    selectedSetPlayId: saved[0].selectedSetPlayId,
+                    setPlayId: getSetPlayId(type),
+                    name: catalogNames[type],
+                    type,
+                    userData: updatedUserData
+                }
+            ]);
+        }
+    );
+
     test('Should update selected set play data when six set plays are already selected', async () => {
         await SetPlaysDataModel.create({
             startingLineupId,
             setPlayList: [
-                { setPlayId: getSetPlayId(SetPlayEnumType.Ncd) },
-                { setPlayId: getSetPlayId(SetPlayEnumType.Ncd) },
-                { setPlayId: getSetPlayId(SetPlayEnumType.Ncd6) },
-                { setPlayId: getSetPlayId(SetPlayEnumType.Ncd6) },
+                {
+                    setPlayId: getSetPlayId(SetPlayEnumType.Ncd),
+                    userData: { playerId: ownPlayerIds[0] }
+                },
+                {
+                    setPlayId: getSetPlayId(SetPlayEnumType.Ncd),
+                    userData: { playerId: ownPlayerIds[0] }
+                },
+                {
+                    setPlayId: getSetPlayId(SetPlayEnumType.Ncd6),
+                    userData: { playerId: ownPlayerIds[1] }
+                },
+                {
+                    setPlayId: getSetPlayId(SetPlayEnumType.Ncd6),
+                    userData: { playerId: ownPlayerIds[1] }
+                },
                 {
                     setPlayId: getSetPlayId(SetPlayEnumType.Rezerwa),
                     userData: { playerId: ownPlayerIds[5] },
@@ -668,10 +791,22 @@ describe('removeSetPlay', () => {
         await SetPlaysDataModel.create({
             startingLineupId,
             setPlayList: [
-                { setPlayId: getSetPlayId(SetPlayEnumType.Ncd) },
-                { setPlayId: getSetPlayId(SetPlayEnumType.Ncd) },
-                { setPlayId: getSetPlayId(SetPlayEnumType.Ncd6) },
-                { setPlayId: getSetPlayId(SetPlayEnumType.Ncd6) },
+                {
+                    setPlayId: getSetPlayId(SetPlayEnumType.Ncd),
+                    userData: { playerId: ownPlayerIds[0] }
+                },
+                {
+                    setPlayId: getSetPlayId(SetPlayEnumType.Ncd),
+                    userData: { playerId: ownPlayerIds[0] }
+                },
+                {
+                    setPlayId: getSetPlayId(SetPlayEnumType.Ncd6),
+                    userData: { playerId: ownPlayerIds[1] }
+                },
+                {
+                    setPlayId: getSetPlayId(SetPlayEnumType.Ncd6),
+                    userData: { playerId: ownPlayerIds[1] }
+                },
                 {
                     setPlayId: getSetPlayId(SetPlayEnumType.Rezerwa),
                     userData: { playerId: ownPlayerIds[5] }
@@ -1025,7 +1160,12 @@ describe('saveAdminSetPlay', () => {
         if (heatTypes.includes(type)) {
             return {
                 setPlayId,
-                userData: { playerId: ownPlayerIds[0] },
+                userData: {
+                    playerId: ownPlayerIds[0],
+                    ...(type === SetPlayEnumType.Awatar
+                        ? { replacedPlayerId: ownPlayerIds[1] }
+                        : {})
+                },
                 adminData: { ...fullScores }
             };
         }
@@ -1051,6 +1191,7 @@ describe('saveAdminSetPlay', () => {
         }
         return {
             setPlayId,
+            userData: { playerId: ownPlayerIds[0] },
             adminData: { playerIdList: ownPlayerIds.slice(0, 4) }
         };
     }
@@ -1350,7 +1491,12 @@ describe('saveAdminSetPlay', () => {
                 startingLineupId,
                 {
                     setPlayId: getSetPlayId(type),
-                    userData: { playerId: ownPlayerIds[0] }
+                    userData: {
+                        playerId: ownPlayerIds[0],
+                        ...(type === SetPlayEnumType.Awatar
+                            ? { replacedPlayerId: ownPlayerIds[1] }
+                            : {})
+                    }
                 },
                 type
             );
@@ -1712,7 +1858,10 @@ describe('getSetPlaysForAdmin', () => {
                 setPlayId: getSetPlayId(SetPlayEnumType.GwarancjaStartow),
                 userData: { playerId: ownPlayerIds[0] }
             },
-            { setPlayId: getSetPlayId(SetPlayEnumType.Ncd6) },
+            {
+                setPlayId: getSetPlayId(SetPlayEnumType.Ncd6),
+                userData: { playerId: ownPlayerIds[1] }
+            },
             { setPlayId: getSetPlayId(SetPlayEnumType.Remis) }
         ]);
         await SetPlaysDataModel.updateOne(

@@ -159,14 +159,17 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 }
             }).save();
 
-            const [gwarancjaStartow, spartacus, muchomor] =
+            const [gwarancjaStartow, spartacus, muchomor, ncd, ncd6, awatar] =
                 await SetPlaysModel.create([
                     {
                         name: 'Gwarancja startów',
                         type: SetPlayEnumType.GwarancjaStartow
                     },
                     { name: 'Spartacus', type: SetPlayEnumType.Spartacus },
-                    { name: 'Muchomor', type: SetPlayEnumType.Muchomor }
+                    { name: 'Muchomor', type: SetPlayEnumType.Muchomor },
+                    { name: 'NCD', type: SetPlayEnumType.Ncd },
+                    { name: 'NCD6', type: SetPlayEnumType.Ncd6 },
+                    { name: 'Awatar', type: SetPlayEnumType.Awatar }
                 ]);
             await SetPlaysDataModel.create([
                 {
@@ -183,6 +186,26 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                                 opponentPlayerId: players[5]._id.toString()
                             },
                             adminData: { ownAverage: 2, opponentAverage: 1.5 }
+                        },
+                        {
+                            setPlayId: ncd._id,
+                            userData: { playerId: players[2]._id.toString() },
+                            adminData: {
+                                playerIdList: players.slice(5, 9).map(player => {
+                                    return player._id.toString();
+                                })
+                            }
+                        },
+                        {
+                            setPlayId: ncd6._id,
+                            userData: { playerId: players[3]._id.toString() }
+                        },
+                        {
+                            setPlayId: awatar._id,
+                            userData: {
+                                playerId: players[5]._id.toString(),
+                                replacedPlayerId: players[4]._id.toString()
+                            }
                         }
                     ]
                 },
@@ -283,6 +306,24 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                     userData: {
                         ownPlayerId: players[1]._id.toString(),
                         opponentPlayerId: players[5]._id.toString()
+                    }
+                },
+                {
+                    name: 'NCD',
+                    type: SetPlayEnumType.Ncd,
+                    userData: { playerId: players[2]._id.toString() }
+                },
+                {
+                    name: 'NCD6',
+                    type: SetPlayEnumType.Ncd6,
+                    userData: { playerId: players[3]._id.toString() }
+                },
+                {
+                    name: 'Awatar',
+                    type: SetPlayEnumType.Awatar,
+                    userData: {
+                        playerId: players[5]._id.toString(),
+                        replacedPlayerId: players[4]._id.toString()
                     }
                 }
             ]);

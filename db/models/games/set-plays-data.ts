@@ -63,6 +63,7 @@ const setPlayPayloadZodSchema = z.discriminatedUnion('type', [
     }),
     z.object({
         type: z.literal(SetPlayEnumType.Ncd),
+        userData: z.object({ playerId: objectIdSchema }).required(),
         adminData: z
             .object({
                 playerIdList: uniquePlayerIdList.refine(
@@ -74,6 +75,7 @@ const setPlayPayloadZodSchema = z.discriminatedUnion('type', [
     }),
     z.object({
         type: z.literal(SetPlayEnumType.Ncd6),
+        userData: z.object({ playerId: objectIdSchema }).required(),
         adminData: z
             .object({
                 playerIdList: uniquePlayerIdList.refine(
@@ -140,7 +142,12 @@ const setPlayPayloadZodSchema = z.discriminatedUnion('type', [
     }),
     z.object({
         type: z.literal(SetPlayEnumType.Awatar),
-        userData: z.object({ playerId: objectIdSchema }).required(),
+        userData: z
+            .object({
+                playerId: objectIdSchema,
+                replacedPlayerId: objectIdSchema
+            })
+            .required(),
         adminData: playerScoresZodSchema.default({})
     }),
     z.object({

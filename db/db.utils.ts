@@ -85,6 +85,13 @@ export function normalizeSetPlayData<
     const references:
         | SetPlayUserDataType
         | Exclude<SetPlayAdminDataType, Record<string, boolean>> = data;
+    if ('replacedPlayerId' in references) {
+        return {
+            ...data,
+            playerId: references.playerId.toLowerCase(),
+            replacedPlayerId: references.replacedPlayerId.toLowerCase()
+        };
+    }
     if ('playerId' in references) {
         return { ...data, playerId: references.playerId.toLowerCase() };
     }
