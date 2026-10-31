@@ -88,11 +88,14 @@ function remisAdminData(checkedPlayerIds: string[] = []) {
 }
 
 function brudnaPalaAdminData(checkedPlayerIds: string[] = []) {
-    return Object.fromEntries(
-        ownPlayerIds.slice(0, 4).map(playerId => {
-            return [playerId, checkedPlayerIds.includes(playerId)];
-        })
-    );
+    return {
+        isDisabled: false,
+        playerResults: Object.fromEntries(
+            ownPlayerIds.slice(0, 4).map(playerId => {
+                return [playerId, checkedPlayerIds.includes(playerId)];
+            })
+        )
+    };
 }
 
 const clearFixtures = async () => {
@@ -115,7 +118,7 @@ const createStartingLineup = async (
         playerThree: players[2],
         playerFour: players[3],
         playerFive: players[4],
-        roles: { pn: players[0], kb: players[1], p: players[2] }
+        roles: { pn: { playerId: players[0], isDisabled: false }, kb: players[1], p: players[2] }
     });
 };
 
@@ -1166,7 +1169,10 @@ describe('saveAdminSetPlay', () => {
                         ? { replacedPlayerId: ownPlayerIds[1] }
                         : {})
                 },
-                adminData: { ...fullScores }
+                adminData: {
+                    ...fullScores,
+                    ...(type === SetPlayEnumType.Awatar ? { isDisabled: false } : {})
+                }
             };
         }
         if (type === SetPlayEnumType.Spartacus) {
@@ -1461,6 +1467,7 @@ describe('saveAdminSetPlay', () => {
             });
             const before = await getStoredSetPlays(startingLineupId);
             const adminData = {
+                ...(type === SetPlayEnumType.Awatar ? { isDisabled: false } : {}),
                 heatOne: { value: score, bonus: false, isNominated: false },
                 heatTwo: { value: score, bonus: false, isNominated: false },
                 heatThree: { value: score, bonus: false, isNominated: false },
@@ -1506,6 +1513,7 @@ describe('saveAdminSetPlay', () => {
                 isNominated: false
             };
             const unusedScores = {
+                ...(type === SetPlayEnumType.Awatar ? { isDisabled: false } : {}),
                 heatOne: unusedHeat,
                 heatTwo: unusedHeat,
                 heatThree: unusedHeat,
@@ -1545,7 +1553,11 @@ describe('saveAdminSetPlay', () => {
                 }
             ]);
 
-            const editedScores = { ...fullScores, heatOne: unusedHeat };
+            const editedScores = {
+                ...fullScores,
+                ...(type === SetPlayEnumType.Awatar ? { isDisabled: false } : {}),
+                heatOne: unusedHeat
+            };
             // Another set-play form may trigger resubmission of this unchanged payload.
             for (const adminData of [editedScores, editedScores]) {
                 await SetPlaysDataModel.saveAdminSetPlay('2', ownUserId, [
@@ -1629,6 +1641,56 @@ describe('saveAdminSetPlay', () => {
         ]);
         expect(await getStoredSetPlays(startingLineupId)).toEqual(before);
     });
+
+    test.each([SetPlayEnumType.Awatar, SetPlayEnumType.BrudnaPala])(
+        'Should disable and re-enable %s while preserving its inputs and other selected plays',
+        async type => {
+            await SetPlaysDataModel.create({
+                startingLineupId,
+                setPlayList: [
+                    adminSetPlayData(type),
+                    adminSetPlayData(SetPlayEnumType.Remis)
+                ]
+            });
+            const before = await getStoredSetPlays(startingLineupId);
+            expect(before[0]).toHaveProperty('adminData.isDisabled', false);
+            const savedAdminData =
+                'adminData' in before[0] ? before[0].adminData : undefined;
+
+            for (const isDisabled of [true, false]) {
+                await SetPlaysDataModel.saveAdminSetPlay('2', ownUserId, [
+                    { ...before[0], adminData: { ...savedAdminData, isDisabled } }
+                ]);
+                const expectedAdminData = { ...savedAdminData, isDisabled };
+                expect(await getStoredSetPlays(startingLineupId)).toEqual([
+                    { ...before[0], adminData: expectedAdminData },
+                    before[1]
+                ]);
+                expect(
+                    (await SetPlaysDataModel.getSetPlaysForAdmin(2, ownUserId))[0]
+                ).toHaveProperty('adminData', expectedAdminData);
+            }
+
+            await SetPlaysDataModel.saveAdminSetPlay('2', ownUserId, [
+                { ...before[0], adminData: { ...savedAdminData, isDisabled: true } }
+            ]);
+            const updated = await SetPlaysDataModel.updateSetPlay(
+                startingLineupId,
+                before[0].selectedSetPlayId,
+                {
+                    setPlayId: before[0].setPlayId,
+                    userData: type === SetPlayEnumType.Awatar
+                        ? { playerId: marketPlayerId, replacedPlayerId: ownPlayerIds[2] }
+                        : { leaderIdList: ownPlayerIds.slice(0, 4).reverse() }
+                }
+            );
+            expect(updated[0]).toHaveProperty('adminData', {
+                ...savedAdminData,
+                isDisabled: true
+            });
+            expect(updated[1]).toEqual(before[1]);
+        }
+    );
 
     test.each([1, 14])(
         'Should save admin data at boundary round %i',
@@ -1728,6 +1790,7 @@ describe('saveAdminSetPlay', () => {
                 ...before[5],
                 adminData: {
                     ...fullScores,
+                    isDisabled: false,
                     heatSeven: { value: 77, bonus: true, isNominated: true }
                 }
             }

@@ -72,7 +72,7 @@ beforeEach(async () => {
         roundNumber: 2,
         ...lineupPlayers,
         roles: {
-            pn: lineupPlayers.playerOne,
+            pn: { playerId: lineupPlayers.playerOne, isDisabled: false },
             kb: lineupPlayers.playerTwo,
             p: lineupPlayers.playerThree
         }
@@ -114,7 +114,7 @@ describe('Test SetPlaysModel methods and static functions', () => {
                     roundNumber,
                     ...lineupPlayers,
                     roles: {
-                        pn: lineupPlayers.playerOne,
+                        pn: { playerId: lineupPlayers.playerOne, isDisabled: false },
                         kb: lineupPlayers.playerTwo,
                         p: lineupPlayers.playerThree
                     }

@@ -2,6 +2,11 @@ import { HydratedDocument, model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
 import {
+    MIN_REGULAR_SEASON_ROUND,
+    MAX_REGULAR_SEASON_ROUND
+} from '@/db/db.constants';
+import {
+    booleanDefaultFalseSchema,
     objectIdSchema,
     roundNumberSchema
 } from '@/db/models/schema.types';
@@ -11,13 +16,16 @@ import UserModel from '@/db/models/user';
 
 const playerRolesZodSchema = z
     .object({
-        pn: objectIdSchema,
+        pn: z.object({
+            playerId: objectIdSchema.unwrap(),
+            isDisabled: booleanDefaultFalseSchema
+        }),
         kb: objectIdSchema,
         p: objectIdSchema
     })
     .required()
     .refine(
-        roles => new Set([roles.pn, roles.kb, roles.p]).size === 3,
+        roles => new Set([roles.pn.playerId, roles.kb, roles.p]).size === 3,
         { message: 'A player can have only one role' }
     );
 
@@ -38,9 +46,12 @@ const playerPositionsAndRolesZodSchema = startingLineupZodSchema
     .omit({ userId: true, roundNumber: true })
     .required();
 
-export type PlayerPositionsAndRolesType = z.infer<
+export type PlayerPositionsAndRolesType = z.input<
     typeof playerPositionsAndRolesZodSchema
 >;
+
+export type StartingLineupPrimusNominatusForAdminReturnType =
+    StartingLineupType['roles']['pn'];
 
 interface StartingLineupMethodsType {
     updatePlayersPosition: (data: PlayerPositionsAndRolesType) => Promise<void>;
@@ -82,6 +93,15 @@ interface StartingLineupModelType extends Model<
     '',
     StartingLineupMethodsType
 > {
+    getPrimusNominatusForAdmin: (
+        roundNumber: number,
+        userId: string
+    ) => Promise<StartingLineupPrimusNominatusForAdminReturnType | null>;
+    savePrimusNominatusForAdmin: (
+        roundNumber: number,
+        userId: string,
+        isDisabled: boolean
+    ) => Promise<void>;
     getUserStartingLineupByRound: (
         userId: string,
         roundNumber: number
@@ -114,11 +134,93 @@ const startingLineupSchema = new Schema<
     playerFour: { type: Schema.Types.ObjectId, ref: 'Players', required: true },
     playerFive: { type: Schema.Types.ObjectId, ref: 'Players', required: true },
     roles: {
-        pn: { type: Schema.Types.ObjectId, ref: 'Players', required: true },
+        pn: {
+            playerId: { type: Schema.Types.ObjectId, ref: 'Players', required: true },
+            isDisabled: { type: Boolean, default: false }
+        },
         kb: { type: Schema.Types.ObjectId, ref: 'Players', required: true },
         p: { type: Schema.Types.ObjectId, ref: 'Players', required: true }
     }
 });
+
+startingLineupSchema.static(
+    'getPrimusNominatusForAdmin',
+    async function getPrimusNominatusForAdmin(
+        roundNumber: number,
+        userId: string
+    ): Promise<StartingLineupPrimusNominatusForAdminReturnType | null> {
+        try {
+            if (
+                roundNumber < MIN_REGULAR_SEASON_ROUND ||
+                roundNumber > MAX_REGULAR_SEASON_ROUND
+            ) {
+                throw new Error(
+                    `Invalid roundNumber: ${roundNumber}. Must be between ${MIN_REGULAR_SEASON_ROUND} and ${MAX_REGULAR_SEASON_ROUND}`
+                );
+            }
+            const isValidUserId = await UserModel.exists({ _id: userId });
+            if (!isValidUserId) {
+                throw new Error(`Invalid userId: ${userId}`);
+            }
+
+            const startingLineupDocument = await this.findOne({
+                userId,
+                roundNumber
+            }).exec();
+            if (!startingLineupDocument) {
+                return null;
+            }
+
+            return {
+                playerId: startingLineupDocument.roles.pn.playerId.toString(),
+                isDisabled: startingLineupDocument.roles.pn.isDisabled
+            };
+        } catch (error) {
+            console.error('Error fetching Primus Nominatus admin data:', error);
+            throw error;
+        }
+    }
+);
+
+startingLineupSchema.static(
+    'savePrimusNominatusForAdmin',
+    async function savePrimusNominatusForAdmin(
+        roundNumber: number,
+        userId: string,
+        isDisabled: boolean
+    ): Promise<void> {
+        try {
+            if (
+                roundNumber < MIN_REGULAR_SEASON_ROUND ||
+                roundNumber > MAX_REGULAR_SEASON_ROUND
+            ) {
+                throw new Error(
+                    `Invalid roundNumber: ${roundNumber}. Must be between ${MIN_REGULAR_SEASON_ROUND} and ${MAX_REGULAR_SEASON_ROUND}`
+                );
+            }
+            const isValidUserId = await UserModel.exists({ _id: userId });
+            if (!isValidUserId) {
+                throw new Error(`Invalid userId: ${userId}`);
+            }
+            const validatedIsDisabled = z.boolean().parse(isDisabled);
+            const startingLineupDocument = await this.findOne({
+                userId,
+                roundNumber
+            }).exec();
+            if (!startingLineupDocument) {
+                throw new Error('No starting lineup for user and round');
+            }
+            startingLineupDocument.set(
+                'roles.pn.isDisabled',
+                validatedIsDisabled
+            );
+            await startingLineupDocument.save();
+        } catch (error) {
+            console.error('Error saving Primus Nominatus admin data:', error);
+            throw error;
+        }
+    }
+);
 
 startingLineupSchema.static(
     'getUserStartingLineupByRound',
@@ -179,7 +281,11 @@ startingLineupSchema.static(
             await new StartingLineupModel({
                 userId,
                 roundNumber,
-                ...data
+                ...data,
+                roles: {
+                    ...data.roles,
+                    pn: { playerId: data.roles.pn.playerId, isDisabled: false }
+                }
             }).save();
         } catch (error) {
             console.error('Error updating starting lineup:', error);
@@ -207,7 +313,16 @@ startingLineupSchema.method(
 
             playerPositionsAndRolesZodSchema.parse(data);
 
-            this.set(data);
+            this.set({
+                ...data,
+                roles: {
+                    ...data.roles,
+                    pn: {
+                        playerId: data.roles.pn.playerId,
+                        isDisabled: this.roles.pn.isDisabled
+                    }
+                }
+            });
             await this.save();
         } catch (error) {
             console.error('Error updating starting lineup:', error);

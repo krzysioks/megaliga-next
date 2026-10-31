@@ -377,7 +377,7 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                         playerFour: players[3]._id.toString(),
                         playerFive: players[4]._id.toString(),
                         roles: {
-                            pn: players[0]._id.toString(),
+                            pn: { playerId: players[0]._id.toString(), isDisabled: false },
                             kb: players[1]._id.toString(),
                             p: players[2]._id.toString()
                         }
@@ -391,7 +391,7 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                         playerFour: players[3]._id.toString(),
                         playerFive: players[4]._id.toString(),
                         roles: {
-                            pn: players[0]._id.toString(),
+                            pn: { playerId: players[0]._id.toString(), isDisabled: false },
                             kb: players[1]._id.toString(),
                             p: players[2]._id.toString()
                         }
@@ -408,7 +408,7 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                         playerFour: players[3]._id.toString(),
                         playerFive: players[4]._id.toString(),
                         roles: {
-                            pn: players[0]._id.toString(),
+                            pn: { playerId: players[0]._id.toString(), isDisabled: false },
                             kb: players[1]._id.toString(),
                             p: players[2]._id.toString()
                         }
@@ -422,7 +422,7 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                         playerFour: players[3]._id.toString(),
                         playerFive: players[4]._id.toString(),
                         roles: {
-                            pn: players[0]._id.toString(),
+                            pn: { playerId: players[0]._id.toString(), isDisabled: false },
                             kb: players[1]._id.toString(),
                             p: players[2]._id.toString()
                         }

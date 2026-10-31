@@ -23,7 +23,8 @@ export function formatSetPlaysComment(
     );
     const getPlayerName = (playerId: string) => playerNames.get(playerId) ?? '';
     const roleDescriptions = PLAYER_ROLE_LABELS.flatMap(([role, label]) => {
-        const playerId = params.roles?.[role];
+        const playerId =
+            role === 'pn' ? params.roles?.pn.playerId : params.roles?.[role];
         return playerId ? [`${label} - ${getPlayerName(playerId)}`] : [];
     });
     const selectedPlayDescriptions = params.setPlays.map(setPlay => {

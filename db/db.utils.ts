@@ -88,7 +88,10 @@ export async function getSetPlaysDetails(
 ): Promise<GetSetPlaysDetailsReturnType> {
     const roles = params.roles
         ? {
-              pn: params.roles.pn.toString(),
+              pn: {
+                  playerId: params.roles.pn.playerId.toString(),
+                  isDisabled: params.roles.pn.isDisabled
+              },
               kb: params.roles.kb.toString(),
               p: params.roles.p.toString()
           }
@@ -101,7 +104,9 @@ export async function getSetPlaysDetails(
                 userData: 'userData' in setPlay ? setPlay.userData : null
             };
         });
-    const playerIds = new Set<string>(Object.values(roles ?? {}));
+    const playerIds = new Set<string>(
+        roles ? [roles.pn.playerId, roles.kb, roles.p] : []
+    );
     for (const setPlay of setPlays) {
         const userData = setPlay.userData;
         if (!userData) {
@@ -155,6 +160,18 @@ export function normalizeSetPlayData<
     const references:
         | SetPlayUserDataType
         | Exclude<SetPlayAdminDataType, Record<string, boolean>> = data;
+    if ('playerResults' in references) {
+        return {
+            ...data,
+            playerResults: Object.fromEntries(
+                Object.entries(references.playerResults).map(
+                    ([playerId, isSelected]) => {
+                        return [playerId.toLowerCase(), isSelected];
+                    }
+                )
+            )
+        };
+    }
     if ('replacedPlayerId' in references) {
         return {
             ...data,

@@ -14,6 +14,7 @@ import { normalizeSetPlayData } from '@/db/db.utils';
 import StartingLineupModel from '@/db/models/games/starting-lineup';
 import {
     attemptZodSchema,
+    booleanDefaultFalseSchema,
     playerScoresZodSchema,
     numberSchema,
     objectIdSchema,
@@ -111,14 +112,16 @@ const setPlayPayloadZodSchema = z.discriminatedUnion('type', [
                 'Four leaders are required'
             )
         }),
-        adminData: z
-            .record(objectIdSchema.unwrap(), z.boolean())
-            .refine(
-                results =>
-                    Object.keys(results).length === BRUDNA_PALA_LEADER_COUNT,
-                'BrudnaPala requires four player results'
-            )
-            .optional()
+        adminData: z.object({
+            isDisabled: booleanDefaultFalseSchema,
+            playerResults: z
+                .record(objectIdSchema.unwrap(), z.boolean())
+                .refine(
+                    results =>
+                        Object.keys(results).length === BRUDNA_PALA_LEADER_COUNT,
+                    'BrudnaPala requires four player results'
+                )
+        }).optional()
     }),
     z.object({
         type: z.literal(SetPlayEnumType.PauloSousa)
@@ -148,7 +151,9 @@ const setPlayPayloadZodSchema = z.discriminatedUnion('type', [
                 replacedPlayerId: objectIdSchema
             })
             .required(),
-        adminData: playerScoresZodSchema.default({})
+        adminData: playerScoresZodSchema.extend({
+            isDisabled: booleanDefaultFalseSchema
+        }).default({})
     }),
     z.object({
         type: z.literal(SetPlayEnumType.KoloFortunyNorbiego),
@@ -360,11 +365,14 @@ setPlaysDataSchema.pre('validate', async function validateSetPlayDocument() {
                 entry.type === SetPlayEnumType.BrudnaPala &&
                 entry.adminData === undefined
             ) {
-                entry.adminData = Object.fromEntries(
-                    entry.userData.leaderIdList.map(playerId => {
-                        return [playerId, false];
-                    })
-                );
+                entry.adminData = {
+                    isDisabled: false,
+                    playerResults: Object.fromEntries(
+                        entry.userData.leaderIdList.map(playerId => {
+                            return [playerId, false];
+                        })
+                    )
+                };
             }
             return {
                 _id: plays[index].selectedSetPlayId,
@@ -375,8 +383,7 @@ setPlaysDataSchema.pre('validate', async function validateSetPlayDocument() {
                 ...('adminData' in entry && entry.adminData !== undefined
                     ? {
                           adminData:
-                              entry.type === SetPlayEnumType.Remis ||
-                              entry.type === SetPlayEnumType.BrudnaPala
+                              entry.type === SetPlayEnumType.Remis
                                   ? Object.fromEntries(
                                         Object.entries(entry.adminData).map(
                                             ([playerId, isSelected]) => {

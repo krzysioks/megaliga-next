@@ -138,7 +138,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 playerFour: players[3]._id.toString(),
                 playerFive: players[4]._id.toString(),
                 roles: {
-                    pn: players[0]._id.toString(),
+                    pn: { playerId: players[0]._id.toString(), isDisabled: false },
                     kb: players[1]._id.toString(),
                     p: players[2]._id.toString()
                 }
@@ -153,7 +153,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 playerFour: players[8]._id.toString(),
                 playerFive: players[9]._id.toString(),
                 roles: {
-                    pn: players[5]._id.toString(),
+                    pn: { playerId: players[5]._id.toString(), isDisabled: false },
                     kb: players[6]._id.toString(),
                     p: players[7]._id.toString()
                 }
@@ -299,7 +299,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             expect(result.teamTwo.teamName).toBe(userTwo.teamName);
             expect(result.teamOne).toMatchObject({
                 roles: {
-                    pn: players[0]._id.toString(),
+                    pn: { playerId: players[0]._id.toString(), isDisabled: false },
                     kb: players[1]._id.toString(),
                     p: players[2]._id.toString()
                 },
@@ -435,7 +435,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 playerThree: playerIds[2],
                 playerFour: playerIds[3],
                 playerFive: playerIds[4],
-                roles: { pn: playerIds[0], kb: playerIds[1], p: playerIds[2] }
+                roles: { pn: { playerId: playerIds[0], isDisabled: false }, kb: playerIds[1], p: playerIds[2] }
             });
             const schedule = await ScheduleModel.create({
                 userOneId: userOne._id,
@@ -466,7 +466,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 setPlayDescriptions: ''
             });
             expect(result.teamTwo).toMatchObject({
-                roles: { pn: playerIds[0], kb: playerIds[1], p: playerIds[2] },
+                roles: { pn: { playerId: playerIds[0], isDisabled: false }, kb: playerIds[1], p: playerIds[2] },
                 setPlayPlayers: expect.arrayContaining([
                     {
                         playerId: playerIds[0],
@@ -519,7 +519,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 playerFour: players[3]._id.toString(),
                 playerFive: players[4]._id.toString(),
                 roles: {
-                    pn: players[0]._id.toString(),
+                    pn: { playerId: players[0]._id.toString(), isDisabled: false },
                     kb: players[1]._id.toString(),
                     p: players[2]._id.toString()
                 }
@@ -534,7 +534,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 playerFour: players[8]._id.toString(),
                 playerFive: players[9]._id.toString(),
                 roles: {
-                    pn: players[5]._id.toString(),
+                    pn: { playerId: players[5]._id.toString(), isDisabled: false },
                     kb: players[6]._id.toString(),
                     p: players[7]._id.toString()
                 }
@@ -713,7 +713,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 playerThree: playerIds[2],
                 playerFour: playerIds[3],
                 playerFive: playerIds[4],
-                roles: { pn: playerIds[0], kb: playerIds[1], p: playerIds[2] }
+                roles: { pn: { playerId: playerIds[0], isDisabled: false }, kb: playerIds[1], p: playerIds[2] }
             });
             const schedule = await ScheduleModel.create({
                 userOneId: userOne._id,

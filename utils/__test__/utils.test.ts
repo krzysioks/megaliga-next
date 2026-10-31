@@ -13,7 +13,7 @@ const players = [
 describe('formatSetPlaysComment', () => {
     test('Should format roles and selected player details in saved order without merging repeated selections', () => {
         const descriptions = formatSetPlaysComment({
-            roles: { p: 'three', pn: 'one', kb: 'two' },
+            roles: { p: 'three', pn: { playerId: 'one', isDisabled: false }, kb: 'two' },
             players,
             setPlays: [
                 {
@@ -149,7 +149,7 @@ describe('formatSetPlaysComment', () => {
         expect(formatSetPlaysComment({ setPlays: [], players: [] })).toBe('');
         expect(
             formatSetPlaysComment({
-                roles: { p: 'three', pn: 'one', kb: 'two' },
+                roles: { p: 'three', pn: { playerId: 'one', isDisabled: false }, kb: 'two' },
                 players,
                 setPlays: []
             })

@@ -37,7 +37,7 @@ const createPositions = (
     return {
         ...positions,
         roles: overrides.roles ?? {
-            pn: positions.playerOne,
+            pn: { playerId: positions.playerOne, isDisabled: false },
             kb: positions.playerTwo,
             p: positions.playerThree
         }
@@ -86,6 +86,212 @@ afterAll(async () => {
 });
 
 describe('Test StartingLineupModel methods and static functions', () => {
+    describe('getPrimusNominatusForAdmin', () => {
+        test.each([0, 15])(
+            'Should throw for an invalid PN round %i',
+            async roundNumber => {
+                await expect(
+                    StartingLineupModel.getPrimusNominatusForAdmin(
+                        roundNumber,
+                        new mongoose.Types.ObjectId().toString()
+                    )
+                ).rejects.toThrow(
+                    `Invalid roundNumber: ${roundNumber}. Must be between 1 and 14`
+                );
+            }
+        );
+
+        test('Should throw for a nonexistent PN user', async () => {
+            const userId = new mongoose.Types.ObjectId().toString();
+            await expect(
+                StartingLineupModel.getPrimusNominatusForAdmin(1, userId)
+            ).rejects.toThrow(`Invalid userId: ${userId}`);
+        });
+
+        test('Should return null without a starting lineup', async () => {
+            const user = await UserModel.create(createUserData());
+            expect(
+                await StartingLineupModel.getPrimusNominatusForAdmin(
+                    1,
+                    user._id.toString()
+                )
+            ).toBeNull();
+        });
+
+        test('Should return the assigned PN player and enabled default before scores or set plays are saved', async () => {
+            const user = await UserModel.create(createUserData());
+            const players = await PlayersModel.create([
+                { extraligaPlayerName: 'Player One' },
+                { extraligaPlayerName: 'Player Two' },
+                { extraligaPlayerName: 'Player Three' },
+                { extraligaPlayerName: 'Player Four' },
+                { extraligaPlayerName: 'Player Five' }
+            ]);
+            await StartingLineupModel.create({
+                userId: user._id,
+                roundNumber: 1,
+                playerOne: players[0]._id,
+                playerTwo: players[1]._id,
+                playerThree: players[2]._id,
+                playerFour: players[3]._id,
+                playerFive: players[4]._id,
+                roles: {
+                    pn: { playerId: players[0]._id, isDisabled: false },
+                    kb: players[1]._id,
+                    p: players[2]._id
+                }
+            });
+
+            expect(
+                await StartingLineupModel.getPrimusNominatusForAdmin(
+                    1,
+                    user._id.toString()
+                )
+            ).toEqual({
+                playerId: players[0]._id.toString(),
+                isDisabled: false
+            });
+        });
+    });
+
+    describe('savePrimusNominatusForAdmin', () => {
+        let userId: string;
+        let otherUserId: string;
+        let positions: PlayerPositionsAndRolesType;
+
+        beforeEach(async () => {
+            const user = await UserModel.create(createUserData());
+            const otherUser = await UserModel.create(
+                createUserData({
+                    username: 'user-two',
+                    email: 'user-two@example.com',
+                    teamName: 'Team Two'
+                })
+            );
+            userId = user._id.toString();
+            otherUserId = otherUser._id.toString();
+            positions = createPositions();
+            await StartingLineupModel.setPlayersPosition(positions, userId, 1);
+        });
+
+        test.each([0, 15])(
+            'Should throw for an invalid PN save round %i',
+            async roundNumber => {
+                await expect(
+                    StartingLineupModel.savePrimusNominatusForAdmin(
+                        roundNumber,
+                        userId,
+                        true
+                    )
+                ).rejects.toThrow(
+                    `Invalid roundNumber: ${roundNumber}. Must be between 1 and 14`
+                );
+            }
+        );
+
+        test('Should throw for a nonexistent PN save user', async () => {
+            const missingUserId = new mongoose.Types.ObjectId().toString();
+            await expect(
+                StartingLineupModel.savePrimusNominatusForAdmin(
+                    1,
+                    missingUserId,
+                    true
+                )
+            ).rejects.toThrow(`Invalid userId: ${missingUserId}`);
+        });
+
+        test('Should throw when saving PN without a starting lineup', async () => {
+            await expect(
+                StartingLineupModel.savePrimusNominatusForAdmin(
+                    1,
+                    otherUserId,
+                    true
+                )
+            ).rejects.toThrow('No starting lineup for user and round');
+        });
+
+        test('Should disable and reenable PN only for the requested user and round while preserving starting lineup edits', async () => {
+            await StartingLineupModel.setPlayersPosition(positions, userId, 2);
+            await StartingLineupModel.setPlayersPosition(
+                positions,
+                otherUserId,
+                1
+            );
+            await StartingLineupModel.savePrimusNominatusForAdmin(
+                1,
+                userId,
+                true
+            );
+            expect(
+                await StartingLineupModel.getPrimusNominatusForAdmin(1, userId)
+            ).toEqual({
+                playerId: positions.roles.pn.playerId,
+                isDisabled: true
+            });
+            expect(
+                await StartingLineupModel.getPrimusNominatusForAdmin(2, userId)
+            ).toEqual({
+                playerId: positions.roles.pn.playerId,
+                isDisabled: false
+            });
+            expect(
+                await StartingLineupModel.getPrimusNominatusForAdmin(
+                    1,
+                    otherUserId
+                )
+            ).toEqual({
+                playerId: positions.roles.pn.playerId,
+                isDisabled: false
+            });
+            const document = await StartingLineupModel.findOne({
+                userId,
+                roundNumber: 1
+            }).exec();
+            const updatedPositions = {
+                ...positions,
+                playerOne: positions.playerTwo,
+                playerTwo: positions.playerOne,
+                roles: {
+                    pn: { playerId: positions.roles.kb, isDisabled: false },
+                    kb: positions.roles.pn.playerId,
+                    p: positions.roles.p
+                }
+            };
+            await document!.updatePlayersPosition(updatedPositions);
+            expect(
+                await StartingLineupModel.getPrimusNominatusForAdmin(1, userId)
+            ).toEqual({
+                playerId: updatedPositions.roles.pn.playerId,
+                isDisabled: true
+            });
+            await StartingLineupModel.savePrimusNominatusForAdmin(
+                1,
+                userId,
+                false
+            );
+            expect(
+                await StartingLineupModel.getPrimusNominatusForAdmin(1, userId)
+            ).toEqual({
+                playerId: updatedPositions.roles.pn.playerId,
+                isDisabled: false
+            });
+            const lineup =
+                await StartingLineupModel.getUserStartingLineupByRound(
+                    userId,
+                    1
+                );
+            expect(lineup.playerOne?.toString()).toBe(
+                updatedPositions.playerOne
+            );
+            expect(lineup.playerTwo?.toString()).toBe(
+                updatedPositions.playerTwo
+            );
+            expect(lineup.roles.pn.playerId.toString()).toBe(
+                updatedPositions.roles.pn.playerId
+            );
+        });
+    });
+
     describe('getUserStartingLineupByRound', () => {
         test('Should return null when lineup does not exist for given userId or roundNumber', async () => {
             const user = await new UserModel(createUserData()).save();
@@ -99,7 +305,10 @@ describe('Test StartingLineupModel methods and static functions', () => {
             }).save();
 
             const missingByRound =
-                await StartingLineupModel.getUserStartingLineupByRound(userId, 2);
+                await StartingLineupModel.getUserStartingLineupByRound(
+                    userId,
+                    2
+                );
             const missingByUser =
                 await StartingLineupModel.getUserStartingLineupByRound(
                     new mongoose.Types.ObjectId().toString(),
@@ -122,10 +331,11 @@ describe('Test StartingLineupModel methods and static functions', () => {
                 ...positions
             }).save();
 
-            const lineup = await StartingLineupModel.getUserStartingLineupByRound(
-                userId,
-                roundNumber
-            );
+            const lineup =
+                await StartingLineupModel.getUserStartingLineupByRound(
+                    userId,
+                    roundNumber
+                );
 
             expect(lineup).not.toBeNull();
             expect(lineup?.userId?.toString()).toBe(userId);
@@ -142,10 +352,14 @@ describe('Test StartingLineupModel methods and static functions', () => {
         test('Should reject duplicate role IDs without creating a lineup', async () => {
             const user = await new UserModel(createUserData()).save();
             const data = createPositions();
-            data.roles.kb = data.roles.pn;
+            data.roles.kb = data.roles.pn.playerId;
 
             await expect(
-                StartingLineupModel.setPlayersPosition(data, user._id.toString(), 1)
+                StartingLineupModel.setPlayersPosition(
+                    data,
+                    user._id.toString(),
+                    1
+                )
             ).rejects.toThrow('A player can have only one role');
             expect(
                 await StartingLineupModel.getUserStartingLineupByRound(
@@ -178,7 +392,11 @@ describe('Test StartingLineupModel methods and static functions', () => {
             } as unknown as PlayerPositionsAndRolesType;
 
             await expect(
-                StartingLineupModel.setPlayersPosition(invalidPositions, userId, 9)
+                StartingLineupModel.setPlayersPosition(
+                    invalidPositions,
+                    userId,
+                    9
+                )
             ).rejects.toThrow(
                 'Invalid positions payload. Allowed fields: playerOne, playerTwo, playerThree, playerFour, playerFive, roles.'
             );
@@ -206,7 +424,10 @@ describe('Test StartingLineupModel methods and static functions', () => {
             ).rejects.toThrow('Starting lineup already exists');
 
             expect(
-                await StartingLineupModel.countDocuments({ userId, roundNumber })
+                await StartingLineupModel.countDocuments({
+                    userId,
+                    roundNumber
+                })
             ).toBe(1);
         });
 
@@ -230,14 +451,24 @@ describe('Test StartingLineupModel methods and static functions', () => {
             expect(savedLineup).not.toBeNull();
             expect(savedLineup?.userId?.toString()).toBe(userId);
             expect(savedLineup?.roundNumber).toBe(roundNumber);
-            expect(savedLineup?.playerOne?.toString()).toBe(positions.playerOne);
-            expect(savedLineup?.playerTwo?.toString()).toBe(positions.playerTwo);
+            expect(savedLineup?.playerOne?.toString()).toBe(
+                positions.playerOne
+            );
+            expect(savedLineup?.playerTwo?.toString()).toBe(
+                positions.playerTwo
+            );
             expect(savedLineup?.playerThree?.toString()).toBe(
                 positions.playerThree
             );
-            expect(savedLineup?.playerFour?.toString()).toBe(positions.playerFour);
-            expect(savedLineup?.playerFive?.toString()).toBe(positions.playerFive);
-            expect(savedLineup?.toObject({ flattenObjectIds: true })).toMatchObject({
+            expect(savedLineup?.playerFour?.toString()).toBe(
+                positions.playerFour
+            );
+            expect(savedLineup?.playerFive?.toString()).toBe(
+                positions.playerFive
+            );
+            expect(
+                savedLineup?.toObject({ flattenObjectIds: true })
+            ).toMatchObject({
                 roles: positions.roles
             });
         });
@@ -255,14 +486,17 @@ describe('Test StartingLineupModel methods and static functions', () => {
             const updatedData = createPositions();
             updatedData.roles.p = updatedData.roles.kb;
 
-            await expect(lineup.updatePlayersPosition(updatedData)).rejects.toThrow(
-                'A player can have only one role'
+            await expect(
+                lineup.updatePlayersPosition(updatedData)
+            ).rejects.toThrow('A player can have only one role');
+            const saved =
+                await StartingLineupModel.getUserStartingLineupByRound(
+                    user._id.toString(),
+                    1
+                );
+            expect(saved?.toObject({ flattenObjectIds: true })).toMatchObject(
+                data
             );
-            const saved = await StartingLineupModel.getUserStartingLineupByRound(
-                user._id.toString(),
-                1
-            );
-            expect(saved?.toObject({ flattenObjectIds: true })).toMatchObject(data);
         });
 
         test('Should not update document when positions payload has forbidden keys', async () => {
@@ -286,7 +520,9 @@ describe('Test StartingLineupModel methods and static functions', () => {
                 'Invalid positions payload. Allowed fields: playerOne, playerTwo, playerThree, playerFour, playerFive, roles.'
             );
 
-            const refreshed = await StartingLineupModel.findById(lineup._id).exec();
+            const refreshed = await StartingLineupModel.findById(
+                lineup._id
+            ).exec();
 
             expect(refreshed?.playerOne?.toString()).toBe(
                 initialPositions.playerOne
@@ -303,9 +539,9 @@ describe('Test StartingLineupModel methods and static functions', () => {
             expect(refreshed?.playerFive?.toString()).toBe(
                 initialPositions.playerFive
             );
-            expect(refreshed?.toObject({ flattenObjectIds: true }).roles).toEqual(
-                initialPositions.roles
-            );
+            expect(
+                refreshed?.toObject({ flattenObjectIds: true }).roles
+            ).toEqual(initialPositions.roles);
         });
 
         test('Should preserve role assignments when the same players are reordered', async () => {
@@ -327,10 +563,11 @@ describe('Test StartingLineupModel methods and static functions', () => {
 
             await lineup.updatePlayersPosition(reorderedData);
 
-            const saved = await StartingLineupModel.getUserStartingLineupByRound(
-                user._id.toString(),
-                1
-            );
+            const saved =
+                await StartingLineupModel.getUserStartingLineupByRound(
+                    user._id.toString(),
+                    1
+                );
             expect(saved?.toObject({ flattenObjectIds: true })).toMatchObject(
                 reorderedData
             );
@@ -342,7 +579,10 @@ describe('Test StartingLineupModel methods and static functions', () => {
             const initialPositions = createPositions();
             const updatedPositions = createPositions();
             updatedPositions.roles = {
-                pn: updatedPositions.playerFour,
+                pn: {
+                    playerId: updatedPositions.playerFour,
+                    isDisabled: false
+                },
                 kb: updatedPositions.playerFive,
                 p: updatedPositions.playerOne
             };
@@ -355,7 +595,9 @@ describe('Test StartingLineupModel methods and static functions', () => {
 
             await lineup.updatePlayersPosition(updatedPositions);
 
-            const refreshed = await StartingLineupModel.findById(lineup._id).exec();
+            const refreshed = await StartingLineupModel.findById(
+                lineup._id
+            ).exec();
 
             expect(refreshed).not.toBeNull();
             expect(refreshed?.playerOne?.toString()).toBe(
@@ -373,9 +615,9 @@ describe('Test StartingLineupModel methods and static functions', () => {
             expect(refreshed?.playerFive?.toString()).toBe(
                 updatedPositions.playerFive
             );
-            expect(refreshed?.toObject({ flattenObjectIds: true }).roles).toEqual(
-                updatedPositions.roles
-            );
+            expect(
+                refreshed?.toObject({ flattenObjectIds: true }).roles
+            ).toEqual(updatedPositions.roles);
         });
     });
 
@@ -490,7 +732,7 @@ describe('Test StartingLineupModel methods and static functions', () => {
             ).save();
             const positionsTwo = await createPlayerPositions();
             positionsTwo.playerOne = positionsOne.playerOne;
-            positionsTwo.roles.pn = positionsOne.playerOne;
+            positionsTwo.roles.pn.playerId = positionsOne.playerOne;
             const lineupTwo = await new StartingLineupModel({
                 userId: userTwo._id.toString(),
                 roundNumber,
