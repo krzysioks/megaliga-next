@@ -1,9 +1,13 @@
 import type {
+    RegularSeasonPlayerScoreDetailsType,
+    ScoreDetailsType
+} from '@/db/models/games/score-details';
+import type {
     SetPlaysDataForUserReturnType,
     SetPlaysDataListByStartingLineupIdReturnType
 } from '@/db/models/games/set-plays-data';
 import type { StartingLineupType } from '@/db/models/games/starting-lineup';
-import type { PlayersReturnType } from '@/db/models/players';
+import type { PlayersReturnType, PlayersType } from '@/db/models/players';
 
 import mongoose from 'mongoose';
 import { z } from 'zod';
@@ -38,3 +42,50 @@ export type PlayerScoreDetailsInputType = z.input<typeof heatScoresSchema>;
 
 export const DEFAULT_PLAYER_SCORE_DETAILS: PlayerScoreDetailsType =
     heatScoresSchema.parse({});
+
+export type CalculationPlayerType = RegularSeasonPlayerScoreDetailsType & {
+    playerId: string;
+    isJunior: PlayersType['isJunior'];
+    setPlay: number;
+    comment?: string;
+};
+
+export interface CalculationTeamType {
+    players: CalculationPlayerType[];
+    startingLineup: Omit<StartingLineupType, 'userId' | 'roundNumber'>;
+    setPlayList: SetPlaysDataListByStartingLineupIdReturnType['setPlayList'];
+}
+
+export interface CalculateMatchScoresParamsType {
+    teamOne: CalculationTeamType;
+    teamTwo: CalculationTeamType;
+}
+
+export interface CalculationTeamReturnType {
+    players: CalculationPlayerType[];
+    trainer: NonNullable<ScoreDetailsType['teamOne']['trainer']>;
+}
+
+export interface CalculateMatchScoresReturnType {
+    teamOne: CalculationTeamReturnType;
+    teamTwo: CalculationTeamReturnType;
+    teamOneScore: number;
+    teamTwoScore: number;
+}
+
+export interface CalculatePlayerParamsType {
+    player: CalculationPlayerType;
+}
+
+export interface CalculateKapitanParamsType extends CalculatePlayerParamsType {
+    opponent: CalculationPlayerType;
+}
+
+export interface CalculatePrimusNominatusParamsType
+    extends CalculatePlayerParamsType {
+    isDisabled: boolean;
+}
+
+export interface CalculateTrainerParamsType {
+    players: CalculationPlayerType[];
+}
