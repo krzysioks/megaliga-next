@@ -94,7 +94,7 @@ const historyGamesScoreDetails = new Schema<
             required: true
         },
         score: { type: Number },
-        setPlays: [{ type: String }],
+        setPlays: { type: String, default: '' },
         players: [
             {
                 playerId: {
@@ -132,7 +132,7 @@ const historyGamesScoreDetails = new Schema<
             required: true
         },
         score: { type: Number },
-        setPlays: [{ type: String }],
+        setPlays: { type: String, default: '' },
         players: [
             {
                 playerId: {

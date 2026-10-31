@@ -1,4 +1,8 @@
-import type { MatchPairType } from '@/db/db.types';
+import type {
+    GetSetPlaysDetailsParamsType,
+    GetSetPlaysDetailsReturnType,
+    MatchPairType
+} from '@/db/db.types';
 import type {
     SetPlayAdminDataType,
     SetPlayUserDataType
@@ -8,7 +12,9 @@ import {
     MAX_SELECTIONS_PER_SET_PLAY,
     MAX_SELECTIONS_PER_RESERVE_SET_PLAY
 } from '@/db/db.constants';
+import PlayersModel from '@/db/models/players';
 import { SetPlayEnumType } from '@/db/models/schema.types';
+import { formatSetPlaysComment } from '@/utils/utils';
 
 // single round-robin schedule for a group of teams, using the berger table algorithm
 export function generateBergerTableRounds(
@@ -75,6 +81,70 @@ export function getSetPlaySelectionLimit(type: SetPlayEnumType) {
     )
         ? MAX_SELECTIONS_PER_RESERVE_SET_PLAY
         : MAX_SELECTIONS_PER_SET_PLAY;
+}
+
+export async function getSetPlaysDetails(
+    params: GetSetPlaysDetailsParamsType
+): Promise<GetSetPlaysDetailsReturnType> {
+    const roles = params.roles
+        ? {
+              pn: params.roles.pn.toString(),
+              kb: params.roles.kb.toString(),
+              p: params.roles.p.toString()
+          }
+        : null;
+    const setPlays: GetSetPlaysDetailsReturnType['setPlays'] =
+        params.setPlayList.map(setPlay => {
+            return {
+                name: setPlay.name,
+                type: setPlay.type,
+                userData: 'userData' in setPlay ? setPlay.userData : null
+            };
+        });
+    const playerIds = new Set<string>(Object.values(roles ?? {}));
+    for (const setPlay of setPlays) {
+        const userData = setPlay.userData;
+        if (!userData) {
+            continue;
+        }
+        if ('playerId' in userData) {
+            playerIds.add(userData.playerId);
+        }
+        if ('replacedPlayerId' in userData) {
+            playerIds.add(userData.replacedPlayerId);
+        }
+        if ('ownPlayerId' in userData) {
+            playerIds.add(userData.ownPlayerId);
+            playerIds.add(userData.opponentPlayerId);
+        }
+        if ('leaderIdList' in userData) {
+            userData.leaderIdList.forEach(playerId => {
+                playerIds.add(playerId);
+            });
+        }
+    }
+    const referencedPlayers = playerIds.size
+        ? await PlayersModel.find({ _id: { $in: [...playerIds] } })
+              .select('_id extraligaPlayerName')
+              .exec()
+        : [];
+    const setPlayPlayers = referencedPlayers.map(player => {
+        return {
+            playerId: player._id.toString(),
+            extraligaPlayerName: player.extraligaPlayerName
+        };
+    });
+
+    return {
+        roles,
+        setPlayPlayers,
+        setPlays,
+        setPlayDescriptions: formatSetPlaysComment({
+            roles,
+            setPlays,
+            players: setPlayPlayers
+        })
+    };
 }
 
 export function normalizeSetPlayData<

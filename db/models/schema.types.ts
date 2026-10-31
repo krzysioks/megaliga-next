@@ -121,7 +121,7 @@ export type HistoryPlayerType = z.infer<typeof historyPlayerSchema>;
 export const historyTeamSchema = z.object({
     teamId: objectIdSchema, // Reference to team in HistoryTeam collection
     score: z.number(),
-    setPlays: z.array(standardStringSchema).optional(),
+    setPlays: z.string().default(''),
     players: z.array(historyPlayerSchema).optional(),
     trainer: trainerSchema.optional()
 });

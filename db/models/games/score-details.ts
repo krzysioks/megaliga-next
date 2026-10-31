@@ -1,11 +1,15 @@
-import { HydratedDocument, model, Model, Schema } from 'mongoose';
+import type { GetSetPlaysDetailsReturnType } from '@/db/db.types';
+
+import { HydratedDocument, model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
+import { getSetPlaysDetails } from '@/db/db.utils';
 import ScheduleModel, { ScheduleType } from '@/db/models/games/schedule';
-import SetPlaysDataModel, {
-    SetPlayUserDataType
-} from '@/db/models/games/set-plays-data';
-import { StartingLineupPlayersByRoundReturnType } from '@/db/models/games/starting-lineup';
+import SetPlaysDataModel from '@/db/models/games/set-plays-data';
+import {
+    StartingLineupPlayersByRoundReturnType,
+    StartingLineupType
+} from '@/db/models/games/starting-lineup';
 import PlayersModel, { PlayersType } from '@/db/models/players';
 import {
     HistoryPlayerType,
@@ -17,7 +21,6 @@ import {
     objectIdSchema,
     roundNumberSchema
 } from '@/db/models/schema.types';
-import { SetPlaysType } from '@/db/models/set-plays';
 import UserModel, { UserType } from '@/db/models/user';
 
 export type RegularSeasonPlayerScoreDetailsType = z.infer<
@@ -48,16 +51,45 @@ type PopulatedScoreDetailsPlayerType = Omit<
     playerId: Pick<PlayersType, 'extraligaPlayerName'>;
 };
 
+type PopulatedScoreDetailsStartingLineupType = {
+    _id: Types.ObjectId;
+    roles: StartingLineupType['roles'];
+};
+
+type PopulatedScoreDetailsTeamWithLineupType = Omit<
+    ScoreDetailsType['teamOne'],
+    'startingLineupId'
+> & {
+    startingLineupId?: PopulatedScoreDetailsStartingLineupType | null;
+};
+
+type PopulatedScoreDetailsForHistoryType = Omit<
+    ScoreDetailsType,
+    'teamOne' | 'teamTwo'
+> & {
+    teamOne: PopulatedScoreDetailsTeamWithLineupType;
+    teamTwo: PopulatedScoreDetailsTeamWithLineupType;
+};
+
+type PopulatedScoreDetailsForHistoryFindType =
+    HydratedDocument<PopulatedScoreDetailsForHistoryType>;
+
 type PopulatedScoreDetailsType = Omit<
     ScoreDetailsType,
     'scheduleId' | 'teamOne' | 'teamTwo'
 > & {
     scheduleId: Pick<ScheduleType, 'userOneScore' | 'userTwoScore'>;
-    teamOne: Omit<ScoreDetailsType['teamOne'], 'userId' | 'players'> & {
+    teamOne: Omit<
+        PopulatedScoreDetailsTeamWithLineupType,
+        'userId' | 'players'
+    > & {
         userId: Pick<UserType, 'teamName'>;
         players: PopulatedScoreDetailsPlayerType[];
     };
-    teamTwo: Omit<ScoreDetailsType['teamTwo'], 'userId' | 'players'> & {
+    teamTwo: Omit<
+        PopulatedScoreDetailsTeamWithLineupType,
+        'userId' | 'players'
+    > & {
         userId: Pick<UserType, 'teamName'>;
         players: PopulatedScoreDetailsPlayerType[];
     };
@@ -71,15 +103,10 @@ type ScoreDetailsTeamPlayerReturnType = Omit<
     extraligaPlayerName: PlayersType['extraligaPlayerName'];
 };
 
-type ScoreDetailsSetPlayReturnType = Pick<SetPlaysType, 'name' | 'type'> & {
-    userData: SetPlayUserDataType | null;
-};
-
-type ScoreDetailsTeamReturnType = {
+type ScoreDetailsTeamReturnType = GetSetPlaysDetailsReturnType & {
     teamName: PopulatedScoreDetailsType['teamOne']['userId']['teamName'];
     players: ScoreDetailsTeamPlayerReturnType[];
     trainer: PopulatedScoreDetailsType['teamOne']['trainer'];
-    setPlays: ScoreDetailsSetPlayReturnType[];
 };
 
 export type ScoreDetailsReturnType = {
@@ -93,7 +120,7 @@ export type ScoreDetailsReturnType = {
 type ScoreDetailsForHistoryTeamReturnType = {
     players: HistoryPlayerType[];
     trainer: ScoreDetailsType['teamOne']['trainer'];
-    setPlays: string[];
+    setPlays: string;
 };
 
 export type ScoreDetailsForHistoryReturnType = {
@@ -306,6 +333,10 @@ scoreDetailsSchema.static(
                     path: 'teamTwo.players.playerId',
                     select: 'extraligaPlayerName'
                 })
+                .populate<PopulatedFindType>({
+                    path: 'teamOne.startingLineupId teamTwo.startingLineupId',
+                    select: 'roles'
+                })
                 .exec();
 
             if (!document) {
@@ -319,9 +350,14 @@ scoreDetailsSchema.static(
             ): Promise<ScoreDetailsTeamReturnType> => {
                 const { setPlayList } = team.startingLineupId
                     ? await SetPlaysDataModel.getSetPlayListByStartingLineupId(
-                          team.startingLineupId.toString()
+                          team.startingLineupId._id.toString()
                       )
                     : { setPlayList: [] };
+
+                const setPlaysDetails = await getSetPlaysDetails({
+                    setPlayList,
+                    roles: team.startingLineupId?.roles
+                });
 
                 return {
                     teamName: team.userId?.teamName ?? '',
@@ -337,13 +373,7 @@ scoreDetailsSchema.static(
                     trainer: team.trainer
                         ? trainerSchema.parse(team.trainer)
                         : undefined,
-                    setPlays: setPlayList.map(play => {
-                        return {
-                            name: play.name,
-                            type: play.type,
-                            userData: 'userData' in play ? play.userData : null
-                        };
-                    })
+                    ...setPlaysDetails
                 };
             };
             const [teamOne, teamTwo] = await Promise.all([
@@ -369,20 +399,31 @@ scoreDetailsSchema.static(
     'getScoreDetailsForHistory',
     async function getScoreDetailsForHistory() {
         try {
-            const documents = await this.find().exec();
+            const documents: PopulatedScoreDetailsForHistoryFindType[] =
+                await this.find()
+                    .populate<PopulatedScoreDetailsForHistoryFindType>({
+                        path: 'teamOne.startingLineupId teamTwo.startingLineupId',
+                        select: 'roles'
+                    })
+                    .exec();
 
             if (!documents.length) {
                 throw new Error('Score details not found');
             }
 
             const mapTeam = async (
-                team: ScoreDetailsType['teamOne']
+                team: PopulatedScoreDetailsTeamWithLineupType
             ): Promise<ScoreDetailsForHistoryTeamReturnType> => {
                 const { setPlayList } = team.startingLineupId
                     ? await SetPlaysDataModel.getSetPlayListByStartingLineupId(
-                          team.startingLineupId.toString()
+                          team.startingLineupId._id.toString()
                       )
                     : { setPlayList: [] };
+
+                const setPlaysDetails = await getSetPlaysDetails({
+                    setPlayList,
+                    roles: team.startingLineupId?.roles
+                });
 
                 return {
                     players: (team.players ?? []).map(player => {
@@ -402,7 +443,7 @@ scoreDetailsSchema.static(
                     trainer: team.trainer
                         ? trainerSchema.parse(team.trainer)
                         : undefined,
-                    setPlays: setPlayList.map(play => play.name)
+                    setPlays: setPlaysDetails.setPlayDescriptions
                 };
             };
 
@@ -513,7 +554,8 @@ scoreDetailsSchema.static(
         playerScore: RegularSeasonPlayerScoreDetailsInputType
     ) {
         try {
-            const normalizedPlayerScore = playerScoresZodSchema.parse(playerScore);
+            const normalizedPlayerScore =
+                playerScoresZodSchema.parse(playerScore);
 
             for (let index = 0; index < playerData.userId.length; index++) {
                 const userId = playerData.userId[index];

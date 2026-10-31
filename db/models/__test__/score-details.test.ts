@@ -206,6 +206,10 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                                 playerId: players[5]._id.toString(),
                                 replacedPlayerId: players[4]._id.toString()
                             }
+                        },
+                        {
+                            setPlayId: gwarancjaStartow._id,
+                            userData: { playerId: players[4]._id.toString() }
                         }
                     ]
                 },
@@ -293,6 +297,39 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
 
             expect(result.teamOne.teamName).toBe(userOne.teamName);
             expect(result.teamTwo.teamName).toBe(userTwo.teamName);
+            expect(result.teamOne).toMatchObject({
+                roles: {
+                    pn: players[0]._id.toString(),
+                    kb: players[1]._id.toString(),
+                    p: players[2]._id.toString()
+                },
+                setPlayPlayers: expect.arrayContaining([
+                    {
+                        playerId: players[0]._id.toString(),
+                        extraligaPlayerName: 'Player One'
+                    },
+                    {
+                        playerId: players[1]._id.toString(),
+                        extraligaPlayerName: 'Player Two'
+                    },
+                    {
+                        playerId: players[2]._id.toString(),
+                        extraligaPlayerName: 'Player Three'
+                    },
+                    {
+                        playerId: players[3]._id.toString(),
+                        extraligaPlayerName: 'Player Four'
+                    },
+                    {
+                        playerId: players[4]._id.toString(),
+                        extraligaPlayerName: 'Player Five'
+                    },
+                    {
+                        playerId: players[5]._id.toString(),
+                        extraligaPlayerName: 'Player Six'
+                    }
+                ])
+            });
 
             expect(result.teamOne.setPlays).toEqual([
                 {
@@ -325,6 +362,11 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                         playerId: players[5]._id.toString(),
                         replacedPlayerId: players[4]._id.toString()
                     }
+                },
+                {
+                    name: 'Gwarancja startów',
+                    type: SetPlayEnumType.GwarancjaStartow,
+                    userData: { playerId: players[4]._id.toString() }
                 }
             ]);
             expect(result.teamTwo.setPlays).toEqual([
@@ -334,6 +376,12 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                     userData: null
                 }
             ]);
+            expect(result.teamOne.setPlayDescriptions).toBe(
+                'PN - Player One, KB - Player Two, P - Player Three, GS: Player One, Spartacus: Player Two vs Player Six, NCD: Player Three, NCD6: Player Four, Awatar: Player Six za Player Five, GS: Player Five'
+            );
+            expect(result.teamTwo.setPlayDescriptions).toBe(
+                'PN - Player Six, KB - Player Seven, P - Player Eight, Muchomor:'
+            );
 
             expect(result.teamOne.players).toHaveLength(2);
             expect(result.teamTwo.players).toHaveLength(2);
@@ -366,11 +414,18 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             ).toBeUndefined();
         });
 
-        test('Should return score details with empty set play lists for a missing lineup reference or a lineup without selections', async () => {
+        test('Should return roles without selected plays and empty summary data for a missing lineup', async () => {
             const userOne = await UserModel.create(createUserData(40));
             const userTwo = await UserModel.create(createUserData(41));
-            const playerIds = Array.from({ length: 5 }, () => {
-                return new mongoose.Types.ObjectId().toString();
+            const players = await PlayersModel.create([
+                { extraligaPlayerName: 'Player One' },
+                { extraligaPlayerName: 'Player Two' },
+                { extraligaPlayerName: 'Player Three' },
+                { extraligaPlayerName: 'Player Four' },
+                { extraligaPlayerName: 'Player Five' }
+            ]);
+            const playerIds = players.map(player => {
+                return player._id.toString();
             });
             const startingLineup = await StartingLineupModel.create({
                 userId: userTwo._id,
@@ -405,6 +460,29 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 );
             expect(result.teamOne.setPlays).toEqual([]);
             expect(result.teamTwo.setPlays).toEqual([]);
+            expect(result.teamOne).toMatchObject({
+                roles: null,
+                setPlayPlayers: [],
+                setPlayDescriptions: ''
+            });
+            expect(result.teamTwo).toMatchObject({
+                roles: { pn: playerIds[0], kb: playerIds[1], p: playerIds[2] },
+                setPlayPlayers: expect.arrayContaining([
+                    {
+                        playerId: playerIds[0],
+                        extraligaPlayerName: 'Player One'
+                    },
+                    {
+                        playerId: playerIds[1],
+                        extraligaPlayerName: 'Player Two'
+                    },
+                    {
+                        playerId: playerIds[2],
+                        extraligaPlayerName: 'Player Three'
+                    }
+                ]),
+                setPlayDescriptions: 'PN - Player One, KB - Player Two, P - Player Three'
+            });
         });
     });
 
@@ -415,7 +493,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             ).rejects.toThrow('Score details not found');
         });
 
-        test('Should return score details with selected set play names for both teams', async () => {
+        test('Should return role and selected set play descriptions for both teams', async () => {
             const userOne = await new UserModel(createUserData(20)).save();
             const userTwo = await new UserModel(createUserData(21)).save();
 
@@ -462,7 +540,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 }
             }).save();
 
-            const [gwarancjaStartow, muchomor, mortalKombatCombo] =
+            const [gwarancjaStartow, muchomor, mortalKombatCombo, ncd, ncd6] =
                 await SetPlaysModel.create([
                     {
                         name: 'Gwarancja startów',
@@ -472,7 +550,9 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                     {
                         name: 'Mortal Kombat Combo',
                         type: SetPlayEnumType.MortalKombatCombo
-                    }
+                    },
+                    { name: 'NCD', type: SetPlayEnumType.Ncd },
+                    { name: 'NCD6', type: SetPlayEnumType.Ncd6 }
                 ]);
             await SetPlaysDataModel.create([
                 {
@@ -482,12 +562,31 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                             setPlayId: gwarancjaStartow._id,
                             userData: { playerId: players[0]._id.toString() }
                         },
-                        { setPlayId: muchomor._id }
+                        { setPlayId: muchomor._id },
+                        {
+                            setPlayId: gwarancjaStartow._id,
+                            userData: { playerId: players[4]._id.toString() }
+                        }
                     ]
                 },
                 {
                     startingLineupId: startingLineupTwo._id,
-                    setPlayList: [{ setPlayId: mortalKombatCombo._id }]
+                    setPlayList: [
+                        { setPlayId: mortalKombatCombo._id },
+                        {
+                            setPlayId: ncd._id,
+                            userData: { playerId: players[6]._id.toString() },
+                            adminData: {
+                                playerIdList: players.slice(0, 4).map(player => {
+                                    return player._id.toString();
+                                })
+                            }
+                        },
+                        {
+                            setPlayId: ncd6._id,
+                            userData: { playerId: players[7]._id.toString() }
+                        }
+                    ]
                 }
             ]);
 
@@ -547,13 +646,23 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
 
             const [scoreDetails] = result;
 
-            expect(scoreDetails.teamOne.setPlays).toEqual([
-                'Gwarancja startów',
-                'Muchomor'
-            ]);
-            expect(scoreDetails.teamTwo.setPlays).toEqual([
-                'Mortal Kombat Combo'
-            ]);
+            expect(scoreDetails.teamOne.setPlays).toBe(
+                'PN - Player One, KB - Player Two, P - Player Three, GS: Player One, Muchomor:, GS: Player Five'
+            );
+            expect(scoreDetails.teamTwo.setPlays).toBe(
+                'PN - Player Six, KB - Player Seven, P - Player Eight, Mortal Kombat Combo:, NCD: Player Seven, NCD6: Player Eight'
+            );
+            const liveScoreDetails =
+                await ScoreDetailsModel.getScoreDetailsByScheduleAndRoundId(
+                    schedule._id.toString(),
+                    3
+                );
+            expect(liveScoreDetails.teamOne.setPlayDescriptions).toEqual(
+                scoreDetails.teamOne.setPlays
+            );
+            expect(liveScoreDetails.teamTwo.setPlayDescriptions).toEqual(
+                scoreDetails.teamTwo.setPlays
+            );
 
             expect(scoreDetails.teamOne.trainer?.heatOne).toBe(1);
             expect(scoreDetails.teamOne.trainer?.setPlay).toBe(0);
@@ -583,11 +692,18 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             );
         });
 
-        test('Should export history with empty set play lists for a missing lineup reference or a lineup without selections', async () => {
+        test('Should export roles without selected plays and an empty comment for a missing lineup', async () => {
             const userOne = await UserModel.create(createUserData(40));
             const userTwo = await UserModel.create(createUserData(41));
-            const playerIds = Array.from({ length: 5 }, () => {
-                return new mongoose.Types.ObjectId().toString();
+            const players = await PlayersModel.create([
+                { extraligaPlayerName: 'Player One' },
+                { extraligaPlayerName: 'Player Two' },
+                { extraligaPlayerName: 'Player Three' },
+                { extraligaPlayerName: 'Player Four' },
+                { extraligaPlayerName: 'Player Five' }
+            ]);
+            const playerIds = players.map(player => {
+                return player._id.toString();
             });
             const startingLineup = await StartingLineupModel.create({
                 userId: userTwo._id,
@@ -616,8 +732,10 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             });
 
             const [result] = await ScoreDetailsModel.getScoreDetailsForHistory();
-            expect(result.teamOne.setPlays).toEqual([]);
-            expect(result.teamTwo.setPlays).toEqual([]);
+            expect(result.teamOne.setPlays).toBe('');
+            expect(result.teamTwo.setPlays).toBe(
+                'PN - Player One, KB - Player Two, P - Player Three'
+            );
         });
     });
 

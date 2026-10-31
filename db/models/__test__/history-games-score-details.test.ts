@@ -74,7 +74,7 @@ describe('Test HistoryGamesScoreDetailsModel methods and static functions', () =
             teamOne: {
                 teamId: teamOne._id.toString(),
                 score: 46,
-                setPlays: ['team-one-setplay'],
+                setPlays: 'team-one-setplay',
                 players: [
                     {
                         playerId: players[0]._id.toString(),
@@ -100,7 +100,7 @@ describe('Test HistoryGamesScoreDetailsModel methods and static functions', () =
             teamTwo: {
                 teamId: teamTwo._id.toString(),
                 score: 44,
-                setPlays: ['team-two-setplay'],
+                setPlays: 'team-two-setplay',
                 players: [
                     {
                         playerId: players[2]._id.toString(),
@@ -138,8 +138,8 @@ describe('Test HistoryGamesScoreDetailsModel methods and static functions', () =
         expect(result.teamOne.score).toBe(46);
         expect(result.teamTwo.score).toBe(44);
 
-        expect(result.teamOne.setPlays).toEqual(['team-one-setplay']);
-        expect(result.teamTwo.setPlays).toEqual(['team-two-setplay']);
+        expect(result.teamOne.setPlays).toBe('team-one-setplay');
+        expect(result.teamTwo.setPlays).toBe('team-two-setplay');
 
         expect(result.teamOne.players).toHaveLength(2);
         expect(result.teamTwo.players).toHaveLength(2);
@@ -198,7 +198,7 @@ describe('Test HistoryGamesScoreDetailsModel methods and static functions', () =
                 teamOne: {
                     teamId: teamOne._id.toString(),
                     score: 46,
-                    setPlays: ['team-one-setplay'],
+                    setPlays: 'team-one-setplay',
                     players: [
                         {
                             playerId: players[0]._id.toString(),
@@ -216,7 +216,7 @@ describe('Test HistoryGamesScoreDetailsModel methods and static functions', () =
                 teamTwo: {
                     teamId: teamTwo._id.toString(),
                     score: 44,
-                    setPlays: ['team-two-setplay'],
+                    setPlays: 'team-two-setplay',
                     players: [
                         {
                             playerId: players[1]._id.toString(),

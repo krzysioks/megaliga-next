@@ -449,7 +449,11 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                             setPlayId: gwarancjaStartow._id,
                             userData: { playerId: players[0]._id.toString() }
                         },
-                        { setPlayId: muchomor._id }
+                        { setPlayId: muchomor._id },
+                        {
+                            setPlayId: gwarancjaStartow._id,
+                            userData: { playerId: players[4]._id.toString() }
+                        }
                     ]
                 },
                 {
@@ -609,13 +613,12 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                     .lean()
                     .exec();
 
-            expect(firstScoreDetails?.teamOne.setPlays).toEqual([
-                'Gwarancja startów',
-                'Muchomor'
-            ]);
-            expect(firstScoreDetails?.teamTwo.setPlays).toEqual([
-                'Mortal Kombat Combo'
-            ]);
+            expect(firstScoreDetails?.teamOne.setPlays).toBe(
+                'PN - Player One, KB - Player Two, P - Player Three, GS: Player One, Muchomor:, GS: Player Five'
+            );
+            expect(firstScoreDetails?.teamTwo.setPlays).toBe(
+                'PN - Player One, KB - Player Two, P - Player Three, Mortal Kombat Combo:'
+            );
 
             const secondScoreDetails =
                 await HistoryGamesScoreDetailsModel.findById(
@@ -623,10 +626,12 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                 )
                     .lean()
                     .exec();
-            expect(secondScoreDetails?.teamOne.setPlays).toEqual(['Muchomor']);
-            expect(secondScoreDetails?.teamTwo.setPlays).toEqual([
-                'Mortal Kombat Combo'
-            ]);
+            expect(secondScoreDetails?.teamOne.setPlays).toBe(
+                'PN - Player One, KB - Player Two, P - Player Three, Muchomor:'
+            );
+            expect(secondScoreDetails?.teamTwo.setPlays).toBe(
+                'PN - Player One, KB - Player Two, P - Player Three, Mortal Kombat Combo:'
+            );
 
             expect(firstScoreDetails?.teamOne.score).toBe(44);
             expect(firstScoreDetails?.teamTwo.score).toBe(40);
@@ -691,6 +696,22 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                 setPlay: 1,
                 comment: 'Solid ride'
             });
+            await PlayersModel.updateOne(
+                { _id: players[0]._id },
+                { extraligaPlayerName: 'Updated Player One' }
+            );
+            await SetPlaysDataModel.deleteMany();
+
+            const archivedScoreDetails =
+                await HistoryGamesScoreDetailsModel.getHistoryScoreDetailsById(
+                    firstGame!.scoreDetails!.toString()
+                );
+            expect(archivedScoreDetails.teamOne.setPlays).toEqual(
+                firstScoreDetails?.teamOne.setPlays
+            );
+            expect(archivedScoreDetails.teamTwo.setPlays).toEqual(
+                firstScoreDetails?.teamTwo.setPlays
+            );
         });
     });
 
@@ -957,12 +978,8 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                     .lean()
                     .exec();
 
-            expect(firstScoreDetails?.teamOne.setPlays).toEqual([
-                'team-one-setplay'
-            ]);
-            expect(firstScoreDetails?.teamTwo.setPlays).toEqual([
-                'team-two-setplay'
-            ]);
+            expect(firstScoreDetails?.teamOne.setPlays).toBe('team-one-setplay');
+            expect(firstScoreDetails?.teamTwo.setPlays).toBe('team-two-setplay');
 
             expect(firstScoreDetails?.teamOne.score).toBe(44);
             expect(firstScoreDetails?.teamTwo.score).toBe(40);

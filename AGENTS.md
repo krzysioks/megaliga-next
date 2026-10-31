@@ -49,6 +49,12 @@ Apply these before any of the pattern rules below. They decide _whether_ and _ho
 - Review the final diff for avoidable complexity.
 - Justify every new abstraction.
 
+## Utility and helper function parameters
+
+- When adding or changing utility/helper functions with grouped inputs, accept one named parameter object, such as `params: FormatSetPlaysParamsType`.
+- Define the parameter interface separately in the corresponding `*.types.ts` file, such as `utils/utils.types.ts`, and import it using `import type`.
+- Access input fields through `params` in the function body. Keep parameter destructuring and inline object type definitions out of the function signature.
+
 ## Unit test rules
 
 - Model test suites cover the model's custom static functions and instance methods. Exercise validation and database utilities through the model functions that use them; do not test those utilities directly in model suites.
