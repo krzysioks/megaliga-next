@@ -495,8 +495,8 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                                     bonus: false,
                                     isNominated: false
                                 },
-                                setPlay: 1,
-                                comment: 'Solid ride'
+                                setPlay: -2,
+                                comment: 'NCD6 -2'
                             }
                         ],
                         trainer: {
@@ -668,7 +668,7 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                 'heatOne.isNominated'
             );
             expect(firstScoreDetails?.teamOne.players?.[0].comment).toBe(
-                'Solid ride'
+                'NCD6 -2'
             );
 
             expect(firstScoreDetails?.teamTwo.players).toHaveLength(1);
@@ -693,8 +693,8 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                 heatFive: null,
                 heatSix: null,
                 heatSeven: null,
-                setPlay: 1,
-                comment: 'Solid ride'
+                setPlay: -2,
+                comment: 'NCD6 -2'
             });
             await PlayersModel.updateOne(
                 { _id: players[0]._id },

@@ -92,7 +92,7 @@ export const playerSchema = heatScoresSchema.extend({
 
 export const regularSeasonPlayerSchema = playerScoresZodSchema.extend({
     playerId: objectIdSchema,
-    setPlay: heatSchema,
+    setPlay: z.number().max(100).default(0),
     comment: standardStringSchema.optional()
 });
 
@@ -111,7 +111,7 @@ const historyHeatScoresSchema = z.object({
 
 export const historyPlayerSchema = historyHeatScoresSchema.extend({
     playerId: objectIdSchema,
-    setPlay: heatSchema,
+    setPlay: z.number().max(100).default(0),
     comment: standardStringSchema.optional()
 });
 

@@ -6,7 +6,8 @@ import type {
     CalculatePrimusNominatusParamsType,
     CalculateTrainerParamsType,
     CalculationTeamReturnType,
-    CalculationTeamType
+    CalculationTeamType,
+    ScoreModifierType
 } from '@/db/db.types';
 
 import {
@@ -14,22 +15,23 @@ import {
     KAPITAN_POINTS,
     LIDER_FIRST_POINT_TOTAL,
     MAX_LIDER_POINTS,
+    MAX_PLAYER_MODIFIER_POINTS,
     ORDINARY_RACE_BONUS,
-    STARTING_LINEUP_POSITION_KEYS
+    STARTING_LINEUP_POSITION_KEYS,
+    FIFTH_PLAYER_INDEX
 } from '@/db/db.constants';
-
-function getActualHeats(params: CalculatePlayerParamsType) {
-    return CALCULATION_HEAT_KEYS.map(key => params.player[key]).filter(
-        heat => heat.value !== null
-    );
-}
-
-function getPlayerTotal(params: CalculatePlayerParamsType) {
-    return getActualHeats(params).reduce(
-        (total, heat) => total + (heat.value ?? 0),
-        0
-    );
-}
+import { SetPlayEnumType } from '@/db/models/schema.types';
+import { getActualHeats, getPlayerTotal } from '@/db/player-scores.utils';
+import {
+    calculateGwarancjaStartow,
+    calculateRemis,
+    calculateMortalKombatCombo,
+    calculateNcd,
+    calculateNcd6,
+    calculateSpartacus,
+    calculateRyszardKowalski,
+    calculateTaktyczna
+} from '@/db/set-plays.utils';
 
 function getTeamTotal(params: CalculationTeamReturnType) {
     return (
@@ -49,6 +51,7 @@ export function calculateLider(params: CalculatePlayerParamsType): number {
         0,
         Math.min(
             MAX_LIDER_POINTS,
+            MAX_PLAYER_MODIFIER_POINTS,
             getPlayerTotal(params) - LIDER_FIRST_POINT_TOTAL + 1
         )
     );
@@ -107,7 +110,7 @@ export function calculateTrainer(
         heatTwo: params.players[1].heatTwo.value ?? 0,
         heatThree: params.players[2].heatThree.value ?? 0,
         heatFour: params.players[3].heatFour.value ?? 0,
-        heatFive: params.players[4].heatFive.value ?? 0,
+        heatFive: params.players[FIFTH_PLAYER_INDEX].heatFive.value ?? 0,
         heatSix: 0,
         heatSeven: 0,
         setPlay: 0,
@@ -145,11 +148,66 @@ export function calculateMatchScores(
 ): CalculateMatchScoresReturnType {
     const teamOne = prepareTeam(params.teamOne);
     const teamTwo = prepareTeam(params.teamTwo);
-    for (const [team, source, opponent] of [
-        [teamOne, params.teamOne, teamTwo],
-        [teamTwo, params.teamTwo, teamOne]
-    ] as const) {
+
+    const effectiveTeams = [teamOne, teamTwo].map((team, index) => {
+        const source = index === 0 ? params.teamOne : params.teamTwo;
+        const players = structuredClone(team.players);
+        for (const setPlay of source.setPlayList) {
+            if (setPlay.type !== SetPlayEnumType.GwarancjaStartow) {
+                continue;
+            }
+            const player = players.find(
+                entry => entry.playerId === setPlay.userData.playerId
+            );
+            if (!player) {
+                throw new Error(
+                    `Selected player is not in starting lineup: ${setPlay.userData.playerId}`
+                );
+            }
+            const { virtualHeats } = calculateGwarancjaStartow({ player });
+            const emptyKeys = CALCULATION_HEAT_KEYS.filter(
+                key => player[key].value === null
+            );
+            virtualHeats.forEach((heat, heatIndex) => {
+                player[emptyKeys[heatIndex]] = heat;
+            });
+        }
+        team.trainer.heatFive = players[FIFTH_PLAYER_INDEX].heatFive.value ?? 0;
+        return players;
+    });
+
+    for (const [teamIndex, team] of [teamOne, teamTwo].entries()) {
+        const source = teamIndex === 0 ? params.teamOne : params.teamTwo;
+        const opponent = teamIndex === 0 ? teamTwo : teamOne;
+        const effectivePlayers = effectiveTeams[teamIndex];
+        const opponentEffectivePlayers =
+            teamIndex === 0 ? effectiveTeams[1] : effectiveTeams[0];
+
+        for (const setPlay of source.setPlayList) {
+            let targetId: string | undefined;
+            switch (setPlay.type) {
+                case SetPlayEnumType.GwarancjaStartow:
+                case SetPlayEnumType.Ncd:
+                case SetPlayEnumType.Ncd6:
+                case SetPlayEnumType.RyszardKowalski:
+                    targetId = setPlay.userData.playerId;
+                    break;
+                case SetPlayEnumType.Spartacus:
+                    targetId = setPlay.userData.ownPlayerId;
+                    break;
+            }
+            if (
+                targetId &&
+                !team.players.some(player => player.playerId === targetId)
+            ) {
+                throw new Error(
+                    `Selected player is not in starting lineup: ${targetId}`
+                );
+            }
+        }
+
         const roles = source.startingLineup.roles;
+
         for (const rolePlayerId of [roles.pn.playerId, roles.kb, roles.p]) {
             if (
                 !team.players.some(player => player.playerId === rolePlayerId)
@@ -159,48 +217,180 @@ export function calculateMatchScores(
                 );
             }
         }
+
         team.players.forEach((player, index) => {
-            const contributions: string[] = [];
+            const modifiers: ScoreModifierType[] = [];
+            const effectivePlayer = effectivePlayers[index];
             if (index === 0) {
-                const points = calculateLider({ player });
-                player.setPlay += points;
-                contributions.push(`Lider ${points}`);
-            } else if (index === 1) {
-                const points = calculateJoker({ player });
-                player.setPlay += points;
-                contributions.push(`Joker ${points}`);
-            } else if (index === 2) {
-                const points = calculateKapitan({
-                    player,
-                    opponent: opponent.players[index]
+                modifiers.push({
+                    name: 'Lider',
+                    points: calculateLider({ player: effectivePlayer }),
+                    countsTowardsLimit: true
                 });
-                player.setPlay += points;
-                contributions.push(`Kapitan ${points}`);
+            } else if (index === 1) {
+                modifiers.push({
+                    name: 'Joker',
+                    points: calculateJoker({ player }),
+                    countsTowardsLimit: true
+                });
+            } else if (index === 2) {
+                modifiers.push({
+                    name: 'Kapitan',
+                    points: calculateKapitan({
+                        player: effectivePlayer,
+                        opponent: opponentEffectivePlayers[index]
+                    }),
+                    countsTowardsLimit: true
+                });
             }
             if (player.playerId === roles.pn.playerId) {
-                const points = calculatePrimusNominatus({
-                    player,
-                    isDisabled: roles.pn.isDisabled
+                modifiers.push({
+                    name: roles.pn.isDisabled ? 'PN (pominięty)' : 'PN',
+                    points: calculatePrimusNominatus({
+                        player,
+                        isDisabled: roles.pn.isDisabled
+                    }),
+                    countsTowardsLimit: true
                 });
-                player.setPlay += points;
-                contributions.push(
-                    `PN ${points}${roles.pn.isDisabled ? ' (pominięty)' : ''}`
-                );
             }
             if (player.playerId === roles.kb) {
-                const points = calculateKrolBonusow({ player });
-                player.setPlay += points;
-                contributions.push(`KB ${points}`);
+                modifiers.push({
+                    name: 'KB',
+                    points: calculateKrolBonusow({ player: effectivePlayer }),
+                    countsTowardsLimit: true
+                });
             }
             if (player.playerId === roles.p) {
-                const points = calculatePrzelozony({ player });
-                player.setPlay += points;
-                contributions.push(`P ${points}`);
+                modifiers.push({
+                    name: 'P',
+                    points: calculatePrzelozony({ player }),
+                    countsTowardsLimit: true
+                });
             }
-            player.comment = contributions.join(', ');
+            for (const setPlay of source.setPlayList) {
+                switch (setPlay.type) {
+                    case SetPlayEnumType.GwarancjaStartow:
+                        if (setPlay.userData.playerId === player.playerId) {
+                            modifiers.push({
+                                name: 'GS',
+                                points: calculateGwarancjaStartow({ player })
+                                    .points,
+                                countsTowardsLimit: true
+                            });
+                        }
+                        break;
+                    case SetPlayEnumType.Remis:
+                        modifiers.push({
+                            name: 'Remis',
+                            points: calculateRemis({ setPlay, player }),
+                            countsTowardsLimit: true
+                        });
+                        break;
+                    case SetPlayEnumType.MortalKombatCombo:
+                        if (index === 0) {
+                            modifiers.push({
+                                name: 'MKC',
+                                points: calculateMortalKombatCombo({
+                                    liderPoints: calculateLider({
+                                        player: effectivePlayer
+                                    })
+                                }),
+                                countsTowardsLimit: true
+                            });
+                        }
+                        break;
+                    case SetPlayEnumType.Ncd:
+                    case SetPlayEnumType.Ncd6:
+                        if (setPlay.userData.playerId === player.playerId) {
+                            modifiers.push({
+                                name:
+                                    setPlay.type === SetPlayEnumType.Ncd
+                                        ? 'NCD'
+                                        : 'NCD6',
+                                points:
+                                    setPlay.type === SetPlayEnumType.Ncd
+                                        ? calculateNcd({ setPlay, player })
+                                        : calculateNcd6({ setPlay, player }),
+                                countsTowardsLimit:
+                                    setPlay.type === SetPlayEnumType.Ncd
+                            });
+                        }
+                        break;
+                    case SetPlayEnumType.Spartacus:
+                        if (setPlay.userData.ownPlayerId === player.playerId) {
+                            const opponentPlayer = opponent.players.find(
+                                entry =>
+                                    entry.playerId ===
+                                    setPlay.userData.opponentPlayerId
+                            );
+                            if (!opponentPlayer) {
+                                throw new Error(
+                                    `Missing Spartacus opponent: ${setPlay.userData.opponentPlayerId}`
+                                );
+                            }
+                            modifiers.push({
+                                name: 'Spartacus',
+                                points: calculateSpartacus({
+                                    setPlay,
+                                    player,
+                                    opponent: opponentPlayer,
+                                    roundNumber: params.roundNumber
+                                }),
+                                countsTowardsLimit: true
+                            });
+                        }
+                        break;
+                    case SetPlayEnumType.RyszardKowalski:
+                        if (setPlay.userData.playerId === player.playerId) {
+                            modifiers.push({
+                                name: 'RK',
+                                points: calculateRyszardKowalski({ player }),
+                                countsTowardsLimit: true
+                            });
+                        }
+                        break;
+                    case SetPlayEnumType.Taktyczna:
+                        modifiers.push({
+                            name: 'Taktyczna',
+                            points: calculateTaktyczna({ player }),
+                            countsTowardsLimit: true
+                        });
+                        break;
+                    case SetPlayEnumType.Rezerwa:
+                    case SetPlayEnumType.RezerwaGielda:
+                    case SetPlayEnumType.Muchomor:
+                    case SetPlayEnumType.PijanyCieslak:
+                    case SetPlayEnumType.BrudnaPala:
+                    case SetPlayEnumType.PauloSousa:
+                    case SetPlayEnumType.Typer:
+                    case SetPlayEnumType.Awatar:
+                    case SetPlayEnumType.KoloFortunyNorbiego:
+                        break;
+                }
+            }
+            let allowance = MAX_PLAYER_MODIFIER_POINTS;
+            const comments: string[] = [];
+            for (const modifier of modifiers) {
+                const credited = modifier.countsTowardsLimit
+                    ? Math.min(allowance, modifier.points)
+                    : modifier.points;
+                if (modifier.countsTowardsLimit) {
+                    allowance -= credited;
+                }
+                player.setPlay += credited;
+                const points =
+                    credited === modifier.points
+                        ? `${credited}`
+                        : `${credited}/${modifier.points} (limit ${MAX_PLAYER_MODIFIER_POINTS})`;
+                comments.push(
+                    modifier.name === 'PN (pominięty)'
+                        ? `PN ${points} (pominięty)`
+                        : `${modifier.name} ${points}`
+                );
+            }
+            player.comment = comments.join(', ');
         });
     }
-
     return {
         teamOne,
         teamTwo,

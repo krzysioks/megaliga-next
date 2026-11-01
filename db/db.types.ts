@@ -4,6 +4,7 @@ import type {
 } from '@/db/models/games/score-details';
 import type {
     SetPlaysDataForUserReturnType,
+    SetPlaysDataSelectionReturnType,
     SetPlaysDataListByStartingLineupIdReturnType
 } from '@/db/models/games/set-plays-data';
 import type { StartingLineupType } from '@/db/models/games/starting-lineup';
@@ -12,7 +13,11 @@ import type { PlayersReturnType, PlayersType } from '@/db/models/players';
 import mongoose from 'mongoose';
 import { z } from 'zod';
 
-import { heatScoresSchema, playerSchema } from '@/db/models/schema.types';
+import {
+    SetPlayEnumType,
+    heatScoresSchema,
+    playerSchema
+} from '@/db/models/schema.types';
 
 export type ConnectType = Promise<void | typeof mongoose>;
 
@@ -29,7 +34,10 @@ export type GetSetPlaysDetailsReturnType = {
         SetPlaysDataForUserReturnType,
         'name' | 'type' | 'userData'
     >[];
-    setPlayPlayers: Pick<PlayersReturnType, 'playerId' | 'extraligaPlayerName'>[];
+    setPlayPlayers: Pick<
+        PlayersReturnType,
+        'playerId' | 'extraligaPlayerName'
+    >[];
     setPlayDescriptions: string;
 };
 
@@ -57,6 +65,7 @@ export interface CalculationTeamType {
 }
 
 export interface CalculateMatchScoresParamsType {
+    roundNumber: number;
     teamOne: CalculationTeamType;
     teamTwo: CalculationTeamType;
 }
@@ -81,11 +90,30 @@ export interface CalculateKapitanParamsType extends CalculatePlayerParamsType {
     opponent: CalculationPlayerType;
 }
 
-export interface CalculatePrimusNominatusParamsType
-    extends CalculatePlayerParamsType {
+export interface CalculatePrimusNominatusParamsType extends CalculatePlayerParamsType {
     isDisabled: boolean;
 }
 
 export interface CalculateTrainerParamsType {
     players: CalculationPlayerType[];
+}
+
+export interface ScoreModifierType {
+    name: string;
+    points: number;
+    countsTowardsLimit: boolean;
+}
+
+export interface SetPlayCalculationParamsType<T extends SetPlayEnumType> {
+    setPlay: Extract<SetPlaysDataSelectionReturnType, { type: T }>;
+    player: CalculationPlayerType;
+}
+
+export interface CalculateSpartacusParamsType extends SetPlayCalculationParamsType<SetPlayEnumType.Spartacus> {
+    roundNumber: number;
+    opponent: CalculationPlayerType;
+}
+
+export interface CalculateMortalKombatComboParamsType {
+    liderPoints: number;
 }
