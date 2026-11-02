@@ -617,7 +617,7 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                 'PN - Player One, KB - Player Two, P - Player Three, GS: Player One, Muchomor:, GS: Player Five'
             );
             expect(firstScoreDetails?.teamTwo.setPlays).toBe(
-                'PN - Player One, KB - Player Two, P - Player Three, Mortal Kombat Combo:'
+                'PN - Player One, KB - Player Two, P - Player Three, MKC:'
             );
 
             const secondScoreDetails =
@@ -630,7 +630,7 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                 'PN - Player One, KB - Player Two, P - Player Three, Muchomor:'
             );
             expect(secondScoreDetails?.teamTwo.setPlays).toBe(
-                'PN - Player One, KB - Player Two, P - Player Three, Mortal Kombat Combo:'
+                'PN - Player One, KB - Player Two, P - Player Three, MKC:'
             );
 
             expect(firstScoreDetails?.teamOne.score).toBe(44);

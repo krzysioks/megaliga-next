@@ -650,7 +650,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 'PN - Player One, KB - Player Two, P - Player Three, GS: Player One, Muchomor:, GS: Player Five'
             );
             expect(scoreDetails.teamTwo.setPlays).toBe(
-                'PN - Player Six, KB - Player Seven, P - Player Eight, Mortal Kombat Combo:, NCD: Player Seven, NCD6: Player Eight'
+                'PN - Player Six, KB - Player Seven, P - Player Eight, MKC:, NCD: Player Seven, NCD6: Player Eight'
             );
             const liveScoreDetails =
                 await ScoreDetailsModel.getScoreDetailsByScheduleAndRoundId(

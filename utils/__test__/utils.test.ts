@@ -106,7 +106,7 @@ describe('formatSetPlaysComment', () => {
         );
     });
 
-    test('Should preserve stored labels for plays without additional user choices', () => {
+    test('Should use shared labels for plays without additional user choices', () => {
         const descriptions = formatSetPlaysComment({
             roles: null,
             players: [],
@@ -141,7 +141,7 @@ describe('formatSetPlaysComment', () => {
         });
 
         expect(descriptions).toBe(
-            'Remis:, Mortal Kombat Combo:, Muchomor – własna nazwa:, Pijany Cieślak:, Paulo Sousa:, Taktyczna:'
+            'Remis:, MKC:, Muchomor:, Pijany Cieślak:, Paulo Sousa:, Taktyczna:'
         );
     });
 

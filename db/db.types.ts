@@ -62,6 +62,7 @@ export interface CalculationTeamType {
     players: CalculationPlayerType[];
     startingLineup: Omit<StartingLineupType, 'userId' | 'roundNumber'>;
     setPlayList: SetPlaysDataListByStartingLineupIdReturnType['setPlayList'];
+    replacementPlayers?: Pick<CalculationPlayerType, 'playerId' | 'isJunior'>[];
 }
 
 export interface CalculateMatchScoresParamsType {
@@ -87,7 +88,7 @@ export interface CalculatePlayerParamsType {
 }
 
 export interface CalculateKapitanParamsType extends CalculatePlayerParamsType {
-    opponent: CalculationPlayerType;
+    opponentPlayer: CalculationPlayerType;
 }
 
 export interface CalculatePrimusNominatusParamsType extends CalculatePlayerParamsType {
@@ -109,11 +110,71 @@ export interface SetPlayCalculationParamsType<T extends SetPlayEnumType> {
     player: CalculationPlayerType;
 }
 
-export interface CalculateSpartacusParamsType extends SetPlayCalculationParamsType<SetPlayEnumType.Spartacus> {
-    roundNumber: number;
-    opponent: CalculationPlayerType;
+export interface CalculateSpartacusParamsType extends CalculatePlayerParamsType {
+    ownAverage: number;
+    opponentAverage: number;
+    opponentPlayer: CalculationPlayerType;
 }
 
 export interface CalculateMortalKombatComboParamsType {
     liderPoints: number;
+}
+
+export interface CalculationSlotType {
+    player: CalculationPlayerType;
+    nominalPlayerId: string;
+    isReserve: boolean;
+    replacementNames: string[];
+    isMatchDraw?: boolean;
+}
+
+export interface CalculateReplacementParamsType {
+    player: CalculationPlayerType;
+    playerId: string;
+    isJunior: boolean;
+    scores: RegularSeasonPlayerScoreDetailsType;
+}
+
+export interface ScoreTeamParamsType {
+    teamData: CalculationTeamType;
+    nominal: CalculationTeamReturnType;
+    slots: CalculationSlotType[];
+    opponentSlots: CalculationSlotType[];
+    opponentSpartacusSlots: CalculationSlotType[];
+    opponentTeamData: CalculationTeamType;
+    roundNumber: number;
+    includeCompetitiveAwards: boolean;
+}
+
+export interface SelectReserveLineupParamsType {
+    teamData: CalculationTeamType;
+    nominal: CalculationTeamReturnType;
+    slots: CalculationSlotType[];
+    roundNumber: number;
+}
+
+export interface GetEffectivePlayersParamsType {
+    teamData: CalculationTeamType;
+    slots: CalculationSlotType[];
+}
+
+export interface ReplacementPlayerParamsType {
+    teamData: CalculationTeamType;
+    playerId: string;
+}
+
+export interface GenerateStartingLineupMatrixParamsType {
+    teamData: CalculationTeamType;
+    nominal: CalculationTeamReturnType;
+}
+
+export interface CalculateRemisParamsType
+    extends SetPlayCalculationParamsType<SetPlayEnumType.Remis> {
+    isMatchDraw?: boolean;
+}
+
+export interface GetSpartacusAverageParamsType {
+    teamData: CalculationTeamType;
+    nominalPlayerId: string;
+    average: number;
 }

@@ -1,4 +1,6 @@
 import type {
+    CalculateReplacementParamsType,
+    CalculateRemisParamsType,
     CalculateMortalKombatComboParamsType,
     CalculatePlayerParamsType,
     CalculateSpartacusParamsType,
@@ -16,7 +18,6 @@ import {
     REMIS_POINTS,
     RYSZARD_KOWALSKI_POINTS,
     SPARTACUS_MIN_AVERAGE_DIFFERENCE,
-    SPARTACUS_MIN_ROUND,
     SPARTACUS_POINTS,
     TACTICAL_START_INDEX
 } from '@/db/db.constants';
@@ -42,12 +43,14 @@ export function calculateGwarancjaStartow(params: CalculatePlayerParamsType) {
 }
 
 export function calculateRemis(
-    params: SetPlayCalculationParamsType<SetPlayEnumType.Remis>
+    params: CalculateRemisParamsType
 ): number {
     if (!params.setPlay.adminData) {
         throw new Error('Remis admin data is required for score calculation');
     }
-    return params.setPlay.adminData[params.player.playerId] ? REMIS_POINTS : 0;
+    const isMatchDraw =
+        params.isMatchDraw ?? params.setPlay.adminData[params.player.playerId];
+    return isMatchDraw ? REMIS_POINTS : 0;
 }
 
 export function calculateMortalKombatCombo(
@@ -85,17 +88,11 @@ export function calculateNcd6(
 export function calculateSpartacus(
     params: CalculateSpartacusParamsType
 ): number {
-    if (!params.setPlay.adminData) {
-        throw new Error(
-            'Spartacus admin data is required for score calculation'
-        );
-    }
-    const ownAverage = params.setPlay.adminData.ownAverage;
-    const opponentAverage = params.setPlay.adminData.opponentAverage;
+    const ownAverage = params.ownAverage;
+    const opponentAverage = params.opponentAverage;
     const ownTotal = getPlayerTotal(params);
-    const opponentTotal = getPlayerTotal({ player: params.opponent });
-    return params.roundNumber >= SPARTACUS_MIN_ROUND &&
-        opponentAverage -
+    const opponentTotal = getPlayerTotal({ player: params.opponentPlayer });
+    return opponentAverage -
             ownAverage +
             Number.EPSILON *
                 Math.max(1, Math.abs(ownAverage), Math.abs(opponentAverage)) >=
@@ -120,4 +117,32 @@ export function calculateRyszardKowalski(
 export function calculateTaktyczna(params: CalculatePlayerParamsType): number {
     const actual = getActualHeats(params);
     return actual[TACTICAL_START_INDEX]?.value ?? 0;
+}
+
+export function calculateReplacement(params: CalculateReplacementParamsType) {
+    if (
+        CALCULATION_HEAT_KEYS.some(
+            key => params.scores[key]?.value === undefined
+        )
+    ) {
+        throw new Error(
+            `Missing replacement heat data for player: ${params.playerId}`
+        );
+    }
+    const scores = Object.fromEntries(
+        CALCULATION_HEAT_KEYS.map(key => [
+            key,
+            structuredClone(params.scores[key])
+        ])
+    );
+    return {
+        ...params.player,
+        ...scores,
+        playerId: params.playerId,
+        isJunior: params.isJunior
+    };
+}
+
+export function calculateAwatar(params: CalculateReplacementParamsType) {
+    return calculateReplacement(params);
 }

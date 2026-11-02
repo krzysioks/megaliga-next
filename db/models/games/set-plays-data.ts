@@ -152,6 +152,8 @@ const setPlayPayloadZodSchema = z.discriminatedUnion('type', [
             })
             .required(),
         adminData: playerScoresZodSchema.extend({
+            isMatchDraw: booleanDefaultFalseSchema,
+            average: numberSchema.optional(),
             isDisabled: booleanDefaultFalseSchema
         }).default({})
     }),

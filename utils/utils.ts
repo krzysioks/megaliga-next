@@ -28,7 +28,7 @@ export function formatSetPlaysComment(
         return playerId ? [`${label} - ${getPlayerName(playerId)}`] : [];
     });
     const selectedPlayDescriptions = params.setPlays.map(setPlay => {
-        const label = SET_PLAY_SHORT_LABELS[setPlay.type] ?? setPlay.name;
+        const label = SET_PLAY_SHORT_LABELS[setPlay.type];
         const userData = setPlay.userData;
 
         if (!userData) {
