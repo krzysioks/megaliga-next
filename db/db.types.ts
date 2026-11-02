@@ -138,6 +138,7 @@ export interface CalculateReplacementParamsType {
 export interface ScoreTeamParamsType {
     teamData: CalculationTeamType;
     nominal: CalculationTeamReturnType;
+    spartacusSlots: CalculationSlotType[];
     slots: CalculationSlotType[];
     opponentSlots: CalculationSlotType[];
     opponentSpartacusSlots: CalculationSlotType[];
@@ -151,6 +152,7 @@ export interface SelectReserveLineupParamsType {
     nominal: CalculationTeamReturnType;
     slots: CalculationSlotType[];
     roundNumber: number;
+    opponentSpartacusSlots: CalculationSlotType[];
 }
 
 export interface GetEffectivePlayersParamsType {
@@ -177,4 +179,35 @@ export interface GetSpartacusAverageParamsType {
     teamData: CalculationTeamType;
     nominalPlayerId: string;
     average: number;
+}
+
+export interface CalculateMuchomorParamsType {
+    players: CalculationPlayerType[];
+}
+
+export interface CalculatePauloSousaParamsType {
+    players: CalculationPlayerType[];
+    opponentPlayers: CalculationPlayerType[];
+}
+
+export interface CalculatePijanyCieslakParamsType {
+    trainerScore: number;
+    opponentTrainerScore: number;
+}
+
+export interface CalculateBrudnaPalaParamsType {
+    setPlay: Extract<SetPlaysDataSelectionReturnType, { type: SetPlayEnumType.BrudnaPala }>;
+}
+
+export interface CalculateKoloFortunyNorbiegoParamsType {
+    setPlay: Extract<SetPlaysDataSelectionReturnType, { type: SetPlayEnumType.KoloFortunyNorbiego }>;
+    scoreDifference: number;
+}
+
+export interface GetWinningStartCountParamsType {
+    players: CalculationPlayerType[];
+}
+
+export interface GetTrainerHeatTotalParamsType {
+    trainer: CalculationTeamReturnType['trainer'];
 }

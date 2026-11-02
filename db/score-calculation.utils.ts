@@ -1,5 +1,6 @@
 import type {
     CalculateKapitanParamsType,
+    GetTrainerHeatTotalParamsType,
     CalculateMatchScoresParamsType,
     CalculateMatchScoresReturnType,
     CalculatePlayerParamsType,
@@ -19,6 +20,7 @@ import type {
 
 import {
     CALCULATION_HEAT_KEYS,
+    DISABLED_SET_PLAY_COMMENT_SUFFIX,
     KAPITAN_POINTS,
     LIDER_FIRST_POINT_TOTAL,
     MAX_LIDER_POINTS,
@@ -32,6 +34,12 @@ import { SetPlayEnumType } from '@/db/models/schema.types';
 import { getActualHeats, getPlayerTotal } from '@/db/player-scores.utils';
 import {
     calculateGwarancjaStartow,
+    calculateMuchomor,
+    calculateBrudnaPala,
+    calculateTyper,
+    calculatePauloSousa,
+    calculatePijanyCieslak,
+    calculateKoloFortunyNorbiego,
     calculateRemis,
     calculateMortalKombatCombo,
     calculateNcd,
@@ -44,15 +52,19 @@ import {
 } from '@/db/set-plays.utils';
 import { SET_PLAY_SHORT_LABELS } from '@/utils/utils.constants';
 
+function getTrainerHeatTotal(params: GetTrainerHeatTotalParamsType): number {
+    return CALCULATION_HEAT_KEYS.reduce(
+        (total, key) => total + params.trainer[key],
+        0
+    );
+}
+
 function getTeamTotal(params: CalculationTeamReturnType) {
     return (
         params.players.reduce((total, player) => {
             return total + getPlayerTotal({ player }) + player.setPlay;
         }, 0) +
-        CALCULATION_HEAT_KEYS.reduce(
-            (total, key) => total + params.trainer[key],
-            0
-        ) +
+        getTrainerHeatTotal({ trainer: params.trainer }) +
         params.trainer.setPlay
     );
 }
@@ -77,7 +89,8 @@ export function calculateJoker(params: CalculatePlayerParamsType): number {
 }
 
 export function calculateKapitan(params: CalculateKapitanParamsType): number {
-    return getPlayerTotal(params) > getPlayerTotal({ player: params.opponentPlayer })
+    return getPlayerTotal(params) >
+        getPlayerTotal({ player: params.opponentPlayer })
         ? KAPITAN_POINTS
         : 0;
 }
@@ -287,12 +300,13 @@ function selectReserveLineup(
     let best = params.slots;
     const score = (slots: CalculationSlotType[]) => {
         return getTeamTotal(
-            calculateScoreTeam({
+            calculateTeamScore({
                 teamData: params.teamData,
                 nominal: params.nominal,
+                spartacusSlots: params.slots,
                 slots,
                 opponentSlots: slots,
-                opponentSpartacusSlots: slots,
+                opponentSpartacusSlots: params.opponentSpartacusSlots,
                 opponentTeamData: params.teamData,
                 roundNumber: params.roundNumber,
                 includeCompetitiveAwards: false
@@ -355,19 +369,22 @@ function getSpartacusAverage(params: GetSpartacusAverageParamsType): number {
             continue;
         }
         if (setPlay.adminData.average === undefined) {
-            throw new Error(`Missing Awatar average for player: ${setPlay.userData.playerId}`);
+            throw new Error(
+                `Missing Awatar average for player: ${setPlay.userData.playerId}`
+            );
         }
         return setPlay.adminData.average;
     }
     return params.average;
 }
 
-function calculateScoreTeam(
+function calculateTeamScore(
     params: ScoreTeamParamsType
 ): CalculationTeamReturnType {
     const teamData = params.teamData;
     const team = structuredClone(params.nominal);
     const actualPlayers = params.slots.map(slot => slot.player);
+    const opponentActualPlayers = params.opponentSlots.map(slot => slot.player);
     const effectivePlayers = getEffectivePlayers(params);
     team.trainer = calculateTrainer({ players: actualPlayers });
     team.trainer.heatFive =
@@ -376,6 +393,11 @@ function calculateScoreTeam(
         teamData: params.opponentTeamData,
         slots: params.opponentSlots
     });
+    const opponentTrainer = calculateTrainer({
+        players: opponentActualPlayers
+    });
+    opponentTrainer.heatFive =
+        opponentEffectivePlayers[FIFTH_PLAYER_INDEX].heatFive.value ?? 0;
     const roles = teamData.startingLineup.roles;
 
     for (const rolePlayerId of [roles.pn.playerId, roles.kb, roles.p]) {
@@ -464,7 +486,11 @@ function calculateScoreTeam(
                     break;
                 case SetPlayEnumType.Remis:
                     if (slot.isReserve) {
-                        modifiers.push({ name: SET_PLAY_SHORT_LABELS[setPlay.type], points: 0, countsTowardsLimit: true });
+                        modifiers.push({
+                            name: SET_PLAY_SHORT_LABELS[setPlay.type],
+                            points: 0,
+                            countsTowardsLimit: true
+                        });
                         break;
                     }
                     if (
@@ -533,13 +559,20 @@ function calculateScoreTeam(
                         let points = 0;
                         if (!slot.isReserve) {
                             if (!setPlay.adminData) {
-                                throw new Error('Spartacus admin data is required for score calculation');
+                                throw new Error(
+                                    'Spartacus admin data is required for score calculation'
+                                );
                             }
-                            const opponentPlayer = params.opponentSpartacusSlots.find(
-                                slot => slot.nominalPlayerId === setPlay.userData.opponentPlayerId
-                            )?.player;
+                            const opponentPlayer =
+                                params.opponentSpartacusSlots.find(
+                                    slot =>
+                                        slot.nominalPlayerId ===
+                                        setPlay.userData.opponentPlayerId
+                                )?.player;
                             if (!opponentPlayer) {
-                                throw new Error(`Missing Spartacus opponent: ${setPlay.userData.opponentPlayerId}`);
+                                throw new Error(
+                                    `Missing Spartacus opponent: ${setPlay.userData.opponentPlayerId}`
+                                );
                             }
                             if (params.roundNumber >= SPARTACUS_MIN_ROUND) {
                                 points = calculateSpartacus({
@@ -552,8 +585,10 @@ function calculateScoreTeam(
                                     }),
                                     opponentAverage: getSpartacusAverage({
                                         teamData: params.opponentTeamData,
-                                        nominalPlayerId: setPlay.userData.opponentPlayerId,
-                                        average: setPlay.adminData.opponentAverage
+                                        nominalPlayerId:
+                                            setPlay.userData.opponentPlayerId,
+                                        average:
+                                            setPlay.adminData.opponentAverage
                                     })
                                 });
                             }
@@ -581,7 +616,9 @@ function calculateScoreTeam(
                 case SetPlayEnumType.Taktyczna:
                     modifiers.push({
                         name: SET_PLAY_SHORT_LABELS[setPlay.type],
-                        points: slot.isReserve ? 0 : calculateTaktyczna({ player: actualPlayer }),
+                        points: slot.isReserve
+                            ? 0
+                            : calculateTaktyczna({ player: actualPlayer }),
                         countsTowardsLimit: true
                     });
                     break;
@@ -591,7 +628,7 @@ function calculateScoreTeam(
                         setPlay.adminData.isDisabled
                     ) {
                         modifiers.push({
-                            name: `${SET_PLAY_SHORT_LABELS[setPlay.type]} (pominięta)`,
+                            name: `${SET_PLAY_SHORT_LABELS[setPlay.type]}${DISABLED_SET_PLAY_COMMENT_SUFFIX}`,
                             points: 0,
                             countsTowardsLimit: false
                         });
@@ -625,8 +662,9 @@ function calculateScoreTeam(
             comments.push(
                 modifier.name === 'PN (pominięty)'
                     ? `PN ${points} (pominięty)`
-                    : modifier.name === `${SET_PLAY_SHORT_LABELS[SetPlayEnumType.Awatar]} (pominięta)`
-                      ? `${SET_PLAY_SHORT_LABELS[SetPlayEnumType.Awatar]} ${points} (pominięta)`
+                    : modifier.name ===
+                        `${SET_PLAY_SHORT_LABELS[SetPlayEnumType.Awatar]}${DISABLED_SET_PLAY_COMMENT_SUFFIX}`
+                      ? `${SET_PLAY_SHORT_LABELS[SetPlayEnumType.Awatar]} ${points}${DISABLED_SET_PLAY_COMMENT_SUFFIX}`
                       : `${modifier.name} ${points}`
             );
         }
@@ -643,7 +681,70 @@ function calculateScoreTeam(
             ? [`${name} 0`]
             : [];
     });
-    team.trainer.comment = unusedReserves.join(', ');
+    const trainerComments = [...unusedReserves];
+    for (const setPlay of teamData.setPlayList) {
+        let points: number;
+        switch (setPlay.type) {
+            case SetPlayEnumType.BrudnaPala:
+                points = calculateBrudnaPala({ setPlay });
+                break;
+            case SetPlayEnumType.Typer: {
+                const player = [
+                    ...params.spartacusSlots,
+                    ...params.opponentSpartacusSlots
+                ].find(slot => {
+                    return slot.nominalPlayerId === setPlay.userData.playerId;
+                })?.player;
+                if (!player) {
+                    throw new Error(
+                        `Missing Typer player: ${setPlay.userData.playerId}`
+                    );
+                }
+                points = calculateTyper({ setPlay, player });
+                break;
+            }
+            case SetPlayEnumType.Muchomor:
+                if (!params.includeCompetitiveAwards) {
+                    continue;
+                }
+                points = calculateMuchomor({ players: opponentActualPlayers });
+                break;
+            case SetPlayEnumType.PauloSousa:
+                if (!params.includeCompetitiveAwards) {
+                    continue;
+                }
+                points = calculatePauloSousa({
+                    players: actualPlayers,
+                    opponentPlayers: opponentActualPlayers
+                });
+                break;
+            case SetPlayEnumType.PijanyCieslak:
+                if (!params.includeCompetitiveAwards) {
+                    continue;
+                }
+                points = calculatePijanyCieslak({
+                    trainerScore: getTrainerHeatTotal({
+                        trainer: team.trainer
+                    }),
+                    opponentTrainerScore: getTrainerHeatTotal({
+                        trainer: opponentTrainer
+                    })
+                });
+                break;
+            default:
+                continue;
+        }
+        team.trainer.setPlay += points;
+        const isDisabled =
+            setPlay.type === SetPlayEnumType.BrudnaPala &&
+            setPlay.adminData?.isDisabled;
+        trainerComments.push(
+            `${SET_PLAY_SHORT_LABELS[setPlay.type]} ${points}${isDisabled ? DISABLED_SET_PLAY_COMMENT_SUFFIX : ''}`
+        );
+    }
+
+    team.trainer.comment = trainerComments.join(', ');
+
     return team;
 }
 
@@ -652,23 +753,32 @@ export function calculateMatchScores(
 ): CalculateMatchScoresReturnType {
     const nominalOne = prepareTeam(params.teamOne);
     const nominalTwo = prepareTeam(params.teamTwo);
-    const spartacusSlotsOne = generateStartingLineupMatrix({ teamData: params.teamOne, nominal: nominalOne });
-    const spartacusSlotsTwo = generateStartingLineupMatrix({ teamData: params.teamTwo, nominal: nominalTwo });
+    const spartacusSlotsOne = generateStartingLineupMatrix({
+        teamData: params.teamOne,
+        nominal: nominalOne
+    });
+    const spartacusSlotsTwo = generateStartingLineupMatrix({
+        teamData: params.teamTwo,
+        nominal: nominalTwo
+    });
     const slotsOne = selectReserveLineup({
         teamData: params.teamOne,
         nominal: nominalOne,
         slots: spartacusSlotsOne,
+        opponentSpartacusSlots: spartacusSlotsTwo,
         roundNumber: params.roundNumber
     });
     const slotsTwo = selectReserveLineup({
         teamData: params.teamTwo,
         nominal: nominalTwo,
         slots: spartacusSlotsTwo,
+        opponentSpartacusSlots: spartacusSlotsOne,
         roundNumber: params.roundNumber
     });
-    const teamOne = calculateScoreTeam({
+    const teamOne = calculateTeamScore({
         teamData: params.teamOne,
         nominal: nominalOne,
+        spartacusSlots: spartacusSlotsOne,
         slots: slotsOne,
         opponentSlots: slotsTwo,
         opponentSpartacusSlots: spartacusSlotsTwo,
@@ -676,9 +786,10 @@ export function calculateMatchScores(
         roundNumber: params.roundNumber,
         includeCompetitiveAwards: true
     });
-    const teamTwo = calculateScoreTeam({
+    const teamTwo = calculateTeamScore({
         teamData: params.teamTwo,
         nominal: nominalTwo,
+        spartacusSlots: spartacusSlotsTwo,
         slots: slotsTwo,
         opponentSlots: slotsOne,
         opponentSpartacusSlots: spartacusSlotsOne,
@@ -686,6 +797,28 @@ export function calculateMatchScores(
         roundNumber: params.roundNumber,
         includeCompetitiveAwards: true
     });
+    const scoreDifference = getTeamTotal(teamOne) - getTeamTotal(teamTwo);
+    for (const entry of [
+        { teamData: params.teamOne, team: teamOne },
+        { teamData: params.teamTwo, team: teamTwo }
+    ]) {
+        for (const setPlay of entry.teamData.setPlayList) {
+            if (setPlay.type !== SetPlayEnumType.KoloFortunyNorbiego) {
+                continue;
+            }
+            const points = calculateKoloFortunyNorbiego({
+                setPlay,
+                scoreDifference
+            });
+            entry.team.trainer.setPlay += points;
+            entry.team.trainer.comment = [
+                entry.team.trainer.comment,
+                `${SET_PLAY_SHORT_LABELS[setPlay.type]} ${points}`
+            ]
+                .filter(Boolean)
+                .join(', ');
+        }
+    }
     return {
         teamOne,
         teamTwo,

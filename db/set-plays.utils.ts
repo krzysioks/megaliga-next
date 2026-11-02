@@ -1,5 +1,11 @@
 import type {
     CalculateReplacementParamsType,
+    CalculateMuchomorParamsType,
+    GetWinningStartCountParamsType,
+    CalculatePauloSousaParamsType,
+    CalculatePijanyCieslakParamsType,
+    CalculateBrudnaPalaParamsType,
+    CalculateKoloFortunyNorbiegoParamsType,
     CalculateRemisParamsType,
     CalculateMortalKombatComboParamsType,
     CalculatePlayerParamsType,
@@ -9,6 +15,9 @@ import type {
 
 import {
     CALCULATION_HEAT_KEYS,
+    MUCHOMOR_ZERO_COUNT, MUCHOMOR_POINTS, PIJANY_CIESLAK_POINTS,
+    PAULO_SOUSA_POINTS, TYPER_START_COUNT, TYPER_POINTS, WINNING_RACE_POINTS,
+    BRUDNA_PALA_POINTS, KFN_FIRST_INTERVAL, KFN_INTERVAL_WIDTH, KFN_POINTS, ORDINARY_RACE_BONUS,
     GUARANTEED_START_COUNT,
     MAX_MORTAL_KOMBAT_COMBO_POINTS,
     MAX_RYSZARD_KOWALSKI_POINTS,
@@ -145,4 +154,66 @@ export function calculateReplacement(params: CalculateReplacementParamsType) {
 
 export function calculateAwatar(params: CalculateReplacementParamsType) {
     return calculateReplacement(params);
+}
+
+export function calculateMuchomor(params: CalculateMuchomorParamsType): number {
+    const zeros = params.players.reduce((count, player) => {
+        return count + getActualHeats({ player }).filter(heat => heat.value === 0).length;
+    }, 0);
+    return zeros >= MUCHOMOR_ZERO_COUNT ? MUCHOMOR_POINTS : 0;
+}
+
+export function calculateBrudnaPala(params: CalculateBrudnaPalaParamsType): number {
+    if (!params.setPlay.adminData) {
+        throw new Error('Brudna Pała admin data is required for score calculation');
+    }
+    if (params.setPlay.adminData.isDisabled) {
+        return 0;
+    }
+    const hits = Object.values(params.setPlay.adminData.playerResults).filter(Boolean).length;
+    return BRUDNA_PALA_POINTS[hits];
+}
+
+export function calculateTyper(params: SetPlayCalculationParamsType<SetPlayEnumType.Typer>): number {
+    const heats = getActualHeats(params).slice(0, TYPER_START_COUNT);
+    if (heats.length === 0) {
+        return 0;
+    }
+    const actual = heats.reduce((total, heat) => {
+        return total + (heat.value ?? 0) - (heat.bonus ? ORDINARY_RACE_BONUS : 0);
+    }, 0);
+    const attempts = [params.setPlay.userData.attemptOne, params.setPlay.userData.attemptTwo];
+    return attempts.some(attempt => Object.values(attempt).reduce((total, value) => total + value, 0) === actual)
+        ? TYPER_POINTS : 0;
+}
+
+export function calculatePijanyCieslak(params: CalculatePijanyCieslakParamsType): number {
+    return params.trainerScore > params.opponentTrainerScore ? PIJANY_CIESLAK_POINTS : 0;
+}
+
+function getWinningStartCount(params: GetWinningStartCountParamsType): number {
+    return params.players.reduce((total, player) => {
+        return total + getActualHeats({ player }).filter(heat => {
+            return heat.value === WINNING_RACE_POINTS;
+        }).length;
+    }, 0);
+}
+
+export function calculatePauloSousa(params: CalculatePauloSousaParamsType): number {
+    return getWinningStartCount({ players: params.players }) > getWinningStartCount({ players: params.opponentPlayers })
+        ? PAULO_SOUSA_POINTS : 0;
+}
+
+export function calculateKoloFortunyNorbiego(params: CalculateKoloFortunyNorbiegoParamsType): number {
+    const minimum = params.setPlay.userData.minimum;
+    const maximum = params.setPlay.userData.maximum;
+    const isFirstInterval = minimum === KFN_FIRST_INTERVAL.minimum && maximum === KFN_FIRST_INTERVAL.maximum;
+    const isLaterInterval = minimum >= KFN_FIRST_INTERVAL.maximum &&
+        (minimum - KFN_FIRST_INTERVAL.maximum) % KFN_INTERVAL_WIDTH === 0 &&
+        maximum === minimum + KFN_INTERVAL_WIDTH;
+    if (!Number.isInteger(minimum) || !Number.isInteger(maximum) || (!isFirstInterval && !isLaterInterval)) {
+        throw new Error(`Invalid KFN interval: ${minimum}-${maximum}`);
+    }
+    const margin = Math.abs(params.scoreDifference);
+    return margin > 0 && margin >= minimum && margin <= maximum ? KFN_POINTS : 0;
 }

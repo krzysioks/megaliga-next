@@ -26,6 +26,7 @@ export const KAPITAN_POINTS = 4;
 export const ORDINARY_RACE_BONUS = 1;
 
 export const MAX_PLAYER_MODIFIER_POINTS = 10;
+export const DISABLED_SET_PLAY_COMMENT_SUFFIX = ' (pominięta)';
 export const GUARANTEED_START_COUNT = 5;
 export const REMIS_POINTS = 6;
 export const MAX_MORTAL_KOMBAT_COMBO_POINTS = 4;
@@ -41,3 +42,15 @@ export const TACTICAL_START_INDEX = 5;
 export const SPARTACUS_MIN_ROUND = 2;
 
 export const FIFTH_PLAYER_INDEX = 4;
+
+export const MUCHOMOR_ZERO_COUNT = 4;
+export const MUCHOMOR_POINTS = 4;
+export const PIJANY_CIESLAK_POINTS = 4;
+export const PAULO_SOUSA_POINTS = 4;
+export const TYPER_START_COUNT = 4;
+export const TYPER_POINTS = 4;
+export const WINNING_RACE_POINTS = 3;
+export const BRUDNA_PALA_POINTS = [0, 0, 1, 2, 6] as const;
+export const KFN_FIRST_INTERVAL = { minimum: 0, maximum: 12 };
+export const KFN_INTERVAL_WIDTH = 10;
+export const KFN_POINTS = 5;

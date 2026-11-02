@@ -279,50 +279,177 @@ describe('calculateMatchScores', () => {
     );
 
     test.each(['own', 'opponent'] as const)(
-        'Should reject a missing average for the %s Awatar in Spartacus', side => {
+        'Should reject a missing average for the %s Awatar in Spartacus',
+        side => {
             const teamOne = createTeam();
             const teamTwo = createTeam('opponent-');
-            teamOne.setPlayList = [{
-                selectedSetPlayId: 's', setPlayId: 's', name: 'Spartacus',
-                type: SetPlayEnumType.Spartacus,
-                userData: { ownPlayerId: 'four', opponentPlayerId: 'opponent-four' },
-                adminData: { ownAverage: 1, opponentAverage: 2 }
-            }];
+            teamOne.setPlayList = [
+                {
+                    selectedSetPlayId: 's',
+                    setPlayId: 's',
+                    name: 'Spartacus',
+                    type: SetPlayEnumType.Spartacus,
+                    userData: {
+                        ownPlayerId: 'four',
+                        opponentPlayerId: 'opponent-four'
+                    },
+                    adminData: { ownAverage: 1, opponentAverage: 2 }
+                }
+            ];
             const awatarTeam = side === 'own' ? teamOne : teamTwo;
-            awatarTeam.replacementPlayers = [{ playerId: 'replacement', isJunior: true }];
+            awatarTeam.replacementPlayers = [
+                { playerId: 'replacement', isJunior: true }
+            ];
             awatarTeam.setPlayList.push({
-                selectedSetPlayId: 'a', setPlayId: 'a', name: 'Awatar',
+                selectedSetPlayId: 'a',
+                setPlayId: 'a',
+                name: 'Awatar',
                 type: SetPlayEnumType.Awatar,
-                userData: { playerId: 'replacement', replacedPlayerId: side === 'own' ? 'four' : 'opponent-four' },
-                adminData: { ...createReplacementScores([3, 3, 3]), isDisabled: false }
+                userData: {
+                    playerId: 'replacement',
+                    replacedPlayerId: side === 'own' ? 'four' : 'opponent-four'
+                },
+                adminData: {
+                    ...createReplacementScores([3, 3, 3]),
+                    isDisabled: false
+                }
             });
             const input = { roundNumber: 2, teamOne, teamTwo };
-            expect(() => calculateMatchScores(input)).toThrow('Missing Awatar average for player: replacement');
-            expect(() => calculateMatchScores({ ...input, roundNumber: 1 })).not.toThrow();
+            expect(() => calculateMatchScores(input)).toThrow(
+                'Missing Awatar average for player: replacement'
+            );
+            expect(() =>
+                calculateMatchScores({ ...input, roundNumber: 1 })
+            ).not.toThrow();
         }
     );
 
     test('Should reject an Awatar target outside the starting lineup', () => {
         const teamOne = createTeam();
-        teamOne.setPlayList = [{
-            selectedSetPlayId: 'a', setPlayId: 'a', name: 'Awatar',
-            type: SetPlayEnumType.Awatar,
-            userData: { playerId: 'replacement', replacedPlayerId: 'missing' },
-            adminData: { ...createReplacementScores([3]), isDisabled: false }
-        }];
-        expect(() => calculateMatchScores({ roundNumber: 2, teamOne, teamTwo: createTeam() }))
-            .toThrow('Selected player is not in starting lineup: missing');
+        teamOne.setPlayList = [
+            {
+                selectedSetPlayId: 'a',
+                setPlayId: 'a',
+                name: 'Awatar',
+                type: SetPlayEnumType.Awatar,
+                userData: {
+                    playerId: 'replacement',
+                    replacedPlayerId: 'missing'
+                },
+                adminData: {
+                    ...createReplacementScores([3]),
+                    isDisabled: false
+                }
+            }
+        ];
+        expect(() =>
+            calculateMatchScores({
+                roundNumber: 2,
+                teamOne,
+                teamTwo: createTeam()
+            })
+        ).toThrow('Selected player is not in starting lineup: missing');
     });
 
     test('Should reject a Remis selection without a result for a starting lineup rider', () => {
         const teamOne = createTeam();
-        teamOne.setPlayList = [{
-            selectedSetPlayId: 'remis', setPlayId: 'remis', name: 'Remis',
-            type: SetPlayEnumType.Remis,
-            adminData: { leader: false, joker: false, captain: false, four: false }
-        }];
-        expect(() => calculateMatchScores({ roundNumber: 2, teamOne, teamTwo: createTeam() }))
-            .toThrow('Missing Remis result for player: five');
+        teamOne.setPlayList = [
+            {
+                selectedSetPlayId: 'remis',
+                setPlayId: 'remis',
+                name: 'Remis',
+                type: SetPlayEnumType.Remis,
+                adminData: {
+                    leader: false,
+                    joker: false,
+                    captain: false,
+                    four: false
+                }
+            }
+        ];
+        expect(() =>
+            calculateMatchScores({
+                roundNumber: 2,
+                teamOne,
+                teamTwo: createTeam()
+            })
+        ).toThrow('Missing Remis result for player: five');
+    });
+
+    test('Should reject a missing Typer rider', () => {
+        const teamOne = createTeam();
+        const input = {
+            roundNumber: 2,
+            teamOne,
+            teamTwo: createTeam('opponent-')
+        };
+        teamOne.setPlayList = [
+            {
+                selectedSetPlayId: 't',
+                setPlayId: 't',
+                name: 'Typer',
+                type: SetPlayEnumType.Typer,
+                userData: {
+                    playerId: 'missing',
+                    attemptOne: {
+                        heatOne: 0,
+                        heatTwo: 0,
+                        heatThree: 0,
+                        heatFour: 0
+                    },
+                    attemptTwo: {
+                        heatOne: 1,
+                        heatTwo: 1,
+                        heatThree: 1,
+                        heatFour: 1
+                    }
+                }
+            }
+        ];
+        expect(() => calculateMatchScores(input)).toThrow(
+            'Missing Typer player: missing'
+        );
+    });
+
+    test('Should reject missing Brudna Pała admin data', () => {
+        const teamOne = createTeam();
+        const input = {
+            roundNumber: 2,
+            teamOne,
+            teamTwo: createTeam('opponent-')
+        };
+        teamOne.setPlayList = [
+            {
+                selectedSetPlayId: 'b',
+                setPlayId: 'b',
+                name: 'Brudna Pała',
+                type: SetPlayEnumType.BrudnaPala,
+                userData: { leaderIdList: ['a', 'b', 'c', 'd'] }
+            }
+        ];
+        expect(() => calculateMatchScores(input)).toThrow(
+            'Brudna Pała admin data is required for score calculation'
+        );
+    });
+
+    test('Should reject an invalid KFN interval even when the teams draw', () => {
+        const teamOne = createTeam();
+        teamOne.setPlayList = [
+            {
+                selectedSetPlayId: 'k',
+                setPlayId: 'k',
+                name: 'KFN',
+                type: SetPlayEnumType.KoloFortunyNorbiego,
+                userData: { minimum: 0, maximum: 22 }
+            }
+        ];
+        expect(() =>
+            calculateMatchScores({
+                roundNumber: 2,
+                teamOne,
+                teamTwo: createTeam('opponent-')
+            })
+        ).toThrow('Invalid KFN interval: 0-22');
     });
 
     test('Should calculate total scores for both teams with no selected set plays', () => {
@@ -969,7 +1096,10 @@ describe('calculateMatchScores', () => {
                 name: 'Awatar',
                 type: SetPlayEnumType.Awatar,
                 userData: { playerId: 'avatar', replacedPlayerId: 'captain' },
-                adminData: { ...createReplacementScores([3, 2]), isDisabled: false }
+                adminData: {
+                    ...createReplacementScores([3, 2]),
+                    isDisabled: false
+                }
             },
             {
                 selectedSetPlayId: 'gs',
@@ -1156,11 +1286,17 @@ describe('calculateMatchScores', () => {
     test('Should use the Awatar draw checkbox for Remis without changing original rider results', () => {
         const teamOne = createTeam();
         teamOne.players[1] = {
-            ...createPlayer([0, 0]), playerId: 'joker', isJunior: true
+            ...createPlayer([0, 0]),
+            playerId: 'joker',
+            isJunior: true
         };
         teamOne.replacementPlayers = [{ playerId: 'reserve', isJunior: true }];
         const results = {
-            leader: false, joker: false, captain: false, four: false, five: false
+            leader: false,
+            joker: false,
+            captain: false,
+            four: false,
+            five: false
         };
         const replacement = {
             selectedSetPlayId: 'a',
@@ -1174,44 +1310,110 @@ describe('calculateMatchScores', () => {
                 isDisabled: false
             }
         };
-        teamOne.setPlayList = [replacement, {
-            selectedSetPlayId: 'remis', setPlayId: 'remis', name: 'Remis',
-            type: SetPlayEnumType.Remis, adminData: results
-        }];
-        const result = calculateMatchScores({ roundNumber: 2, teamOne, teamTwo: createTeam() });
-        expect(result.teamOne.players[1].comment).toBe('Joker 6, KB 0, Awatar +15, Remis 4/6 (limit 10)');
+        teamOne.setPlayList = [
+            replacement,
+            {
+                selectedSetPlayId: 'remis',
+                setPlayId: 'remis',
+                name: 'Remis',
+                type: SetPlayEnumType.Remis,
+                adminData: results
+            }
+        ];
+        const result = calculateMatchScores({
+            roundNumber: 2,
+            teamOne,
+            teamTwo: createTeam()
+        });
+        expect(result.teamOne.players[1].comment).toBe(
+            'Joker 6, KB 0, Awatar +15, Remis 4/6 (limit 10)'
+        );
         expect(result.teamOne.players[1].setPlay).toBe(25);
         results.joker = true;
         replacement.adminData.isMatchDraw = false;
-        expect(calculateMatchScores({ roundNumber: 2, teamOne, teamTwo: createTeam() })
-            .teamOne.players[1].comment).toBe('Joker 6, KB 0, Awatar +15, Remis 0');
+        expect(
+            calculateMatchScores({
+                roundNumber: 2,
+                teamOne,
+                teamTwo: createTeam()
+            }).teamOne.players[1].comment
+        ).toBe('Joker 6, KB 0, Awatar +15, Remis 0');
         replacement.adminData.isDisabled = true;
-        expect(calculateMatchScores({ roundNumber: 2, teamOne, teamTwo: createTeam() })
-            .teamOne.players[1].comment).toBe('Joker 0, KB 0, Awatar 0 (pominięta), Remis 6');
+        expect(
+            calculateMatchScores({
+                roundNumber: 2,
+                teamOne,
+                teamTwo: createTeam()
+            }).teamOne.players[1].comment
+        ).toBe('Joker 0, KB 0, Awatar 0 (pominięta), Remis 6');
         replacement.adminData.isDisabled = false;
         teamOne.setPlayList = [replacement];
         replacement.adminData.isMatchDraw = true;
-        expect(calculateMatchScores({ roundNumber: 2, teamOne, teamTwo: createTeam() })
-            .teamOne.players[1].comment).toBe('Joker 6, KB 0, Awatar +15');
+        expect(
+            calculateMatchScores({
+                roundNumber: 2,
+                teamOne,
+                teamTwo: createTeam()
+            }).teamOne.players[1].comment
+        ).toBe('Joker 6, KB 0, Awatar +15');
     });
 
-    test.each([SetPlayEnumType.Rezerwa, SetPlayEnumType.RezerwaGielda] as const)(
-        'Should exclude %s riders from Remis, Taktyczna and the replaced rider role', type => {
+    test.each([
+        SetPlayEnumType.Rezerwa,
+        SetPlayEnumType.RezerwaGielda
+    ] as const)(
+        "Should exclude %s riders from Remis, Taktyczna and the original rider's PN, KB, and P role bonuses",
+        type => {
             const teamOne = createTeam();
-            teamOne.players[1] = { ...createPlayer([0, 0]), playerId: 'joker', isJunior: true };
-            teamOne.replacementPlayers = [{ playerId: 'reserve', isJunior: true }];
+            teamOne.players[1] = {
+                ...createPlayer([0, 0]),
+                playerId: 'joker',
+                isJunior: true
+            };
+            teamOne.replacementPlayers = [
+                { playerId: 'reserve', isJunior: true }
+            ];
             const scores = createPlayer([3, 3, 3, 3, 3, 2]);
             scores.heatSix.bonus = true;
             teamOne.setPlayList = [
-                { selectedSetPlayId: 'r', setPlayId: 'r', name: 'Rezerwa', type,
-                    userData: { playerId: 'reserve' }, adminData: scores },
-                { selectedSetPlayId: 'remis', setPlayId: 'remis', name: 'Remis', type: SetPlayEnumType.Remis,
-                    adminData: { leader: false, joker: true, captain: false, four: false, five: false } },
-                { selectedSetPlayId: 't', setPlayId: 't', name: 'Taktyczna', type: SetPlayEnumType.Taktyczna }
+                {
+                    selectedSetPlayId: 'r',
+                    setPlayId: 'r',
+                    name: 'Rezerwa',
+                    type,
+                    userData: { playerId: 'reserve' },
+                    adminData: scores
+                },
+                {
+                    selectedSetPlayId: 'remis',
+                    setPlayId: 'remis',
+                    name: 'Remis',
+                    type: SetPlayEnumType.Remis,
+                    adminData: {
+                        leader: false,
+                        joker: true,
+                        captain: false,
+                        four: false,
+                        five: false
+                    }
+                },
+                {
+                    selectedSetPlayId: 't',
+                    setPlayId: 't',
+                    name: 'Taktyczna',
+                    type: SetPlayEnumType.Taktyczna
+                }
             ];
-            const result = calculateMatchScores({ roundNumber: 2, teamOne, teamTwo: createTeam() });
-            const label = type === SetPlayEnumType.Rezerwa ? 'Rezerwa' : 'Rezerwa Giełda';
-            expect(result.teamOne.players[1].comment).toBe(`Joker 5, ${label} +17, Remis 0, Taktyczna 0`);
+            const result = calculateMatchScores({
+                roundNumber: 2,
+                teamOne,
+                teamTwo: createTeam()
+            });
+            const label =
+                type === SetPlayEnumType.Rezerwa ? 'Rezerwa' : 'Rezerwa Giełda';
+            expect(result.teamOne.players[1].comment).toBe(
+                `Joker 5, ${label} +17, Remis 0, Taktyczna 0`
+            );
             expect(result.teamOne.players[1].setPlay).toBe(22);
             expect(result.teamOne.players[1].heatOne.value).toBe(0);
         }
@@ -1219,33 +1421,64 @@ describe('calculateMatchScores', () => {
     test('Should use an opponent Awatar score and pre-round average for Spartacus and restore the original when disabled', () => {
         const teamOne = createTeam();
         const teamTwo = createTeam('opponent-');
-        teamOne.players[3] = { ...createPlayer([3, 3, 3, 1]), playerId: 'four' };
+        teamOne.players[3] = {
+            ...createPlayer([3, 3, 3, 1]),
+            playerId: 'four'
+        };
         const spartacus = {
-            selectedSetPlayId: 's', setPlayId: 's', name: 'Spartacus',
+            selectedSetPlayId: 's',
+            setPlayId: 's',
+            name: 'Spartacus',
             type: SetPlayEnumType.Spartacus as const,
-            userData: { ownPlayerId: 'four', opponentPlayerId: 'opponent-four' },
+            userData: {
+                ownPlayerId: 'four',
+                opponentPlayerId: 'opponent-four'
+            },
             adminData: { ownAverage: 1, opponentAverage: 1.2 }
         };
         const awatar = {
-            selectedSetPlayId: 'a', setPlayId: 'a', name: 'Awatar',
+            selectedSetPlayId: 'a',
+            setPlayId: 'a',
+            name: 'Awatar',
             type: SetPlayEnumType.Awatar as const,
-            userData: { playerId: 'replacement', replacedPlayerId: 'opponent-four' },
-            adminData: { ...createReplacementScores([3, 3, 3, 2]), average: 1.2, isDisabled: false }
+            userData: {
+                playerId: 'replacement',
+                replacedPlayerId: 'opponent-four'
+            },
+            adminData: {
+                ...createReplacementScores([3, 3, 3, 2]),
+                average: 1.2,
+                isDisabled: false
+            }
         };
         teamOne.setPlayList = [spartacus];
-        teamTwo.replacementPlayers = [{ playerId: 'replacement', isJunior: true }];
+        teamTwo.replacementPlayers = [
+            { playerId: 'replacement', isJunior: true }
+        ];
         teamTwo.setPlayList = [awatar];
         const input = { roundNumber: 2, teamOne, teamTwo };
-        expect(calculateMatchScores(input).teamOne.players[3].comment).toBe('Spartacus 0');
-        awatar.adminData = { ...awatar.adminData, ...createReplacementScores([3, 3, 2]), average: 1.1 };
-        expect(calculateMatchScores(input).teamOne.players[3].comment).toBe('Spartacus 0');
+        expect(calculateMatchScores(input).teamOne.players[3].comment).toBe(
+            'Spartacus 0'
+        );
+        awatar.adminData = {
+            ...awatar.adminData,
+            ...createReplacementScores([3, 3, 2]),
+            average: 1.1
+        };
+        expect(calculateMatchScores(input).teamOne.players[3].comment).toBe(
+            'Spartacus 0'
+        );
         awatar.adminData.average = 1.12;
         const before = structuredClone(input);
-        expect(calculateMatchScores(input).teamOne.players[3].comment).toBe('Spartacus 3');
+        expect(calculateMatchScores(input).teamOne.players[3].comment).toBe(
+            'Spartacus 3'
+        );
         expect(input).toEqual(before);
         awatar.adminData.average = 0.5;
         awatar.adminData.isDisabled = true;
-        expect(calculateMatchScores(input).teamOne.players[3].comment).toBe('Spartacus 3');
+        expect(calculateMatchScores(input).teamOne.players[3].comment).toBe(
+            'Spartacus 3'
+        );
     });
 
     test('Should use our Awatar average including zero while opponent reserves leave the selected Spartacus duel unchanged', () => {
@@ -1253,109 +1486,184 @@ describe('calculateMatchScores', () => {
         const teamTwo = createTeam('opponent-');
         teamTwo.players = teamTwo.players.map(player => {
             return {
-                ...createPlayer([3, 3, 3, 3, 3]), playerId: player.playerId,
+                ...createPlayer([3, 3, 3, 3, 3]),
+                playerId: player.playerId,
                 isJunior: player.playerId === 'opponent-five'
             };
         });
-        teamTwo.players[3] = { ...createPlayer([3, 3, 2]), playerId: 'opponent-four' };
+        teamTwo.players[3] = {
+            ...createPlayer([3, 3, 2]),
+            playerId: 'opponent-four'
+        };
         const spartacus = {
-            selectedSetPlayId: 's', setPlayId: 's', name: 'Spartacus',
+            selectedSetPlayId: 's',
+            setPlayId: 's',
+            name: 'Spartacus',
             type: SetPlayEnumType.Spartacus as const,
-            userData: { ownPlayerId: 'four', opponentPlayerId: 'opponent-four' },
+            userData: {
+                ownPlayerId: 'four',
+                opponentPlayerId: 'opponent-four'
+            },
             adminData: { ownAverage: 1, opponentAverage: 1.2 }
         };
         const awatar = {
-            selectedSetPlayId: 'a', setPlayId: 'a', name: 'Awatar',
+            selectedSetPlayId: 'a',
+            setPlayId: 'a',
+            name: 'Awatar',
             type: SetPlayEnumType.Awatar as const,
             userData: { playerId: 'replacement', replacedPlayerId: 'four' },
-            adminData: { ...createReplacementScores([3, 3, 3, 2]), average: 1.1, isDisabled: false }
+            adminData: {
+                ...createReplacementScores([3, 3, 3, 2]),
+                average: 1.1,
+                isDisabled: false
+            }
         };
-        teamOne.replacementPlayers = [{ playerId: 'replacement', isJunior: true }];
+        teamOne.replacementPlayers = [
+            { playerId: 'replacement', isJunior: true }
+        ];
         teamOne.setPlayList = [spartacus, awatar];
         const opponentAwatar = {
-            selectedSetPlayId: 'opponent-a', setPlayId: 'opponent-a', name: 'Awatar',
+            selectedSetPlayId: 'opponent-a',
+            setPlayId: 'opponent-a',
+            name: 'Awatar',
             type: SetPlayEnumType.Awatar as const,
-            userData: { playerId: 'opponent-avatar', replacedPlayerId: 'opponent-four' },
-            adminData: { ...createReplacementScores([3, 3, 3]), average: 1.2, isDisabled: false }
+            userData: {
+                playerId: 'opponent-avatar',
+                replacedPlayerId: 'opponent-four'
+            },
+            adminData: {
+                ...createReplacementScores([3, 3, 3]),
+                average: 1.2,
+                isDisabled: false
+            }
         };
         spartacus.adminData.opponentAverage = 0.5;
         teamTwo.replacementPlayers = [
             { playerId: 'reserve', isJunior: true },
             { playerId: 'opponent-avatar', isJunior: true }
         ];
-        teamTwo.setPlayList = [opponentAwatar, {
-            selectedSetPlayId: 'r', setPlayId: 'r', name: 'Rezerwa',
-            type: SetPlayEnumType.Rezerwa, userData: { playerId: 'reserve' },
-            adminData: createPlayer([3, 3, 3, 3, 3])
-        }];
+        teamTwo.setPlayList = [
+            opponentAwatar,
+            {
+                selectedSetPlayId: 'r',
+                setPlayId: 'r',
+                name: 'Rezerwa',
+                type: SetPlayEnumType.Rezerwa,
+                userData: { playerId: 'reserve' },
+                adminData: createPlayer([3, 3, 3, 3, 3])
+            }
+        ];
         const input = { roundNumber: 2, teamOne, teamTwo };
-        expect(calculateMatchScores(input).teamOne.players[3].comment).toBe('Awatar +3, Spartacus 0');
+        expect(calculateMatchScores(input).teamOne.players[3].comment).toBe(
+            'Awatar +3, Spartacus 0'
+        );
         awatar.adminData.average = 1.08;
         const result = calculateMatchScores(input);
-        expect(result.teamOne.players[3].comment).toBe('Awatar +3, Spartacus 3');
+        expect(result.teamOne.players[3].comment).toBe(
+            'Awatar +3, Spartacus 3'
+        );
         expect(result.teamTwo.players[3].comment).toBe('Awatar/Rezerwa +7');
         opponentAwatar.adminData.average = 0.12;
         awatar.adminData.average = 0;
-        expect(calculateMatchScores(input).teamOne.players[3].comment).toBe('Awatar +3, Spartacus 3');
+        expect(calculateMatchScores(input).teamOne.players[3].comment).toBe(
+            'Awatar +3, Spartacus 3'
+        );
         awatar.adminData.isDisabled = true;
-        expect(calculateMatchScores(input).teamOne.players[3].comment).toBe('Spartacus 0, Awatar 0 (pominięta)');
+        expect(calculateMatchScores(input).teamOne.players[3].comment).toBe(
+            'Spartacus 0, Awatar 0 (pominięta)'
+        );
     });
 
-    test('Should retain the first equally scoring reserve arrangement and leave the lineup unchanged when it ties', () => {
+    test('Should leave the lineup unchanged when using a reserve does not improve its score', () => {
         const teamOne = createTeam();
         teamOne.players = teamOne.players.map(player => {
             return {
-                ...createPlayer([3, 3, 3, 3, 3]), playerId: player.playerId,
+                ...createPlayer([3, 3, 3, 3, 3]),
+                playerId: player.playerId,
                 isJunior: player.playerId === 'five'
             };
         });
         teamOne.replacementPlayers = [
-            { playerId: 'reserve', isJunior: true }, { playerId: 'market', isJunior: true }
+            { playerId: 'reserve', isJunior: true },
+            { playerId: 'market', isJunior: true }
         ];
         const reserve = {
-            selectedSetPlayId: 'r', setPlayId: 'r', name: 'Rezerwa',
-            type: SetPlayEnumType.Rezerwa as const, userData: { playerId: 'reserve' },
+            selectedSetPlayId: 'r',
+            setPlayId: 'r',
+            name: 'Rezerwa',
+            type: SetPlayEnumType.Rezerwa as const,
+            userData: { playerId: 'reserve' },
             adminData: createPlayer([3, 3, 3, 3, 3])
         };
         const market = {
-            ...reserve, selectedSetPlayId: 'rg', setPlayId: 'rg',
-            type: SetPlayEnumType.RezerwaGielda as const, userData: { playerId: 'market' }
+            ...reserve,
+            selectedSetPlayId: 'rg',
+            setPlayId: 'rg',
+            type: SetPlayEnumType.RezerwaGielda as const,
+            userData: { playerId: 'market' }
         };
         teamOne.setPlayList = [reserve, market];
-        const input = { roundNumber: 2, teamOne, teamTwo: createTeam('opponent-') };
+        const input = {
+            roundNumber: 2,
+            teamOne,
+            teamTwo: createTeam('opponent-')
+        };
         const unchanged = calculateMatchScores(input);
-        expect(unchanged.teamOne.players.map(player => player.comment)).toEqual([
-            'Lider 5, PN 0', 'Joker 6, KB 0', 'Kapitan 4, P 3', '', ''
-        ]);
-        expect(unchanged.teamOne.trainer.comment).toBe('Rezerwa 0, Rezerwa Giełda 0');
+        expect(unchanged.teamOne.players.map(player => player.comment)).toEqual(
+            ['Lider 5, PN 0', 'Joker 6, KB 0', 'Kapitan 4, P 3', '', '']
+        );
+        expect(unchanged.teamOne.trainer.comment).toBe(
+            'Rezerwa 0, Rezerwa Giełda 0'
+        );
         reserve.adminData = createPlayer([3, 3, 3, 3, 3, 2]);
         market.adminData = createPlayer([3, 3, 3, 3, 3, 2]);
         const tied = calculateMatchScores(input);
         expect(tied.teamOne.players.map(player => player.comment)).toEqual([
-            'Lider 5, Rezerwa +2', 'Joker 6, KB 0', 'Kapitan 4, P 3', 'Rezerwa Giełda +2', ''
+            'Lider 5, Rezerwa +2',
+            'Joker 6, KB 0',
+            'Kapitan 4, P 3',
+            'Rezerwa Giełda +2',
+            ''
         ]);
         expect(tied.teamOneScore).toBe(112);
     });
 
-    test('Should preserve an earned role when replacing the lowest raw scorer would produce fewer points', () => {
+    test('Should evaluate which low scoring rider should be replaced in order to get the highest award', () => {
         const teamOne = createTeam();
         teamOne.players = teamOne.players.map(player => {
             return {
-                ...createPlayer([3, 3, 3, 3, 3]), playerId: player.playerId,
+                ...createPlayer([3, 3, 3, 3, 3]),
+                playerId: player.playerId,
                 isJunior: player.playerId === 'five'
             };
         });
-        teamOne.players[3] = { ...createPlayer([3, 2, 0, 0, 0]), playerId: 'four' };
+        teamOne.players[3] = {
+            ...createPlayer([3, 2, 0, 0, 0]),
+            playerId: 'four'
+        };
         teamOne.players[3].heatOne.isNominated = true;
-        teamOne.players[4] = { ...createPlayer([3, 3, 0, 0, 0]), playerId: 'five', isJunior: true };
+        teamOne.players[4] = {
+            ...createPlayer([3, 3, 0, 0, 0]),
+            playerId: 'five',
+            isJunior: true
+        };
         teamOne.startingLineup.roles.pn.playerId = 'four';
         teamOne.replacementPlayers = [{ playerId: 'reserve', isJunior: true }];
-        teamOne.setPlayList = [{
-            selectedSetPlayId: 'r', setPlayId: 'r', name: 'Rezerwa',
-            type: SetPlayEnumType.Rezerwa, userData: { playerId: 'reserve' },
-            adminData: createPlayer([3, 3, 2, 0, 0])
-        }];
-        const result = calculateMatchScores({ roundNumber: 2, teamOne, teamTwo: createTeam('opponent-') });
+        teamOne.setPlayList = [
+            {
+                selectedSetPlayId: 'r',
+                setPlayId: 'r',
+                name: 'Rezerwa',
+                type: SetPlayEnumType.Rezerwa,
+                userData: { playerId: 'reserve' },
+                adminData: createPlayer([3, 3, 2, 0, 0])
+            }
+        ];
+        const result = calculateMatchScores({
+            roundNumber: 2,
+            teamOne,
+            teamTwo: createTeam('opponent-')
+        });
         expect(result.teamOne.players[3].comment).toBe('PN 3');
         expect(result.teamOne.players[4].comment).toBe('Rezerwa +2');
         expect(result.teamOneScore).toBe(88);
@@ -1365,32 +1673,80 @@ describe('calculateMatchScores', () => {
         const teamOne = createTeam();
         teamOne.players = teamOne.players.map(player => {
             return {
-                ...createPlayer([3, 3, 3, 3, 3]), playerId: player.playerId
+                ...createPlayer([3, 3, 3, 3, 3]),
+                playerId: player.playerId
             };
         });
-        teamOne.players[4] = { ...createPlayer([0]), playerId: 'five', isJunior: true };
+        teamOne.players[4] = {
+            ...createPlayer([0]),
+            playerId: 'five',
+            isJunior: true
+        };
         teamOne.startingLineup.roles.pn.playerId = 'five';
         teamOne.replacementPlayers = [
-            { playerId: 'avatar', isJunior: true }, { playerId: 'reserve', isJunior: true }
+            { playerId: 'avatar', isJunior: true },
+            { playerId: 'reserve', isJunior: true }
         ];
         const reserveScores = createPlayer([4, 3, 3, 3]);
         reserveScores.heatOne.bonus = true;
         teamOne.setPlayList = [
-            { selectedSetPlayId: 'a', setPlayId: 'a', name: 'Awatar', type: SetPlayEnumType.Awatar,
+            {
+                selectedSetPlayId: 'a',
+                setPlayId: 'a',
+                name: 'Awatar',
+                type: SetPlayEnumType.Awatar,
                 userData: { playerId: 'avatar', replacedPlayerId: 'five' },
-                adminData: { ...createReplacementScores([1]), isMatchDraw: true, isDisabled: false } },
-            { selectedSetPlayId: 'r', setPlayId: 'r', name: 'Rezerwa', type: SetPlayEnumType.Rezerwa,
-                userData: { playerId: 'reserve' }, adminData: reserveScores },
-            { selectedSetPlayId: 'gs', setPlayId: 'gs', name: 'GS', type: SetPlayEnumType.GwarancjaStartow,
-                userData: { playerId: 'five' } },
-            { selectedSetPlayId: 'remis', setPlayId: 'remis', name: 'Remis', type: SetPlayEnumType.Remis,
-                adminData: { leader: false, joker: false, captain: false, four: false, five: false } },
-            { selectedSetPlayId: 't', setPlayId: 't', name: 'Taktyczna', type: SetPlayEnumType.Taktyczna }
+                adminData: {
+                    ...createReplacementScores([1]),
+                    isMatchDraw: true,
+                    isDisabled: false
+                }
+            },
+            {
+                selectedSetPlayId: 'r',
+                setPlayId: 'r',
+                name: 'Rezerwa',
+                type: SetPlayEnumType.Rezerwa,
+                userData: { playerId: 'reserve' },
+                adminData: reserveScores
+            },
+            {
+                selectedSetPlayId: 'gs',
+                setPlayId: 'gs',
+                name: 'GS',
+                type: SetPlayEnumType.GwarancjaStartow,
+                userData: { playerId: 'five' }
+            },
+            {
+                selectedSetPlayId: 'remis',
+                setPlayId: 'remis',
+                name: 'Remis',
+                type: SetPlayEnumType.Remis,
+                adminData: {
+                    leader: false,
+                    joker: false,
+                    captain: false,
+                    four: false,
+                    five: false
+                }
+            },
+            {
+                selectedSetPlayId: 't',
+                setPlayId: 't',
+                name: 'Taktyczna',
+                type: SetPlayEnumType.Taktyczna
+            }
         ];
-        const input = { roundNumber: 2, teamOne, teamTwo: createTeam('opponent-') };
+        const input = {
+            roundNumber: 2,
+            teamOne,
+            teamTwo: createTeam('opponent-')
+        };
         const before = structuredClone(input);
         const result = calculateMatchScores(input);
-        expect(result.teamOne.players[4].comment).toBe('Awatar/Rezerwa +13, GS 0, Remis 0, Taktyczna 0');
+        expect(result.teamOne.players[4].comment).toBe(
+            'Awatar/Rezerwa +13, GS 0, Remis 0, Taktyczna 0'
+        );
         expect(result.teamOne.players[4].setPlay).toBe(13);
         expect(result.teamOne.players[4].heatOne.value).toBe(0);
         expect(result.teamOne.trainer.heatFive).toBe(0);
@@ -1402,15 +1758,601 @@ describe('calculateMatchScores', () => {
         const teamOne = createTeam();
         teamOne.replacementPlayers = [{ playerId: 'reserve', isJunior: true }];
         teamOne.setPlayList = [
-            { selectedSetPlayId: 'r', setPlayId: 'r', name: 'Rezerwa', type: SetPlayEnumType.Rezerwa,
-                userData: { playerId: 'reserve' }, adminData: createPlayer([3, 3, 3, 3, 3]) },
-            { selectedSetPlayId: 's', setPlayId: 's', name: 'Spartacus', type: SetPlayEnumType.Spartacus,
-                userData: { ownPlayerId: 'joker', opponentPlayerId: 'opponent-joker' },
-                adminData: { ownAverage: 1, opponentAverage: 1.2 } }
+            {
+                selectedSetPlayId: 'r',
+                setPlayId: 'r',
+                name: 'Rezerwa',
+                type: SetPlayEnumType.Rezerwa,
+                userData: { playerId: 'reserve' },
+                adminData: createPlayer([3, 3, 3, 3, 3])
+            },
+            {
+                selectedSetPlayId: 's',
+                setPlayId: 's',
+                name: 'Spartacus',
+                type: SetPlayEnumType.Spartacus,
+                userData: {
+                    ownPlayerId: 'joker',
+                    opponentPlayerId: 'opponent-joker'
+                },
+                adminData: { ownAverage: 1, opponentAverage: 1.2 }
+            }
         ];
         const result = calculateMatchScores({
-            roundNumber: 2, teamOne, teamTwo: createTeam('opponent-')
+            roundNumber: 2,
+            teamOne,
+            teamTwo: createTeam('opponent-')
         });
-        expect(result.teamOne.players[1].comment).toBe('Joker 6, Rezerwa +10, Spartacus 0');
+        expect(result.teamOne.players[1].comment).toBe(
+            'Joker 6, Rezerwa +10, Spartacus 0'
+        );
+    });
+
+    test('Should calculate trainer set-play points from match results', () => {
+        const teamOne = createTeam();
+        const teamTwo = createTeam('opponent-');
+        teamTwo.players = teamTwo.players.map(player => {
+            return { ...createPlayer([0]), playerId: player.playerId };
+        });
+        teamOne.setPlayList = [
+            {
+                selectedSetPlayId: 'm',
+                setPlayId: 'm',
+                name: 'Muchomor',
+                type: SetPlayEnumType.Muchomor
+            },
+            {
+                selectedSetPlayId: 'b',
+                setPlayId: 'b',
+                name: 'Brudna Pała',
+                type: SetPlayEnumType.BrudnaPala,
+                userData: { leaderIdList: ['a', 'b', 'c', 'd'] },
+                adminData: {
+                    isDisabled: false,
+                    playerResults: { a: true, b: true, c: false, d: false }
+                }
+            },
+            {
+                selectedSetPlayId: 't',
+                setPlayId: 't',
+                name: 'Typer',
+                type: SetPlayEnumType.Typer,
+                userData: {
+                    playerId: 'leader',
+                    attemptOne: {
+                        heatOne: 1,
+                        heatTwo: 1,
+                        heatThree: 1,
+                        heatFour: 1
+                    },
+                    attemptTwo: {
+                        heatOne: 3,
+                        heatTwo: 3,
+                        heatThree: 3,
+                        heatFour: 3
+                    }
+                }
+            },
+            {
+                selectedSetPlayId: 'p',
+                setPlayId: 'p',
+                name: 'Paulo Sousa',
+                type: SetPlayEnumType.PauloSousa
+            },
+            {
+                selectedSetPlayId: 'pc',
+                setPlayId: 'pc',
+                name: 'Pijany Cieślak',
+                type: SetPlayEnumType.PijanyCieslak
+            }
+        ];
+        const input = { roundNumber: 2, teamOne, teamTwo };
+        const before = structuredClone(input);
+        const result = calculateMatchScores(input);
+        expect(result.teamOne.trainer.setPlay).toBe(17);
+        expect(result.teamOne.trainer.comment).toBe(
+            'Muchomor 4, Brudna Pała 1, Typer 4, Paulo Sousa 4, Pijany Cieślak 4'
+        );
+        expect(input).toEqual(before);
+        expect(calculateMatchScores(input)).toEqual(result);
+    });
+    test('Should calculate both teams’ KFN points from the score difference before KFN points', () => {
+        const teamOne = createTeam();
+        const teamTwo = createTeam('opponent-');
+        teamOne.players[3].heatOne.value = 3;
+        teamOne.players[4] = {
+            ...createPlayer([3, 3, 3, 3, 3, 3, 3]),
+            playerId: 'five'
+        };
+        const first = {
+            selectedSetPlayId: 'k',
+            setPlayId: 'k',
+            name: 'KFN',
+            type: SetPlayEnumType.KoloFortunyNorbiego as const,
+            userData: { minimum: 0, maximum: 12 }
+        };
+        teamOne.setPlayList = [first];
+        teamTwo.setPlayList = [{ ...first }];
+        const input = { roundNumber: 2, teamOne, teamTwo };
+        const result = calculateMatchScores(input);
+        expect(result.teamOne.trainer.comment).toBe('KFN 5');
+        expect(result.teamTwo.trainer.comment).toBe('KFN 5');
+        expect(result.teamOneScore - result.teamTwoScore).toBe(12);
+        teamOne.setPlayList.push({ ...first, selectedSetPlayId: 'k2' });
+        const repeated = calculateMatchScores(input);
+        expect(repeated.teamOne.trainer.comment).toBe('KFN 5, KFN 5');
+        expect(repeated.teamTwo.trainer.comment).toBe('KFN 5');
+    });
+
+    test('Should award no KFN points when the match ends in a draw', () => {
+        const teamOne = createTeam();
+        const teamTwo = createTeam('opponent-');
+        for (const team of [teamOne, teamTwo]) {
+            team.setPlayList = [
+                {
+                    selectedSetPlayId: 'k',
+                    setPlayId: 'k',
+                    name: 'KFN',
+                    type: SetPlayEnumType.KoloFortunyNorbiego,
+                    userData: { minimum: 0, maximum: 12 }
+                }
+            ];
+        }
+        const result = calculateMatchScores({
+            roundNumber: 2,
+            teamOne,
+            teamTwo
+        });
+        expect(result.teamOneScore).toBe(result.teamTwoScore);
+        for (const team of [result.teamOne, result.teamTwo]) {
+            expect(team.trainer.setPlay).toBe(0);
+            expect(team.trainer.comment).toBe('KFN 0');
+        }
+    });
+
+    test('Should preserve unused reserve comments alongside disabled and repeated trainer plays', () => {
+        const teamOne = createTeam();
+        teamOne.players = teamOne.players.map(player => {
+            return {
+                ...createPlayer([3, 3, 3, 3, 3]),
+                playerId: player.playerId,
+                isJunior: true
+            };
+        });
+        teamOne.replacementPlayers = [{ playerId: 'reserve', isJunior: true }];
+        const brudna = {
+            selectedSetPlayId: 'b',
+            setPlayId: 'b',
+            name: 'Brudna Pała',
+            type: SetPlayEnumType.BrudnaPala as const,
+            userData: { leaderIdList: ['a', 'b', 'c', 'd'] },
+            adminData: {
+                isDisabled: false,
+                playerResults: { a: true, b: true, c: true, d: true }
+            }
+        };
+        teamOne.setPlayList = [
+            {
+                selectedSetPlayId: 'r',
+                setPlayId: 'r',
+                name: 'Rezerwa',
+                type: SetPlayEnumType.Rezerwa,
+                userData: { playerId: 'reserve' },
+                adminData: createPlayer([0])
+            },
+            brudna,
+            {
+                ...brudna,
+                selectedSetPlayId: 'b2',
+                adminData: { ...brudna.adminData, isDisabled: true }
+            },
+            {
+                selectedSetPlayId: 'pc',
+                setPlayId: 'pc',
+                name: 'Pijany Cieślak',
+                type: SetPlayEnumType.PijanyCieslak
+            },
+            {
+                selectedSetPlayId: 't',
+                setPlayId: 't',
+                name: 'Typer',
+                type: SetPlayEnumType.Typer,
+                userData: {
+                    playerId: 'leader',
+                    attemptOne: {
+                        heatOne: 3,
+                        heatTwo: 3,
+                        heatThree: 3,
+                        heatFour: 3
+                    },
+                    attemptTwo: {
+                        heatOne: 0,
+                        heatTwo: 0,
+                        heatThree: 0,
+                        heatFour: 0
+                    }
+                }
+            },
+            {
+                selectedSetPlayId: 'k',
+                setPlayId: 'k',
+                name: 'KFN',
+                type: SetPlayEnumType.KoloFortunyNorbiego,
+                userData: { minimum: 0, maximum: 12 }
+            }
+        ];
+        const result = calculateMatchScores({
+            roundNumber: 2,
+            teamOne,
+            teamTwo: createTeam('opponent-')
+        });
+        expect(result.teamOne.trainer.comment).toBe(
+            'Rezerwa 0, Brudna Pała 6, Brudna Pała 0 (pominięta), Pijany Cieślak 4, Typer 4, KFN 0'
+        );
+        expect(result.teamOne.trainer.setPlay).toBe(14);
+        for (const [results, expected] of [
+            [{ a: false, b: false, c: false, d: false }, 0],
+            [{ a: true, b: false, c: false, d: false }, 0],
+            [{ a: true, b: true, c: false, d: false }, 1],
+            [{ a: true, b: true, c: true, d: false }, 2]
+        ] as const) {
+            brudna.adminData.playerResults = { ...results };
+            expect(
+                calculateMatchScores({
+                    roundNumber: 2,
+                    teamOne,
+                    teamTwo: createTeam('opponent-')
+                }).teamOne.trainer.comment
+            ).toContain(`Brudna Pała ${expected},`);
+        }
+    });
+
+    test('Should exclude unused and GS heats from Muchomor and Paulo Sousa and award no points for tied comparisons', () => {
+        const teamOne = createTeam();
+        const teamTwo = createTeam('opponent-');
+        teamOne.setPlayList = [
+            {
+                selectedSetPlayId: 'm',
+                setPlayId: 'm',
+                name: 'Muchomor',
+                type: SetPlayEnumType.Muchomor
+            },
+            {
+                selectedSetPlayId: 'p',
+                setPlayId: 'p',
+                name: 'Paulo Sousa',
+                type: SetPlayEnumType.PauloSousa
+            },
+            {
+                selectedSetPlayId: 'pc',
+                setPlayId: 'pc',
+                name: 'Pijany Cieślak',
+                type: SetPlayEnumType.PijanyCieslak
+            }
+        ];
+        const input = { roundNumber: 2, teamOne, teamTwo };
+        expect(calculateMatchScores(input).teamOne.trainer.comment).toBe(
+            'Muchomor 0, Paulo Sousa 0, Pijany Cieślak 0'
+        );
+        teamOne.players[0].heatOne.bonus = true;
+        teamTwo.players[0].heatOne.value = 2;
+        expect(calculateMatchScores(input).teamOne.trainer.comment).toContain(
+            'Paulo Sousa 4'
+        );
+        teamTwo.players[3] = {
+            ...createPlayer([0, 0, 0]),
+            playerId: 'opponent-four'
+        };
+        teamTwo.players[1].heatThree.value = null;
+        teamTwo.players[4].heatFour.value = null;
+        teamTwo.setPlayList = [
+            {
+                selectedSetPlayId: 'gs',
+                setPlayId: 'gs',
+                name: 'GS',
+                type: SetPlayEnumType.GwarancjaStartow,
+                userData: { playerId: 'opponent-four' }
+            }
+        ];
+        expect(calculateMatchScores(input).teamOne.trainer.comment).toContain(
+            'Muchomor 0'
+        );
+        teamTwo.players[4].heatFour.value = 0;
+        expect(calculateMatchScores(input).teamOne.trainer.comment).toContain(
+            'Muchomor 4'
+        );
+        teamOne.players[0].heatOne = {
+            value: 3,
+            bonus: true,
+            isNominated: false
+        };
+        teamTwo.players[0].heatOne = {
+            value: 3,
+            bonus: false,
+            isNominated: false
+        };
+        expect(calculateMatchScores(input).teamOne.trainer.comment).toContain(
+            'Paulo Sousa 4'
+        );
+    });
+
+    test('Should compare trainer heat totals for Pijany Cieślak before adding trainer awards', () => {
+        const teamOne = createTeam();
+        teamOne.setPlayList = [
+            {
+                selectedSetPlayId: 'b',
+                setPlayId: 'b',
+                name: 'Brudna Pała',
+                type: SetPlayEnumType.BrudnaPala,
+                userData: { leaderIdList: ['a', 'b', 'c', 'd'] },
+                adminData: {
+                    isDisabled: false,
+                    playerResults: { a: true, b: true, c: true, d: true }
+                }
+            },
+            {
+                selectedSetPlayId: 'pc',
+                setPlayId: 'pc',
+                name: 'Pijany Cieślak',
+                type: SetPlayEnumType.PijanyCieslak
+            }
+        ];
+        const result = calculateMatchScores({
+            roundNumber: 2,
+            teamOne,
+            teamTwo: createTeam('opponent-')
+        });
+        expect(result.teamOne.trainer).toEqual({
+            ...result.teamTwo.trainer,
+            setPlay: 6,
+            comment: 'Brudna Pała 6, Pijany Cieślak 0'
+        });
+    });
+
+    test('Should count only real winning rides for Paulo Sousa, excluding GS copies', () => {
+        const teamOne = createTeam();
+        const teamTwo = createTeam('opponent-');
+        for (const team of [teamOne, teamTwo]) {
+            team.players = team.players.map(player => {
+                return { ...createPlayer([1]), playerId: player.playerId };
+            });
+            team.players[3].heatOne.value = 3;
+        }
+        teamOne.setPlayList = [
+            {
+                selectedSetPlayId: 'gs',
+                setPlayId: 'gs',
+                name: 'GS',
+                type: SetPlayEnumType.GwarancjaStartow,
+                userData: { playerId: 'four' }
+            },
+            {
+                selectedSetPlayId: 'p',
+                setPlayId: 'p',
+                name: 'Paulo Sousa',
+                type: SetPlayEnumType.PauloSousa
+            }
+        ];
+        const result = calculateMatchScores({
+            roundNumber: 2,
+            teamOne,
+            teamTwo
+        });
+        expect(result.teamOne.players[3].comment).toContain(
+            'GS 10/12 (limit 10)'
+        );
+        expect(result.teamOne.trainer.setPlay).toBe(0);
+        expect(result.teamOne.trainer.comment).toBe('Paulo Sousa 0');
+    });
+
+    test('Should count Muchomor zeros from the opponent lineup after reserve replacements', () => {
+        const teamOne = createTeam();
+        const teamTwo = createTeam('opponent-');
+        teamOne.setPlayList = [
+            {
+                selectedSetPlayId: 'm',
+                setPlayId: 'm',
+                name: 'Muchomor',
+                type: SetPlayEnumType.Muchomor
+            }
+        ];
+        teamTwo.players = teamTwo.players.map(player => {
+            return {
+                ...createPlayer([3, 3, 3, 3, 3]),
+                playerId: player.playerId,
+                isJunior: true
+            };
+        });
+        teamTwo.players[3] = {
+            ...createPlayer([0, 0, 0, 0]),
+            playerId: 'opponent-four',
+            isJunior: true
+        };
+        const input = { roundNumber: 2, teamOne, teamTwo };
+        expect(calculateMatchScores(input).teamOne.trainer.comment).toBe(
+            'Muchomor 4'
+        );
+        teamTwo.replacementPlayers = [{ playerId: 'reserve', isJunior: true }];
+        teamTwo.setPlayList = [
+            {
+                selectedSetPlayId: 'r',
+                setPlayId: 'r',
+                name: 'Rezerwa',
+                type: SetPlayEnumType.Rezerwa,
+                userData: { playerId: 'reserve' },
+                adminData: createPlayer([3, 3, 3, 3, 3, 3, 3])
+            }
+        ];
+        const result = calculateMatchScores(input);
+        expect(result.teamTwo.players[3].comment).toBe('Rezerwa +21');
+        expect(result.teamOne.trainer.setPlay).toBe(0);
+        expect(result.teamOne.trainer.comment).toBe('Muchomor 0');
+    });
+
+    test('Should use Awatar real track scores for Typer and exclude bonus, GS copies and reserve results', () => {
+        const teamOne = createTeam();
+        const teamTwo = createTeam('opponent-');
+        const awatarScores = createReplacementScores([3, 2, 1]);
+        awatarScores.heatOne.bonus = true;
+        const prediction = {
+            selectedSetPlayId: 't',
+            setPlayId: 't',
+            name: 'Typer',
+            type: SetPlayEnumType.Typer as const,
+            userData: {
+                playerId: 'opponent-four',
+                attemptOne: {
+                    heatOne: 2,
+                    heatTwo: 1,
+                    heatThree: 1,
+                    heatFour: 1
+                },
+                attemptTwo: {
+                    heatOne: 0,
+                    heatTwo: 0,
+                    heatThree: 0,
+                    heatFour: 0
+                }
+            }
+        };
+        teamOne.setPlayList = [prediction];
+        teamTwo.replacementPlayers = [
+            { playerId: 'avatar', isJunior: true },
+            { playerId: 'reserve', isJunior: true }
+        ];
+        teamTwo.players = teamTwo.players.map(player => {
+            return {
+                ...createPlayer([3, 3, 3, 3, 3]),
+                playerId: player.playerId,
+                isJunior: true
+            };
+        });
+        teamTwo.setPlayList = [
+            {
+                selectedSetPlayId: 'a',
+                setPlayId: 'a',
+                name: 'Awatar',
+                type: SetPlayEnumType.Awatar,
+                userData: {
+                    playerId: 'avatar',
+                    replacedPlayerId: 'opponent-four'
+                },
+                adminData: { ...awatarScores, isDisabled: false }
+            },
+            {
+                selectedSetPlayId: 'gs',
+                setPlayId: 'gs',
+                name: 'GS',
+                type: SetPlayEnumType.GwarancjaStartow,
+                userData: { playerId: 'opponent-four' }
+            }
+        ];
+        const input = { roundNumber: 2, teamOne, teamTwo };
+        const result = calculateMatchScores(input);
+        expect(result.teamOne.trainer.comment).toBe('Typer 4');
+        expect(result.teamTwo.players[3].comment).toContain('GS 2');
+        teamTwo.setPlayList.push({
+            selectedSetPlayId: 'r',
+            setPlayId: 'r',
+            name: 'Rezerwa',
+            type: SetPlayEnumType.Rezerwa,
+            userData: { playerId: 'reserve' },
+            adminData: createPlayer([3, 3, 3, 3, 3])
+        });
+        const replaced = calculateMatchScores(input);
+        expect(replaced.teamOne.trainer.comment).toBe('Typer 4');
+        expect(replaced.teamTwo.players[3].comment).toContain(
+            'Awatar/Rezerwa 0'
+        );
+        prediction.userData.playerId = 'leader';
+        expect(calculateMatchScores(input).teamOne.trainer.comment).toBe(
+            'Typer 0'
+        );
+        teamOne.players[0] = { ...createPlayer([]), playerId: 'leader' };
+        expect(calculateMatchScores(input).teamOne.trainer.comment).toBe(
+            'Typer 0'
+        );
+    });
+
+    test('Should award KFN at the shared 12-point boundary and only within the selected interval', () => {
+        const teamOne = createTeam();
+        const teamTwo = createTeam('opponent-');
+        for (const team of [teamOne, teamTwo]) {
+            team.players = team.players.map(player => {
+                return { ...createPlayer([0]), playerId: player.playerId };
+            });
+        }
+        teamOne.players[4] = {
+            ...createPlayer([3, 3, 3, 3]),
+            playerId: 'five'
+        };
+        const first = {
+            selectedSetPlayId: 'k',
+            setPlayId: 'k',
+            name: 'KFN',
+            type: SetPlayEnumType.KoloFortunyNorbiego as const,
+            userData: { minimum: 0, maximum: 12 }
+        };
+        teamOne.setPlayList = [first];
+        teamTwo.setPlayList = [
+            { ...first, userData: { minimum: 12, maximum: 22 } }
+        ];
+        const input = { roundNumber: 2, teamOne, teamTwo };
+        const result = calculateMatchScores(input);
+        expect([result.teamOneScore, result.teamTwoScore]).toEqual([17, 5]);
+        expect(result.teamOne.trainer.comment).toBe('KFN 5');
+        expect(result.teamTwo.trainer.comment).toBe('KFN 5');
+        teamOne.players[4].heatFive.value = 3;
+        const outside = calculateMatchScores(input);
+        expect(outside.teamOne.trainer.comment).toBe('KFN 0');
+        expect(outside.teamTwo.trainer.comment).toBe('KFN 5');
+    });
+
+    test('Should use signed pre-KFN totals before flooring the final team score at zero', () => {
+        const teamOne = createTeam();
+        const teamTwo = createTeam('opponent-');
+        for (const team of [teamOne, teamTwo]) {
+            team.players = team.players.map(player => {
+                return { ...createPlayer([0]), playerId: player.playerId };
+            });
+        }
+        teamTwo.players[4] = {
+            ...createPlayer([3, 3, 3, 2]),
+            playerId: 'opponent-five'
+        };
+        teamOne.setPlayList = [
+            {
+                selectedSetPlayId: 'n',
+                setPlayId: 'n',
+                name: 'NCD6',
+                type: SetPlayEnumType.Ncd6,
+                userData: { playerId: 'leader' },
+                adminData: { playerIdList: ['a', 'b', 'c', 'd'] }
+            },
+            {
+                selectedSetPlayId: 'k',
+                setPlayId: 'k',
+                name: 'KFN',
+                type: SetPlayEnumType.KoloFortunyNorbiego,
+                userData: { minimum: 0, maximum: 12 }
+            }
+        ];
+        teamTwo.setPlayList = [
+            {
+                selectedSetPlayId: 'k2',
+                setPlayId: 'k2',
+                name: 'KFN',
+                type: SetPlayEnumType.KoloFortunyNorbiego,
+                userData: { minimum: 12, maximum: 22 }
+            }
+        ];
+        const result = calculateMatchScores({
+            roundNumber: 2,
+            teamOne,
+            teamTwo
+        });
+        expect([result.teamOneScore, result.teamTwoScore]).toEqual([0, 16]);
+        expect(result.teamOne.trainer.comment).toBe('KFN 0');
+        expect(result.teamTwo.trainer.comment).toBe('KFN 5');
     });
 });
