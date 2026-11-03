@@ -1,11 +1,23 @@
-import type { GetSetPlaysDetailsReturnType } from '@/db/db.types';
+import type {
+    CalculationTeamType,
+    CalculateMatchScoresReturnType,
+    GetSetPlaysDetailsReturnType
+} from '@/db/db.types';
 
 import { HydratedDocument, model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
-import { getSetPlaysDetails } from '@/db/db.utils';
+import {
+    MIN_REGULAR_SEASON_ROUND,
+    MAX_REGULAR_SEASON_ROUND,
+    STARTING_LINEUP_PLAYER_COUNT,
+    STARTING_LINEUP_POSITION_KEYS
+} from '@/db/db.constants';
+import { areRoundScoresComplete, getSetPlaysDetails } from '@/db/db.utils';
 import ScheduleModel, { ScheduleType } from '@/db/models/games/schedule';
-import SetPlaysDataModel from '@/db/models/games/set-plays-data';
+import SetPlaysDataModel, {
+    setPlayPayloadZodSchema
+} from '@/db/models/games/set-plays-data';
 import {
     StartingLineupPlayersByRoundReturnType,
     StartingLineupType
@@ -19,9 +31,12 @@ import {
     regularSeasonTeamSchema,
     trainerSchema,
     objectIdSchema,
-    roundNumberSchema
+    roundNumberSchema,
+    SetPlayEnumType
 } from '@/db/models/schema.types';
+import SeasonOpsModel from '@/db/models/season-ops';
 import UserModel, { UserType } from '@/db/models/user';
+import { calculateMatchScores } from '@/db/score-calculation.utils';
 
 export type RegularSeasonPlayerScoreDetailsType = z.infer<
     typeof playerScoresZodSchema
@@ -160,8 +175,33 @@ interface ScoreDetailsModelType extends Model<ScoreDetailsType> {
         playerScore: RegularSeasonPlayerScoreDetailsInputType
     ) => Promise<SavePlayerScoreDetailsReturnType>;
     isScoreCalculationsEnabled: (roundNumber: number) => Promise<boolean>;
+    calculateScoresByRound: (roundNumber: number) => Promise<void>;
     deleteAll: () => Promise<void>;
 }
+
+type PopulatedScoreDetailsCalculationTeamType = Omit<
+    ScoreDetailsType['teamOne'],
+    'startingLineupId'
+> & {
+    startingLineupId: (StartingLineupType & { _id: Types.ObjectId }) | null;
+};
+
+type PopulatedScoreDetailsCalculationType = Omit<
+    ScoreDetailsType,
+    'scheduleId' | 'teamOne' | 'teamTwo'
+> & {
+    scheduleId: (ScheduleType & { _id: Types.ObjectId }) | null;
+    teamOne: PopulatedScoreDetailsCalculationTeamType;
+    teamTwo: PopulatedScoreDetailsCalculationTeamType;
+};
+
+type PopulatedScoreDetailsCalculationFindType =
+    HydratedDocument<PopulatedScoreDetailsCalculationType>;
+
+type ScoreDetailsRoundCalculationType = {
+    document: PopulatedScoreDetailsCalculationFindType;
+    result: CalculateMatchScoresReturnType;
+};
 
 const scoreDetailsSchema = new Schema<ScoreDetailsType, ScoreDetailsModelType>({
     scheduleId: { type: Schema.Types.ObjectId, ref: 'Schedule' },
@@ -634,40 +674,235 @@ scoreDetailsSchema.static(
 
             const documents = await this.find({ roundNumber }).exec();
 
-            if (documents.length < 6) {
-                return false;
-            }
-
-            const isTeamComplete = (
-                team: ScoreDetailsType['teamOne']
-            ): boolean => {
-                const players = team.players ?? [];
-
-                if (players.length !== 5) {
-                    return false;
-                }
-
-                return players.every(player => {
-                    return (
-                        player.heatOne?.value !== undefined &&
-                        player.heatTwo?.value !== undefined &&
-                        player.heatThree?.value !== undefined &&
-                        player.heatFour?.value !== undefined &&
-                        player.heatFive?.value !== undefined &&
-                        player.heatSix?.value !== undefined &&
-                        player.heatSeven?.value !== undefined
-                    );
-                });
-            };
-
-            return documents.every(document => {
-                return (
-                    isTeamComplete(document.teamOne) &&
-                    isTeamComplete(document.teamTwo)
-                );
-            });
+            return areRoundScoresComplete({ documents });
         } catch (error) {
             console.error('Error checking score calculations status:', error);
+            throw error;
+        }
+    }
+);
+
+scoreDetailsSchema.static(
+    'calculateScoresByRound',
+    async function calculateScoresByRound(roundNumber: number) {
+        try {
+            if (
+                roundNumber < MIN_REGULAR_SEASON_ROUND ||
+                roundNumber > MAX_REGULAR_SEASON_ROUND
+            ) {
+                throw new Error(
+                    `Invalid roundNumber: ${roundNumber}. Must be between ${MIN_REGULAR_SEASON_ROUND} and ${MAX_REGULAR_SEASON_ROUND}`
+                );
+            }
+            const documents: PopulatedScoreDetailsCalculationFindType[] =
+                await this.find({ roundNumber })
+                    .populate<PopulatedScoreDetailsCalculationFindType>({
+                        path: 'scheduleId',
+                        select: 'roundNumber userOneId userTwoId'
+                    })
+                    .populate<PopulatedScoreDetailsCalculationFindType>({
+                        path: 'teamOne.startingLineupId',
+                        select: 'userId roundNumber playerOne playerTwo playerThree playerFour playerFive roles'
+                    })
+                    .populate<PopulatedScoreDetailsCalculationFindType>({
+                        path: 'teamTwo.startingLineupId',
+                        select: 'userId roundNumber playerOne playerTwo playerThree playerFour playerFive roles'
+                    })
+                    .exec();
+            if (!areRoundScoresComplete({ documents })) {
+                throw new Error(
+                    `Score details are incomplete for round: ${roundNumber}`
+                );
+            }
+
+            const currentSeason = await SeasonOpsModel.findOne({
+                isCurrentSeason: true
+            }).exec();
+
+            if (!currentSeason) {
+                throw new Error('Current season not found');
+            }
+
+            const scheduleIds = new Set(
+                documents.map(document => document.scheduleId?._id.toString())
+            );
+
+            if (
+                scheduleIds.size !== documents.length ||
+                (await ScheduleModel.countDocuments({ roundNumber })) !==
+                    documents.length
+            ) {
+                throw new Error(
+                    `Schedule coverage is incomplete for round: ${roundNumber}`
+                );
+            }
+
+            const calculations: ScoreDetailsRoundCalculationType[] = [];
+            for (const document of documents) {
+                const schedule = document.scheduleId;
+                if (
+                    !schedule ||
+                    schedule.roundNumber !== roundNumber ||
+                    schedule.userOneId?.toString() !==
+                        document.teamOne.userId?.toString() ||
+                    schedule.userTwoId?.toString() !==
+                        document.teamTwo.userId?.toString()
+                ) {
+                    throw new Error(
+                        `Invalid schedule for score details: ${document._id}`
+                    );
+                }
+                const teams: CalculationTeamType[] = [];
+                for (const team of [document.teamOne, document.teamTwo]) {
+                    const startingLineup = team.startingLineupId;
+                    const userId = team.userId?.toString();
+                    if (
+                        !startingLineup ||
+                        startingLineup.roundNumber !== roundNumber ||
+                        startingLineup.userId?.toString() !== userId
+                    ) {
+                        throw new Error(
+                            `Invalid starting lineup for user: ${userId}`
+                        );
+                    }
+                    const positions = Object.fromEntries(
+                        STARTING_LINEUP_POSITION_KEYS.map(key => {
+                            return [key, startingLineup[key]?.toString()];
+                        })
+                    );
+                    const positionIds = STARTING_LINEUP_POSITION_KEYS.map(key =>
+                        startingLineup[key]?.toString()
+                    );
+                    const playerScores = team.players!;
+                    if (
+                        new Set(positionIds).size !==
+                            STARTING_LINEUP_PLAYER_COUNT ||
+                        positionIds.some(id => {
+                            return (
+                                !id ||
+                                !playerScores.some(
+                                    player => player.playerId?.toString() === id
+                                )
+                            );
+                        })
+                    ) {
+                        throw new Error(
+                            `Starting lineup players do not match score details for user: ${userId}`
+                        );
+                    }
+                    const { setPlayList } =
+                        await SetPlaysDataModel.getSetPlayListByStartingLineupId(
+                            startingLineup._id.toString()
+                        );
+                    for (const setPlay of setPlayList) {
+                        setPlayPayloadZodSchema.parse(setPlay);
+                    }
+                    const replacementIds = setPlayList.flatMap(setPlay => {
+                        return setPlay.type === SetPlayEnumType.Rezerwa ||
+                            setPlay.type === SetPlayEnumType.RezerwaGielda ||
+                            (setPlay.type === SetPlayEnumType.Awatar &&
+                                !setPlay.adminData?.isDisabled)
+                            ? [setPlay.userData.playerId]
+                            : [];
+                    });
+                    const players = await PlayersModel.find({
+                        _id: { $in: [...positionIds, ...replacementIds] }
+                    })
+                        .select('isJunior')
+                        .exec();
+                    const playerMetadata = players.map(player => {
+                        return {
+                            playerId: player._id.toString(),
+                            isJunior: player.isJunior
+                        };
+                    });
+                    const mappedPlayers = playerScores.map(player => {
+                        const playerId = player.playerId!.toString();
+                        const metadata = playerMetadata.find(
+                            item => item.playerId === playerId
+                        );
+                        if (!metadata) {
+                            throw new Error(`Missing player: ${playerId}`);
+                        }
+                        return {
+                            ...playerScoresZodSchema.parse(player),
+                            ...metadata,
+                            setPlay: 0,
+                            comment: ''
+                        };
+                    });
+                    teams.push({
+                        players: mappedPlayers,
+                        startingLineup: {
+                            playerOne: positions.playerOne,
+                            playerTwo: positions.playerTwo,
+                            playerThree: positions.playerThree,
+                            playerFour: positions.playerFour,
+                            playerFive: positions.playerFive,
+                            roles: {
+                                pn: {
+                                    playerId:
+                                        startingLineup.roles.pn.playerId.toString(),
+                                    isDisabled:
+                                        startingLineup.roles.pn.isDisabled
+                                },
+                                kb: startingLineup.roles.kb.toString(),
+                                p: startingLineup.roles.p.toString()
+                            }
+                        },
+                        setPlayList,
+                        replacementPlayers: playerMetadata.filter(player =>
+                            replacementIds.includes(player.playerId)
+                        )
+                    });
+                }
+                const result = calculateMatchScores({
+                    roundNumber,
+                    teamOne: teams[0],
+                    teamTwo: teams[1]
+                });
+                for (const team of [result.teamOne, result.teamTwo]) {
+                    regularSeasonPlayerSchema.array().parse(team.players);
+                    trainerSchema.parse(team.trainer);
+                }
+                calculations.push({ document, result });
+            }
+            const userIds = documents.flatMap(document => {
+                return [document.teamOne.userId, document.teamTwo.userId];
+            });
+            if (
+                (await UserModel.countDocuments({
+                    _id: { $in: userIds }
+                }).exec()) !== userIds.length
+            ) {
+                throw new Error(`Missing team user for round: ${roundNumber}`);
+            }
+            for (const { document, result } of calculations) {
+                document.set({
+                    'teamOne.players': result.teamOne.players,
+                    'teamOne.trainer': result.teamOne.trainer,
+                    'teamTwo.players': result.teamTwo.players,
+                    'teamTwo.trainer': result.teamTwo.trainer
+                });
+                await document.save();
+                await ScheduleModel.updateOne(
+                    { _id: document.scheduleId!._id, roundNumber },
+                    {
+                        $set: {
+                            userOneScore: result.teamOneScore,
+                            userTwoScore: result.teamTwoScore
+                        }
+                    }
+                );
+            }
+            await currentSeason.updateSeason({
+                isScoreCalculatded: {
+                    ...currentSeason.isScoreCalculatded,
+                    [roundNumber]: true
+                }
+            });
+        } catch (error) {
+            console.error('Error calculating round scores:', error);
             throw error;
         }
     }

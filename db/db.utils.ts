@@ -1,4 +1,5 @@
 import type {
+    AreRoundScoresCompleteParamsType,
     GetSetPlaysDetailsParamsType,
     GetSetPlaysDetailsReturnType,
     MatchPairType
@@ -9,8 +10,11 @@ import type {
 } from '@/db/models/games/set-plays-data';
 
 import {
+    CALCULATION_HEAT_KEYS,
     MAX_SELECTIONS_PER_SET_PLAY,
-    MAX_SELECTIONS_PER_RESERVE_SET_PLAY
+    MAX_SELECTIONS_PER_RESERVE_SET_PLAY,
+    MIN_REGULAR_SEASON_MATCH_COUNT,
+    STARTING_LINEUP_PLAYER_COUNT
 } from '@/db/db.constants';
 import PlayersModel from '@/db/models/players';
 import { SetPlayEnumType } from '@/db/models/schema.types';
@@ -202,4 +206,25 @@ export function normalizeSetPlayData<
         };
     }
     return data;
+}
+
+export function areRoundScoresComplete(
+    params: AreRoundScoresCompleteParamsType
+): boolean {
+    return (
+        params.documents.length >= MIN_REGULAR_SEASON_MATCH_COUNT &&
+        params.documents.every(document => {
+            return [document.teamOne, document.teamTwo].every(team => {
+                const players = team.players ?? [];
+                return (
+                    players.length === STARTING_LINEUP_PLAYER_COUNT &&
+                    players.every(player => {
+                        return CALCULATION_HEAT_KEYS.every(key => {
+                            return player[key]?.value !== undefined;
+                        });
+                    })
+                );
+            });
+        })
+    );
 }

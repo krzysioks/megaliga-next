@@ -10,7 +10,8 @@ import ScoreDetailsModel, {
 import SetPlaysDataModel from '@/db/models/games/set-plays-data';
 import StartingLineupModel from '@/db/models/games/starting-lineup';
 import PlayersModel from '@/db/models/players';
-import { SetPlayEnumType } from '@/db/models/schema.types';
+import { playerScoresZodSchema, SetPlayEnumType } from '@/db/models/schema.types';
+import SeasonOpsModel from '@/db/models/season-ops';
 import SetPlaysModel from '@/db/models/set-plays';
 import UserModel, { UserType } from '@/db/models/user';
 
@@ -53,6 +54,7 @@ beforeAll(async () => {
 
 // before any test clear collections
 beforeEach(async () => {
+    await SeasonOpsModel.deleteMany();
     await SetPlaysDataModel.deleteMany();
     await SetPlaysModel.deleteMany();
     await ScoreDetailsModel.deleteMany();
@@ -64,6 +66,7 @@ beforeEach(async () => {
 
 // close connection to server so that test suite will close
 afterAll(async () => {
+    await SeasonOpsModel.deleteMany();
     await SetPlaysDataModel.deleteMany();
     await SetPlaysModel.deleteMany();
     await ScoreDetailsModel.deleteMany();
@@ -1176,6 +1179,445 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
         });
     });
 
+    describe('calculateScoresByRound', () => {
+        const createRound = async (roundNumber = 2) => {
+            const users = await UserModel.insertMany(
+                Array.from({ length: 12 }, (_, index) =>
+                    createUserData(roundNumber * 12 + index)
+                )
+            );
+            const players = await PlayersModel.create(
+                Array.from({ length: 10 }, (_, index) => {
+                    return {
+                        extraligaPlayerName: `Round ${roundNumber} rider ${index}`,
+                        isJunior: index % 5 === 4
+                    };
+                })
+            );
+            const lineups = await StartingLineupModel.create(
+                users.map((user, index) => {
+                    const ids = players
+                        .slice((index % 2) * 5, (index % 2) * 5 + 5)
+                        .map(player => player._id.toString());
+                    return {
+                        userId: user._id,
+                        roundNumber,
+                        playerOne: ids[0],
+                        playerTwo: ids[1],
+                        playerThree: ids[2],
+                        playerFour: ids[3],
+                        playerFive: ids[4],
+                        roles: {
+                            pn: { playerId: ids[0], isDisabled: false },
+                            kb: ids[1],
+                            p: ids[2]
+                        }
+                    };
+                })
+            );
+            const schedules = await ScheduleModel.create(
+                Array.from({ length: 6 }, (_, index) => {
+                    return {
+                        userOneId: users[index * 2]._id,
+                        userTwoId: users[index * 2 + 1]._id,
+                        roundNumber,
+                        ligueGroupsId: new mongoose.Types.ObjectId(),
+                        userOneScore: 99,
+                        userTwoScore: 98
+                    };
+                })
+            );
+            const documents = await ScoreDetailsModel.create(
+                schedules.map((schedule, index) => {
+                    return {
+                        scheduleId: schedule._id,
+                        roundNumber,
+                        teamOne: {
+                            userId: users[index * 2]._id,
+                            startingLineupId: lineups[index * 2]._id,
+                            players: players.slice(0, 5).map(player => {
+                                return {
+                                    playerId: player._id,
+                                    ...playerScoresZodSchema.parse({
+                                        heatOne: playerHeat(0)
+                                    })
+                                };
+                            })
+                        },
+                        teamTwo: {
+                            userId: users[index * 2 + 1]._id,
+                            startingLineupId: lineups[index * 2 + 1]._id,
+                            players: players.slice(5).map(player => {
+                                return {
+                                    playerId: player._id,
+                                    ...playerScoresZodSchema.parse({
+                                        heatOne: playerHeat(0)
+                                    })
+                                };
+                            })
+                        }
+                    };
+                })
+            );
+            return { users, players, lineups, schedules, documents };
+        };
+
+        test('Should reject a round outside the regular season', async () => {
+            await expect(
+                ScoreDetailsModel.calculateScoresByRound(15)
+            ).rejects.toThrow(
+                'Invalid roundNumber: 15. Must be between 1 and 14'
+            );
+        });
+        test('Should reject incomplete scores before updating any match', async () => {
+            await expect(
+                ScoreDetailsModel.calculateScoresByRound(2)
+            ).rejects.toThrow('Score details are incomplete for round: 2');
+        });
+
+        test('Should reject calculation when the current season is missing', async () => {
+            await createRound();
+            await expect(
+                ScoreDetailsModel.calculateScoresByRound(2)
+            ).rejects.toThrow('Current season not found');
+        });
+
+        test.each([
+            'schedule',
+            'lineup',
+            'players',
+            'metadata',
+            'coverage',
+            'user'
+        ])(
+            'Should reject invalid %s references before updating any match',
+            async kind => {
+                const fixture = await createRound();
+                await SeasonOpsModel.create({
+                    name: '2026',
+                    isCurrentSeason: true,
+                    numberOfGroups: 1
+                });
+                const document = fixture.documents[5];
+                let expected: string;
+                if (kind === 'schedule') {
+                    await ScheduleModel.updateOne(
+                        { _id: fixture.schedules[5]._id },
+                        { userOneId: new mongoose.Types.ObjectId() }
+                    );
+                    expected = `Invalid schedule for score details: ${document._id}`;
+                } else if (kind === 'lineup') {
+                    await StartingLineupModel.deleteOne({
+                        _id: fixture.lineups[10]._id
+                    });
+                    expected = `Invalid starting lineup for user: ${fixture.users[10]._id}`;
+                } else if (kind === 'players') {
+                    await StartingLineupModel.updateOne(
+                        { _id: fixture.lineups[10]._id },
+                        { playerFive: fixture.players[5]._id }
+                    );
+                    expected = `Starting lineup players do not match score details for user: ${fixture.users[10]._id}`;
+                } else if (kind === 'metadata') {
+                    await PlayersModel.deleteOne({
+                        _id: fixture.players[0]._id
+                    });
+                    expected = `Missing player: ${fixture.players[0]._id}`;
+                } else if (kind === 'coverage') {
+                    await ScheduleModel.create({
+                        roundNumber: 2,
+                        userOneId: fixture.users[0]._id,
+                        userTwoId: fixture.users[1]._id
+                    });
+                    expected = 'Schedule coverage is incomplete for round: 2';
+                } else {
+                    await UserModel.deleteOne({ _id: fixture.users[11]._id });
+                    expected = 'Missing team user for round: 2';
+                }
+                await expect(
+                    ScoreDetailsModel.calculateScoresByRound(2)
+                ).rejects.toThrow(expected);
+                expect(
+                    (await ScheduleModel.findById(fixture.schedules[0]._id))
+                        ?.userOneScore
+                ).toBe(99);
+                expect(
+                    (await ScoreDetailsModel.findById(fixture.documents[0]._id))
+                        ?.teamOne.trainer?.comment
+                ).toBeUndefined();
+                expect(
+                    (
+                        await SeasonOpsModel.findOne({
+                            isCurrentSeason: true
+                        }).exec()
+                    )?.isScoreCalculatded[2]
+                ).toBe(false);
+            }
+        );
+
+        test('Should reject an invalid KFN interval in the last match before saving any result', async () => {
+            const fixture = await createRound();
+            await SeasonOpsModel.create({
+                name: '2026',
+                isCurrentSeason: true,
+                numberOfGroups: 1
+            });
+            const kfn = await SetPlaysModel.create({
+                name: 'KFN',
+                type: SetPlayEnumType.KoloFortunyNorbiego
+            });
+            await SetPlaysDataModel.collection.insertOne({
+                startingLineupId: fixture.lineups[10]._id,
+                setPlayList: [
+                    {
+                        _id: new mongoose.Types.ObjectId(),
+                        setPlayId: kfn._id,
+                        userData: { minimum: 0, maximum: 22 }
+                    }
+                ]
+            });
+            await expect(
+                ScoreDetailsModel.calculateScoresByRound(2)
+            ).rejects.toThrow('Invalid KFN interval: 0-22');
+            expect(
+                (await ScheduleModel.findById(fixture.schedules[0]._id))
+                    ?.userOneScore
+            ).toBe(99);
+            expect(
+                (await ScoreDetailsModel.findById(fixture.documents[0]._id))
+                    ?.teamOne.trainer?.comment
+            ).toBeUndefined();
+        });
+
+        test('Should reject missing NCD admin data before updating any match', async () => {
+            const fixture = await createRound();
+            await SeasonOpsModel.create({
+                name: '2026',
+                isCurrentSeason: true,
+                numberOfGroups: 1
+            });
+            const ncd = await SetPlaysModel.create({
+                name: 'NCD',
+                type: SetPlayEnumType.Ncd
+            });
+            await SetPlaysDataModel.collection.insertOne({
+                startingLineupId: fixture.lineups[10]._id,
+                setPlayList: [
+                    {
+                        _id: new mongoose.Types.ObjectId(),
+                        setPlayId: ncd._id,
+                        userData: {
+                            playerId: fixture.players[0]._id.toString()
+                        }
+                    }
+                ]
+            });
+            await expect(
+                ScoreDetailsModel.calculateScoresByRound(2)
+            ).rejects.toThrow(
+                'NCD admin data is required for score calculation'
+            );
+            expect(
+                (await ScheduleModel.findById(fixture.schedules[0]._id))
+                    ?.userOneScore
+            ).toBe(99);
+        });
+
+        test('Should keep the round uncalculated when saving a match fails', async () => {
+            await createRound();
+            const season = await SeasonOpsModel.create({
+                name: '2026',
+                isCurrentSeason: true,
+                numberOfGroups: 1
+            });
+            const update = jest
+                .spyOn(ScheduleModel, 'updateOne')
+                .mockImplementationOnce(() => {
+                    throw new Error('Schedule write failed');
+                });
+            try {
+                await expect(
+                    ScoreDetailsModel.calculateScoresByRound(2)
+                ).rejects.toThrow('Schedule write failed');
+                expect(
+                    (await SeasonOpsModel.findById(season._id).exec())
+                        ?.isScoreCalculatded[2]
+                ).toBe(false);
+            } finally {
+                update.mockRestore();
+            }
+        });
+
+        test('Should load replacement junior status and retain unused reserve comments', async () => {
+            const fixture = await createRound();
+            await SeasonOpsModel.create({
+                name: '2026',
+                isCurrentSeason: true,
+                numberOfGroups: 1
+            });
+            const replacements = await PlayersModel.create([
+                { extraligaPlayerName: 'Awatar junior', isJunior: true },
+                { extraligaPlayerName: 'Unused reserve', isJunior: false }
+            ]);
+            const awatar = await SetPlaysModel.create({
+                name: 'Awatar',
+                type: SetPlayEnumType.Awatar
+            });
+            const reserve = await SetPlaysModel.create({
+                name: 'Rezerwa',
+                type: SetPlayEnumType.Rezerwa
+            });
+            await StartingLineupModel.updateOne(
+                { _id: fixture.lineups[0]._id },
+                { 'roles.p': fixture.players[4]._id }
+            );
+            await SetPlaysDataModel.collection.insertOne({
+                startingLineupId: fixture.lineups[0]._id,
+                setPlayList: [
+                    {
+                        _id: new mongoose.Types.ObjectId(),
+                        setPlayId: awatar._id,
+                        userData: {
+                            playerId: replacements[0]._id.toString(),
+                            replacedPlayerId: fixture.players[4]._id.toString()
+                        },
+                        adminData: {
+                            ...playerScoresZodSchema.parse({
+                                heatOne: playerHeat(2, true)
+                            }),
+                            isDisabled: false,
+                            isMatchDraw: false
+                        }
+                    },
+                    {
+                        _id: new mongoose.Types.ObjectId(),
+                        setPlayId: reserve._id,
+                        userData: { playerId: replacements[1]._id.toString() },
+                        adminData: playerScoresZodSchema.parse({
+                            heatOne: playerHeat(0)
+                        })
+                    }
+                ]
+            });
+            await ScoreDetailsModel.calculateScoresByRound(2);
+            const saved = await ScoreDetailsModel.findById(
+                fixture.documents[0]._id
+            );
+            expect(saved?.teamOne.players?.[4].comment).toBe('P 2, Awatar +2');
+            expectPlayerHeat(
+                saved?.teamOne.players?.[4].heatOne,
+                playerHeat(0)
+            );
+            expect(saved?.teamOne.trainer?.comment).toBe('Rezerwa 0');
+            expect(
+                (await ScheduleModel.findById(fixture.schedules[0]._id))
+                    ?.userOneScore
+            ).toBe(4);
+        });
+
+        test('Should recalculate scores after a heat correction without changing other rounds', async () => {
+            const fixture = await createRound();
+            await ScoreDetailsModel.updateOne(
+                { _id: fixture.documents[5]._id },
+                {
+                    'teamTwo.players.4': {
+                        playerId: fixture.players[9]._id,
+                        ...playerScoresZodSchema.parse({})
+                    }
+                }
+            );
+            expect(await ScoreDetailsModel.isScoreCalculationsEnabled(2)).toBe(true);
+            const otherRound = await createRound(3);
+            const season = await SeasonOpsModel.create({
+                name: '2026',
+                isCurrentSeason: true,
+                numberOfGroups: 1
+            });
+            const ncd = await SetPlaysModel.create({
+                name: 'NCD6',
+                type: SetPlayEnumType.Ncd6
+            });
+            await SetPlaysDataModel.collection.insertOne({
+                startingLineupId: fixture.lineups[0]._id,
+                setPlayList: [
+                    {
+                        _id: new mongoose.Types.ObjectId(),
+                        setPlayId: ncd._id,
+                        userData: {
+                            playerId: fixture.players[0]._id.toString()
+                        },
+                        adminData: {
+                            playerIdList: fixture.players
+                                .slice(1, 5)
+                                .map(player => player._id.toString())
+                        }
+                    }
+                ]
+            });
+            await expect(
+                ScoreDetailsModel.calculateScoresByRound(2)
+            ).resolves.toBeUndefined();
+            let saved = await ScoreDetailsModel.findById(
+                fixture.documents[0]._id
+            );
+            expect(saved?.teamOne.players?.[0].setPlay).toBe(-2);
+            expect(saved?.teamOne.players?.[0].comment).toBe(
+                'Lider 0, PN 0, NCD6 -2'
+            );
+            expect(saved?.teamOne.trainer?.comment).toBe('');
+            expect(
+                (await ScheduleModel.findById(fixture.schedules[0]._id))
+                    ?.userOneScore
+            ).toBe(0);
+            expect(
+                (await SeasonOpsModel.findById(season._id).exec())
+                    ?.isScoreCalculatded[2]
+            ).toBe(true);
+            const before =
+                await ScoreDetailsModel.getScoreDetailsByScheduleAndRoundId(
+                    fixture.schedules[0]._id.toString(),
+                    2
+                );
+            await ScoreDetailsModel.calculateScoresByRound(2);
+            expect(
+                await ScoreDetailsModel.getScoreDetailsByScheduleAndRoundId(
+                    fixture.schedules[0]._id.toString(),
+                    2
+                )
+            ).toEqual(before);
+            await ScoreDetailsModel.updateOne(
+                { _id: fixture.documents[0]._id },
+                { 'teamOne.players.0.heatOne': playerHeat(3, true, true) }
+            );
+            await ScoreDetailsModel.calculateScoresByRound(2);
+            saved = await ScoreDetailsModel.findById(fixture.documents[0]._id);
+            expect(saved?.teamOne.players?.[0].setPlay).toBe(1);
+            expect(saved?.teamOne.players?.[0].comment).toBe(
+                'Lider 0, PN 3, NCD6 -2'
+            );
+            expectPlayerHeat(
+                saved?.teamOne.players?.[0].heatOne,
+                playerHeat(3, true, true)
+            );
+            expect(saved?.teamOne.players?.[0].heatSeven.value).toBeNull();
+            expect(
+                (await ScheduleModel.findById(fixture.schedules[0]._id))
+                    ?.userOneScore
+            ).toBe(7);
+            expect(
+                (await ScheduleModel.findById(otherRound.schedules[0]._id))
+                    ?.userOneScore
+            ).toBe(99);
+            expect(
+                (await ScoreDetailsModel.findById(otherRound.documents[0]._id))
+                    ?.teamOne.trainer?.comment
+            ).toBeUndefined();
+            expect(
+                (await SeasonOpsModel.findById(season._id).exec())
+                    ?.isScoreCalculatded[3]
+            ).toBe(false);
+        });
+    });
+
     describe('isScoreCalculationsEnabled', () => {
         const createCompletePlayer = () => ({
             playerId: new mongoose.Types.ObjectId().toString(),
@@ -1277,6 +1719,10 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 createCompleteScoreDetails(3),
                 createCompleteScoreDetails(3)
             ];
+            scoreDetailsData[0]!.teamOne.players[0] = {
+                playerId: scoreDetailsData[0]!.teamOne.players[0].playerId,
+                ...playerScoresZodSchema.parse({})
+            };
             scoreDetailsData[5]!.teamTwo.players[0]!.heatSix = playerHeat(0);
             scoreDetailsData[5]!.teamTwo.players[0]!.heatSeven = playerHeat(null);
 

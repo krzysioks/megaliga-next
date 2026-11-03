@@ -29,7 +29,7 @@ import {
 
 import '@/db/models/set-plays';
 
-const setPlayPayloadZodSchema = z.discriminatedUnion('type', [
+export const setPlayPayloadZodSchema = z.discriminatedUnion('type', [
     z.object({
         type: z.literal(SetPlayEnumType.GwarancjaStartow),
         userData: z.object({ playerId: objectIdSchema }).required()

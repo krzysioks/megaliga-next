@@ -41,6 +41,13 @@ export type GetSetPlaysDetailsReturnType = {
     setPlayDescriptions: string;
 };
 
+export interface AreRoundScoresCompleteParamsType {
+    documents: {
+        teamOne: Pick<ScoreDetailsType['teamOne'], 'players'>;
+        teamTwo: Pick<ScoreDetailsType['teamTwo'], 'players'>;
+    }[];
+}
+
 export type PlayerScoreDetailsType = Omit<
     z.infer<typeof playerSchema>,
     'playerId' | 'comment' | 'setPlay'
