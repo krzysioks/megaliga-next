@@ -1,8 +1,14 @@
+import type { PlayerPositionsAndRolesType } from '@/db/models/schema.types';
+
 import { HydratedDocument, model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
+import { MIN_PLAYOFF_ROUND, MAX_PLAYOFF_ROUND } from '@/db/db.constants';
 import {
     objectIdSchema,
+    playerPositionsZodSchema,
+    playerPositionsAndRolesZodSchema,
+    playerRolesZodSchema,
     roundNumberSchema,
     standardStringSchema
 } from '@/db/models/schema.types';
@@ -10,41 +16,30 @@ import UserModel from '@/db/models/user';
 
 //StartingLineupPlayoff is representation of megaliga_starting_lineup_playoff of old megaliga database. Will be used for displaying selected starting lineup for given match. Used in dashboard in form to select lineup before match. Also will be used in ScoreDetailsPlayoff model to populate setplays
 
-export const startingLineupPlayoffZodSchema = z.object({
+export const startingLineupPlayoffZodSchema = playerPositionsZodSchema.extend({
     userId: objectIdSchema, //Reference to User model, to know to whom this lineup belongs
     roundNumber: roundNumberSchema,
     setPlays: standardStringSchema.optional(), //TODOKP: for now it will be string, until business logic for setplays will be defined
-    playerOne: objectIdSchema,
-    playerTwo: objectIdSchema,
-    playerThree: objectIdSchema,
-    playerFour: objectIdSchema,
-    playerFive: objectIdSchema
+    roles: playerRolesZodSchema
 });
 
 export type StartingLineupPlayoffType = z.infer<
     typeof startingLineupPlayoffZodSchema
 >;
 
-const playerPositionsPlayoffZodSchema = startingLineupPlayoffZodSchema.omit({
-    userId: true,
-    roundNumber: true,
-    setPlays: true
-});
-
-export type PlayerPostions = Required<
-    z.infer<typeof playerPositionsPlayoffZodSchema>
->;
+export type StartingLineupPlayoffPrimusNominatusForAdminReturnType =
+    StartingLineupPlayoffType['roles']['pn'];
 
 interface StartingLineupPlayoffMethodsType {
-    updatePlayersPosition: (positions: PlayerPostions) => Promise<void>;
+    updatePlayersPosition: (data: PlayerPositionsAndRolesType) => Promise<void>;
 }
 
 const PLAYER_POSITION_KEYS = [
-    ...Object.keys(playerPositionsPlayoffZodSchema.shape)
-] as (keyof PlayerPostions)[];
+    ...Object.keys(playerPositionsAndRolesZodSchema.shape)
+] as (keyof PlayerPositionsAndRolesType)[];
 
 type StartingLineupPlayoffDocumentType = Promise<
-    HydratedDocument<StartingLineupPlayoffType>
+    HydratedDocument<StartingLineupPlayoffType, StartingLineupPlayoffMethodsType>
 >;
 
 export interface StartingLineupPlayoffPlayersByRoundReturnType {
@@ -78,12 +73,21 @@ interface StartingLineupPlayoffModelType extends Model<
     '',
     StartingLineupPlayoffMethodsType
 > {
+    getPrimusNominatusForAdmin: (
+        roundNumber: number,
+        userId: string
+    ) => Promise<StartingLineupPlayoffPrimusNominatusForAdminReturnType | null>;
+    savePrimusNominatusForAdmin: (
+        roundNumber: number,
+        userId: string,
+        isDisabled: boolean
+    ) => Promise<void>;
     getUserStartingLineupByRound: (
         userId: string,
         roundNumber: number
     ) => StartingLineupPlayoffDocumentType;
     setPlayersPosition: (
-        positions: PlayerPostions,
+        data: PlayerPositionsAndRolesType,
         userId: string,
         roundNumber: number
     ) => Promise<void>;
@@ -109,8 +113,101 @@ const startingLineupPlayoffSchema = new Schema<
         required: true
     },
     playerFour: { type: Schema.Types.ObjectId, ref: 'Players', required: true },
-    playerFive: { type: Schema.Types.ObjectId, ref: 'Players', required: true }
+    playerFive: { type: Schema.Types.ObjectId, ref: 'Players', required: true },
+    roles: {
+        pn: {
+            playerId: { type: Schema.Types.ObjectId, ref: 'Players', required: true },
+            isDisabled: { type: Boolean, default: false }
+        },
+        kb: { type: Schema.Types.ObjectId, ref: 'Players', required: true },
+        p: { type: Schema.Types.ObjectId, ref: 'Players', required: true }
+    }
 });
+
+startingLineupPlayoffSchema.static(
+    'getPrimusNominatusForAdmin',
+    async function getPrimusNominatusForAdmin(
+        roundNumber: number,
+        userId: string
+    ): Promise<StartingLineupPlayoffPrimusNominatusForAdminReturnType | null> {
+        try {
+            if (
+                roundNumber < MIN_PLAYOFF_ROUND ||
+                roundNumber > MAX_PLAYOFF_ROUND
+            ) {
+                throw new Error(
+                    `Invalid roundNumber: ${roundNumber}. Must be between ${MIN_PLAYOFF_ROUND} and ${MAX_PLAYOFF_ROUND}`
+                );
+            }
+            const isValidUserId = await UserModel.exists({ _id: userId });
+            if (!isValidUserId) {
+                throw new Error(`Invalid userId: ${userId}`);
+            }
+
+            const startingLineupDocument = await this.findOne({
+                userId,
+                roundNumber
+            }).exec();
+            if (!startingLineupDocument) {
+                return null;
+            }
+
+            return {
+                playerId: startingLineupDocument.roles.pn.playerId.toString(),
+                isDisabled: startingLineupDocument.roles.pn.isDisabled
+            };
+        } catch (error) {
+            console.error(
+                'Error fetching playoff Primus Nominatus admin data:',
+                error
+            );
+            throw error;
+        }
+    }
+);
+
+startingLineupPlayoffSchema.static(
+    'savePrimusNominatusForAdmin',
+    async function savePrimusNominatusForAdmin(
+        roundNumber: number,
+        userId: string,
+        isDisabled: boolean
+    ): Promise<void> {
+        try {
+            if (
+                roundNumber < MIN_PLAYOFF_ROUND ||
+                roundNumber > MAX_PLAYOFF_ROUND
+            ) {
+                throw new Error(
+                    `Invalid roundNumber: ${roundNumber}. Must be between ${MIN_PLAYOFF_ROUND} and ${MAX_PLAYOFF_ROUND}`
+                );
+            }
+            const isValidUserId = await UserModel.exists({ _id: userId });
+            if (!isValidUserId) {
+                throw new Error(`Invalid userId: ${userId}`);
+            }
+            const validatedIsDisabled = z.boolean().parse(isDisabled);
+            const startingLineupDocument = await this.findOne({
+                userId,
+                roundNumber
+            }).exec();
+            if (!startingLineupDocument) {
+                throw new Error('No starting lineup for user and round');
+            }
+            startingLineupDocument.set(
+                'roles.pn.isDisabled',
+                validatedIsDisabled
+            );
+            await startingLineupDocument.save();
+        } catch (error) {
+            console.error(
+                'Error saving playoff Primus Nominatus admin data:',
+                error
+            );
+            throw error;
+        }
+    }
+);
 
 startingLineupPlayoffSchema.static(
     'getUserStartingLineupByRound',
@@ -134,19 +231,23 @@ startingLineupPlayoffSchema.static(
 startingLineupPlayoffSchema.static(
     'setPlayersPosition',
     async function setPlayersPosition(
-        positions: PlayerPostions,
+        data: PlayerPositionsAndRolesType,
         userId: string,
         roundNumber: number
     ) {
         try {
-            const hasOnlyAllowedKeys = Object.keys(positions).every(key =>
-                PLAYER_POSITION_KEYS.includes(key as keyof PlayerPostions)
-            );
+            const hasOnlyAllowedKeys = Object.keys(data).every(key => {
+                return PLAYER_POSITION_KEYS.includes(
+                    key as keyof PlayerPositionsAndRolesType
+                );
+            });
             if (!hasOnlyAllowedKeys) {
                 throw new Error(
-                    'Invalid positions payload. Allowed fields: playerOne, playerTwo, playerThree, playerFour, playerFive.'
+                    'Invalid positions payload. Allowed fields: playerOne, playerTwo, playerThree, playerFour, playerFive, roles.'
                 );
             }
+
+            playerPositionsAndRolesZodSchema.parse(data);
 
             const isValidUserId = await UserModel.exists({ _id: userId });
             if (!isValidUserId) {
@@ -167,7 +268,11 @@ startingLineupPlayoffSchema.static(
             await new StartingLineupPlayoffModel({
                 userId,
                 roundNumber,
-                ...positions
+                ...data,
+                roles: {
+                    ...data.roles,
+                    pn: { playerId: data.roles.pn.playerId, isDisabled: false }
+                }
             }).save();
         } catch (error) {
             console.error('Error updating playoff starting lineup:', error);
@@ -179,19 +284,32 @@ startingLineupPlayoffSchema.static(
 
 startingLineupPlayoffSchema.method(
     'updatePlayersPosition',
-    async function updatePlayersPosition(positions: PlayerPostions) {
+    async function updatePlayersPosition(data: PlayerPositionsAndRolesType) {
         try {
-            const hasOnlyAllowedKeys = Object.keys(positions).every(key =>
-                PLAYER_POSITION_KEYS.includes(key as keyof PlayerPostions)
-            );
+            const hasOnlyAllowedKeys = Object.keys(data).every(key => {
+                return PLAYER_POSITION_KEYS.includes(
+                    key as keyof PlayerPositionsAndRolesType
+                );
+            });
 
             if (!hasOnlyAllowedKeys) {
                 throw new Error(
-                    'Invalid positions payload. Allowed fields: playerOne, playerTwo, playerThree, playerFour, playerFive.'
+                    'Invalid positions payload. Allowed fields: playerOne, playerTwo, playerThree, playerFour, playerFive, roles.'
                 );
             }
 
-            this.set(positions);
+            playerPositionsAndRolesZodSchema.parse(data);
+
+            this.set({
+                ...data,
+                roles: {
+                    ...data.roles,
+                    pn: {
+                        playerId: data.roles.pn.playerId,
+                        isDisabled: this.roles.pn.isDisabled
+                    }
+                }
+            });
             await this.save();
         } catch (error) {
             console.error('Error updating playoff starting lineup:', error);

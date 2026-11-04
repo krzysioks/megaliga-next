@@ -46,6 +46,37 @@ export const uniquePlayerIdList = z
 
 export const booleanDefaultFalseSchema = z.boolean().default(false);
 
+export const playerRolesZodSchema = z
+    .object({
+        pn: z.object({
+            playerId: objectIdSchema.unwrap(),
+            isDisabled: booleanDefaultFalseSchema
+        }),
+        kb: objectIdSchema,
+        p: objectIdSchema
+    })
+    .required()
+    .refine(
+        roles => new Set([roles.pn.playerId, roles.kb, roles.p]).size === 3,
+        { message: 'A player can have only one role' }
+    );
+
+export const playerPositionsZodSchema = z.object({
+    playerOne: objectIdSchema,
+    playerTwo: objectIdSchema,
+    playerThree: objectIdSchema,
+    playerFour: objectIdSchema,
+    playerFive: objectIdSchema
+});
+
+export const playerPositionsAndRolesZodSchema = playerPositionsZodSchema
+    .extend({ roles: playerRolesZodSchema })
+    .required();
+
+export type PlayerPositionsAndRolesType = z.input<
+    typeof playerPositionsAndRolesZodSchema
+>;
+
 export const playerHeatZodSchema = z
     .object({
         value: heatSchema.nullable().default(null),

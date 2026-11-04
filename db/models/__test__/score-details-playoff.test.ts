@@ -74,7 +74,12 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
             playerTwo: players[1]._id.toString(),
             playerThree: players[2]._id.toString(),
             playerFour: players[3]._id.toString(),
-            playerFive: players[4]._id.toString()
+            playerFive: players[4]._id.toString(),
+            roles: {
+                pn: { playerId: players[0]._id, isDisabled: false },
+                kb: players[1]._id,
+                p: players[2]._id
+            }
         }).save();
 
         const startingLineupTwo = await new StartingLineupPlayoffModel({
@@ -85,7 +90,12 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
             playerTwo: players[6]._id.toString(),
             playerThree: players[7]._id.toString(),
             playerFour: players[8]._id.toString(),
-            playerFive: players[9]._id.toString()
+            playerFive: players[9]._id.toString(),
+            roles: {
+                pn: { playerId: players[5]._id, isDisabled: false },
+                kb: players[6]._id,
+                p: players[7]._id
+            }
         }).save();
 
         const schedule = await new SchedulePlayoffModel({
@@ -267,7 +277,12 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
                 playerTwo: players[1]._id.toString(),
                 playerThree: players[2]._id.toString(),
                 playerFour: players[3]._id.toString(),
-                playerFive: players[4]._id.toString()
+                playerFive: players[4]._id.toString(),
+                roles: {
+                    pn: { playerId: players[0]._id, isDisabled: false },
+                    kb: players[1]._id,
+                    p: players[2]._id
+                }
             }).save();
 
             const startingLineupTwo = await new StartingLineupPlayoffModel({
@@ -278,7 +293,12 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
                 playerTwo: players[6]._id.toString(),
                 playerThree: players[7]._id.toString(),
                 playerFour: players[8]._id.toString(),
-                playerFive: players[9]._id.toString()
+                playerFive: players[9]._id.toString(),
+                roles: {
+                    pn: { playerId: players[5]._id, isDisabled: false },
+                    kb: players[6]._id,
+                    p: players[7]._id
+                }
             }).save();
 
             const schedule = await new SchedulePlayoffModel({

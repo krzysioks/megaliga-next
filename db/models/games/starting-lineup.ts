@@ -1,3 +1,5 @@
+import type { PlayerPositionsAndRolesType } from '@/db/models/schema.types';
+
 import { HydratedDocument, model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
@@ -6,49 +8,23 @@ import {
     MAX_REGULAR_SEASON_ROUND
 } from '@/db/db.constants';
 import {
-    booleanDefaultFalseSchema,
     objectIdSchema,
+    playerPositionsZodSchema,
+    playerPositionsAndRolesZodSchema,
+    playerRolesZodSchema,
     roundNumberSchema
 } from '@/db/models/schema.types';
 import UserModel from '@/db/models/user';
 
 //StartingLineup is representation of megaliga_starting_lineup of old megaliga database. Will be used for displaying selected starting lineup for given match. Used in dashboard in form to select lineup before match. Also will be used in ScoreDetails model to populate setplays
 
-const playerRolesZodSchema = z
-    .object({
-        pn: z.object({
-            playerId: objectIdSchema.unwrap(),
-            isDisabled: booleanDefaultFalseSchema
-        }),
-        kb: objectIdSchema,
-        p: objectIdSchema
-    })
-    .required()
-    .refine(
-        roles => new Set([roles.pn.playerId, roles.kb, roles.p]).size === 3,
-        { message: 'A player can have only one role' }
-    );
-
-export const startingLineupZodSchema = z.object({
+export const startingLineupZodSchema = playerPositionsZodSchema.extend({
     userId: objectIdSchema, //Reference to User model, to know to whom this lineup belongs
     roundNumber: roundNumberSchema,
-    playerOne: objectIdSchema,
-    playerTwo: objectIdSchema,
-    playerThree: objectIdSchema,
-    playerFour: objectIdSchema,
-    playerFive: objectIdSchema,
     roles: playerRolesZodSchema
 });
 
 export type StartingLineupType = z.infer<typeof startingLineupZodSchema>;
-
-const playerPositionsAndRolesZodSchema = startingLineupZodSchema
-    .omit({ userId: true, roundNumber: true })
-    .required();
-
-export type PlayerPositionsAndRolesType = z.input<
-    typeof playerPositionsAndRolesZodSchema
->;
 
 export type StartingLineupPrimusNominatusForAdminReturnType =
     StartingLineupType['roles']['pn'];

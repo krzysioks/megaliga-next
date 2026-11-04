@@ -1,9 +1,9 @@
+import type { PlayerPositionsAndRolesType } from '@/db/models/schema.types';
+
 import mongoose from 'mongoose';
 
 import { DBClient } from '@/db/db-client';
-import StartingLineupPlayoffModel, {
-    PlayerPostions
-} from '@/db/models/games/starting-lineup-playoff';
+import StartingLineupPlayoffModel from '@/db/models/games/starting-lineup-playoff';
 import PlayersModel from '@/db/models/players';
 import UserModel, { UserType } from '@/db/models/user';
 
@@ -24,17 +24,27 @@ const createUserData = (overrides: Partial<UserType> = {}) => ({
 });
 
 const createPositions = (
-    overrides: Partial<PlayerPostions> = {}
-): PlayerPostions => ({
-    playerOne: new mongoose.Types.ObjectId().toString(),
-    playerTwo: new mongoose.Types.ObjectId().toString(),
-    playerThree: new mongoose.Types.ObjectId().toString(),
-    playerFour: new mongoose.Types.ObjectId().toString(),
-    playerFive: new mongoose.Types.ObjectId().toString(),
-    ...overrides
-});
+    overrides: Partial<PlayerPositionsAndRolesType> = {}
+): PlayerPositionsAndRolesType => {
+    const positions = {
+        playerOne: new mongoose.Types.ObjectId().toString(),
+        playerTwo: new mongoose.Types.ObjectId().toString(),
+        playerThree: new mongoose.Types.ObjectId().toString(),
+        playerFour: new mongoose.Types.ObjectId().toString(),
+        playerFive: new mongoose.Types.ObjectId().toString(),
+        ...overrides
+    };
+    return {
+        ...positions,
+        roles: overrides.roles ?? {
+            pn: { playerId: positions.playerOne, isDisabled: false },
+            kb: positions.playerTwo,
+            p: positions.playerThree
+        }
+    };
+};
 
-const createPlayerPositions = async (): Promise<PlayerPostions> => {
+const createPlayerPositions = async () => {
     const players = await PlayersModel.create([
         { extraligaPlayerName: 'Player One' },
         { extraligaPlayerName: 'Player Two' },
@@ -43,13 +53,13 @@ const createPlayerPositions = async (): Promise<PlayerPostions> => {
         { extraligaPlayerName: 'Player Five' }
     ]);
 
-    return {
+    return createPositions({
         playerOne: players[0]._id.toString(),
         playerTwo: players[1]._id.toString(),
         playerThree: players[2]._id.toString(),
         playerFour: players[3]._id.toString(),
         playerFive: players[4]._id.toString()
-    };
+    });
 };
 
 // connect to test db before running tests
@@ -76,240 +86,558 @@ afterAll(async () => {
 });
 
 describe('Test StartingLineupPlayoffModel methods and static functions', () => {
-    test('Should return playoff starting lineup for given userId and roundNumber', async () => {
-        const user = await new UserModel(createUserData()).save();
-        const userId = user._id.toString();
-        const roundNumber = 3;
-        const positions = createPositions();
+    describe('getUserStartingLineupByRound', () => {
+        test('Should return null when playoff lineup does not exist for given userId or roundNumber', async () => {
+            const user = await new UserModel(createUserData()).save();
+            const userId = user._id.toString();
+            const positions = createPositions();
 
-        await new StartingLineupPlayoffModel({
-            userId,
-            roundNumber,
-            ...positions
-        }).save();
-
-        const lineup =
-            await StartingLineupPlayoffModel.getUserStartingLineupByRound(
+            await new StartingLineupPlayoffModel({
                 userId,
-                roundNumber
-            );
+                roundNumber: 1,
+                ...positions
+            }).save();
 
-        expect(lineup).not.toBeNull();
-        expect(lineup?.userId?.toString()).toBe(userId);
-        expect(lineup?.roundNumber).toBe(roundNumber);
-        expect(lineup?.playerOne?.toString()).toBe(positions.playerOne);
-        expect(lineup?.playerTwo?.toString()).toBe(positions.playerTwo);
-        expect(lineup?.playerThree?.toString()).toBe(positions.playerThree);
-        expect(lineup?.playerFour?.toString()).toBe(positions.playerFour);
-        expect(lineup?.playerFive?.toString()).toBe(positions.playerFive);
+            const missingByRound =
+                await StartingLineupPlayoffModel.getUserStartingLineupByRound(
+                    userId,
+                    2
+                );
+            const missingByUser =
+                await StartingLineupPlayoffModel.getUserStartingLineupByRound(
+                    new mongoose.Types.ObjectId().toString(),
+                    1
+                );
+
+            expect(missingByRound).toBeNull();
+            expect(missingByUser).toBeNull();
+        });
+
+        test('Should return playoff starting lineup for given userId and roundNumber', async () => {
+            const user = await new UserModel(createUserData()).save();
+            const userId = user._id.toString();
+            const roundNumber = 3;
+            const positions = createPositions();
+
+            await new StartingLineupPlayoffModel({
+                userId,
+                roundNumber,
+                ...positions
+            }).save();
+
+            const lineup =
+                await StartingLineupPlayoffModel.getUserStartingLineupByRound(
+                    userId,
+                    roundNumber
+                );
+
+            expect(lineup).not.toBeNull();
+            expect(lineup?.userId?.toString()).toBe(userId);
+            expect(lineup?.roundNumber).toBe(roundNumber);
+            expect(lineup?.playerOne?.toString()).toBe(positions.playerOne);
+            expect(lineup?.playerTwo?.toString()).toBe(positions.playerTwo);
+            expect(lineup?.playerThree?.toString()).toBe(positions.playerThree);
+            expect(lineup?.playerFour?.toString()).toBe(positions.playerFour);
+            expect(lineup?.playerFive?.toString()).toBe(positions.playerFive);
+        });
     });
 
-    test('Should return null when playoff lineup does not exist for given userId or roundNumber', async () => {
-        const user = await new UserModel(createUserData()).save();
-        const userId = user._id.toString();
-        const positions = createPositions();
+    describe('setPlayersPosition', () => {
+        test('Should reject assigning one playoff rider to multiple roles without creating a lineup', async () => {
+            const user = await UserModel.create(createUserData());
+            const data = createPositions();
+            data.roles.kb = data.roles.pn.playerId;
 
-        await new StartingLineupPlayoffModel({
-            userId,
-            roundNumber: 1,
-            ...positions
-        }).save();
+            await expect(
+                StartingLineupPlayoffModel.setPlayersPosition(
+                    data,
+                    user._id.toString(),
+                    1
+                )
+            ).rejects.toThrow('A player can have only one role');
 
-        const missingByRound =
-            await StartingLineupPlayoffModel.getUserStartingLineupByRound(
-                userId,
-                2
+            expect(
+                await StartingLineupPlayoffModel.getUserStartingLineupByRound(
+                    user._id.toString(),
+                    1
+                )
+            ).toBeNull();
+        });
+
+        test('Should not add playoff lineup when userId is invalid', async () => {
+            const invalidUserId = new mongoose.Types.ObjectId().toString();
+
+            await expect(
+                StartingLineupPlayoffModel.setPlayersPosition(
+                    createPositions(),
+                    invalidUserId,
+                    1
+                )
+            ).rejects.toThrow(`Invalid userId: ${invalidUserId}`);
+
+            expect(await StartingLineupPlayoffModel.countDocuments()).toBe(0);
+        });
+
+        test('Should not add playoff lineup when positions payload has forbidden keys', async () => {
+            const user = await new UserModel(createUserData()).save();
+            const userId = user._id.toString();
+            const invalidPositions = {
+                ...createPositions(),
+                forbiddenKey: new mongoose.Types.ObjectId().toString()
+            } as unknown as PlayerPositionsAndRolesType;
+
+            await expect(
+                StartingLineupPlayoffModel.setPlayersPosition(
+                    invalidPositions,
+                    userId,
+                    1
+                )
+            ).rejects.toThrow(
+                'Invalid positions payload. Allowed fields: playerOne, playerTwo, playerThree, playerFour, playerFive, roles.'
             );
-        const missingByUser =
-            await StartingLineupPlayoffModel.getUserStartingLineupByRound(
-                new mongoose.Types.ObjectId().toString(),
+
+            expect(await StartingLineupPlayoffModel.countDocuments()).toBe(0);
+        });
+
+        test('Should not add playoff lineup when document for userId and roundNumber already exists', async () => {
+            const user = await new UserModel(createUserData()).save();
+            const userId = user._id.toString();
+            const roundNumber = 2;
+
+            await new StartingLineupPlayoffModel({
+                userId,
+                roundNumber,
+                ...createPositions()
+            }).save();
+
+            await expect(
+                StartingLineupPlayoffModel.setPlayersPosition(
+                    createPositions(),
+                    userId,
+                    roundNumber
+                )
+            ).rejects.toThrow(
+                `Playoff starting lineup already exists for userId: ${userId} and roundNumber: ${roundNumber}`
+            );
+
+            expect(
+                await StartingLineupPlayoffModel.countDocuments({
+                    userId,
+                    roundNumber
+                })
+            ).toBe(1);
+        });
+
+        test('Should save all roles and keep PN enabled when creating a playoff lineup', async () => {
+            const user = await UserModel.create(createUserData());
+            const positions = createPositions();
+            const data = {
+                ...positions,
+                roles: {
+                    pn: { playerId: positions.playerOne, isDisabled: true },
+                    kb: positions.playerTwo,
+                    p: positions.playerThree
+                }
+            };
+
+            await StartingLineupPlayoffModel.setPlayersPosition(
+                data,
+                user._id.toString(),
                 1
             );
 
-        expect(missingByRound).toBeNull();
-        expect(missingByUser).toBeNull();
+            const savedLineup =
+                await StartingLineupPlayoffModel.getUserStartingLineupByRound(
+                    user._id.toString(),
+                    1
+                );
+            expect(
+                savedLineup.toObject({ flattenObjectIds: true })
+            ).toMatchObject({
+                ...data,
+                roles: {
+                    pn: { playerId: positions.playerOne, isDisabled: false },
+                    kb: positions.playerTwo,
+                    p: positions.playerThree
+                }
+            });
+        });
     });
 
-    test('Should add new playoff starting lineup document', async () => {
-        const user = await new UserModel(createUserData()).save();
-        const userId = user._id.toString();
-        const roundNumber = 7;
-        const positions = createPositions();
+    describe('updatePlayersPosition', () => {
+        test('Should reject assigning one playoff rider to multiple roles without changing the lineup', async () => {
+            const user = await UserModel.create(createUserData());
+            const data = createPositions();
+            await StartingLineupPlayoffModel.setPlayersPosition(data, user._id.toString(), 1);
+            const lineup =
+                await StartingLineupPlayoffModel.getUserStartingLineupByRound(
+                    user._id.toString(),
+                    1
+                );
+            const updatedData = createPositions();
+            updatedData.roles.p = updatedData.roles.kb;
 
-        await StartingLineupPlayoffModel.setPlayersPosition(
-            positions,
-            userId,
-            roundNumber
-        );
+            await expect(
+                lineup.updatePlayersPosition(updatedData)
+            ).rejects.toThrow('A player can have only one role');
 
-        const savedLineup = await StartingLineupPlayoffModel.findOne({
-            userId,
-            roundNumber
-        }).exec();
+            const savedLineup =
+                await StartingLineupPlayoffModel.getUserStartingLineupByRound(
+                    user._id.toString(),
+                    1
+                );
+            expect(
+                savedLineup.toObject({ flattenObjectIds: true })
+            ).toMatchObject(data);
+        });
 
-        expect(savedLineup).not.toBeNull();
-        expect(savedLineup?.userId?.toString()).toBe(userId);
-        expect(savedLineup?.roundNumber).toBe(roundNumber);
-        expect(savedLineup?.playerOne?.toString()).toBe(positions.playerOne);
-        expect(savedLineup?.playerTwo?.toString()).toBe(positions.playerTwo);
-        expect(savedLineup?.playerThree?.toString()).toBe(
-            positions.playerThree
-        );
-        expect(savedLineup?.playerFour?.toString()).toBe(positions.playerFour);
-        expect(savedLineup?.playerFive?.toString()).toBe(positions.playerFive);
-    });
+        test('Should not update playoff lineup document when positions payload has forbidden keys', async () => {
+            const user = await new UserModel(createUserData()).save();
+            const userId = user._id.toString();
+            const initialPositions = createPositions();
 
-    test('Should not add playoff lineup when userId is invalid', async () => {
-        const invalidUserId = new mongoose.Types.ObjectId().toString();
-
-        await expect(
-            StartingLineupPlayoffModel.setPlayersPosition(
-                createPositions(),
-                invalidUserId,
-                8
-            )
-        ).rejects.toThrow(`Invalid userId: ${invalidUserId}`);
-
-        expect(await StartingLineupPlayoffModel.countDocuments()).toBe(0);
-    });
-
-    test('Should not add playoff lineup when positions payload has forbidden keys', async () => {
-        const user = await new UserModel(createUserData()).save();
-        const userId = user._id.toString();
-        const invalidPositions = {
-            ...createPositions(),
-            forbiddenKey: new mongoose.Types.ObjectId().toString()
-        } as unknown as PlayerPostions;
-
-        await expect(
-            StartingLineupPlayoffModel.setPlayersPosition(
-                invalidPositions,
+            const lineup = await new StartingLineupPlayoffModel({
                 userId,
-                9
-            )
-        ).rejects.toThrow('Invalid positions payload');
+                roundNumber: 1,
+                ...initialPositions
+            }).save();
+            const invalidPositions = {
+                ...createPositions(),
+                forbiddenKey: new mongoose.Types.ObjectId().toString()
+            } as unknown as PlayerPositionsAndRolesType;
 
-        expect(await StartingLineupPlayoffModel.countDocuments()).toBe(0);
-    });
+            await expect(
+                lineup.updatePlayersPosition(invalidPositions)
+            ).rejects.toThrow(
+                'Invalid positions payload. Allowed fields: playerOne, playerTwo, playerThree, playerFour, playerFive, roles.'
+            );
 
-    test('Should not add playoff lineup when document for userId and roundNumber already exists', async () => {
-        const user = await new UserModel(createUserData()).save();
-        const userId = user._id.toString();
-        const roundNumber = 10;
+            const refreshed = await StartingLineupPlayoffModel.findById(
+                lineup._id
+            ).exec();
 
-        await new StartingLineupPlayoffModel({
-            userId,
-            roundNumber,
-            ...createPositions()
-        }).save();
+            expect(refreshed?.playerOne?.toString()).toBe(
+                initialPositions.playerOne
+            );
+            expect(refreshed?.playerTwo?.toString()).toBe(
+                initialPositions.playerTwo
+            );
+            expect(refreshed?.playerThree?.toString()).toBe(
+                initialPositions.playerThree
+            );
+            expect(refreshed?.playerFour?.toString()).toBe(
+                initialPositions.playerFour
+            );
+            expect(refreshed?.playerFive?.toString()).toBe(
+                initialPositions.playerFive
+            );
+        });
 
-        await expect(
-            StartingLineupPlayoffModel.setPlayersPosition(
-                createPositions(),
+        test('Should update playoff positions and roles while preserving the admin PN disable flag', async () => {
+            const user = await UserModel.create(createUserData());
+            const userId = user._id.toString();
+            const data = createPositions();
+            await StartingLineupPlayoffModel.setPlayersPosition(data, userId, 1);
+            const lineup =
+                await StartingLineupPlayoffModel.getUserStartingLineupByRound(
+                    userId,
+                    1
+                );
+            lineup.set('roles.pn.isDisabled', true);
+            await lineup.save();
+            const updatedData = createPositions({
+                playerOne: data.playerFour,
+                playerTwo: data.playerTwo,
+                playerThree: data.playerThree,
+                playerFour: data.playerOne,
+                playerFive: data.playerFive
+            });
+
+            await lineup.updatePlayersPosition(updatedData);
+
+            const savedLineup =
+                await StartingLineupPlayoffModel.getUserStartingLineupByRound(
+                    userId,
+                    1
+                );
+            expect(
+                savedLineup.toObject({ flattenObjectIds: true })
+            ).toMatchObject({
+                ...updatedData,
+                roles: {
+                    ...updatedData.roles,
+                    pn: {
+                        playerId: updatedData.roles.pn.playerId,
+                        isDisabled: true
+                    }
+                }
+            });
+        });
+
+        test('Should keep PN enabled when updating playoff positions and roles', async () => {
+            const user = await new UserModel(createUserData()).save();
+            const userId = user._id.toString();
+            const initialPositions = createPositions();
+            const updatedPositions = createPositions();
+            updatedPositions.roles.pn.isDisabled = true;
+
+            const lineup = await new StartingLineupPlayoffModel({
                 userId,
-                roundNumber
-            )
-        ).rejects.toThrow('Playoff starting lineup already exists');
+                roundNumber: 1,
+                ...initialPositions
+            }).save();
 
-        expect(
-            await StartingLineupPlayoffModel.countDocuments({
-                userId,
-                roundNumber
-            })
-        ).toBe(1);
+            await lineup.updatePlayersPosition(updatedPositions);
+
+            const refreshed = await StartingLineupPlayoffModel.findById(
+                lineup._id
+            ).exec();
+
+            expect(refreshed).not.toBeNull();
+            expect(refreshed?.playerOne?.toString()).toBe(
+                updatedPositions.playerOne
+            );
+            expect(refreshed?.playerTwo?.toString()).toBe(
+                updatedPositions.playerTwo
+            );
+            expect(refreshed?.playerThree?.toString()).toBe(
+                updatedPositions.playerThree
+            );
+            expect(refreshed?.playerFour?.toString()).toBe(
+                updatedPositions.playerFour
+            );
+            expect(refreshed?.playerFive?.toString()).toBe(
+                updatedPositions.playerFive
+            );
+            expect(refreshed?.toObject({ flattenObjectIds: true }).roles).toEqual({
+                ...updatedPositions.roles,
+                pn: {
+                    playerId: updatedPositions.roles.pn.playerId,
+                    isDisabled: false
+                }
+            });
+        });
     });
 
-    test('Should update playoff lineup document when positions payload is valid', async () => {
-        const user = await new UserModel(createUserData()).save();
-        const userId = user._id.toString();
-        const initialPositions = createPositions();
-        const updatedPositions = createPositions();
-
-        const lineup = await new StartingLineupPlayoffModel({
-            userId,
-            roundNumber: 11,
-            ...initialPositions
-        }).save();
-
-        await lineup.updatePlayersPosition(updatedPositions);
-
-        const refreshed = await StartingLineupPlayoffModel.findById(
-            lineup._id
-        ).exec();
-
-        expect(refreshed).not.toBeNull();
-        expect(refreshed?.playerOne?.toString()).toBe(
-            updatedPositions.playerOne
+    describe('getPrimusNominatusForAdmin', () => {
+        test.each([0, 5])(
+            'Should throw for playoff PN round %i outside 1 - 4',
+            async roundNumber => {
+                await expect(
+                    StartingLineupPlayoffModel.getPrimusNominatusForAdmin(
+                        roundNumber,
+                        new mongoose.Types.ObjectId().toString()
+                    )
+                ).rejects.toThrow(
+                    `Invalid roundNumber: ${roundNumber}. Must be between 1 and 4`
+                );
+            }
         );
-        expect(refreshed?.playerTwo?.toString()).toBe(
-            updatedPositions.playerTwo
-        );
-        expect(refreshed?.playerThree?.toString()).toBe(
-            updatedPositions.playerThree
-        );
-        expect(refreshed?.playerFour?.toString()).toBe(
-            updatedPositions.playerFour
-        );
-        expect(refreshed?.playerFive?.toString()).toBe(
-            updatedPositions.playerFive
-        );
-    });
 
-    test('Should not update playoff lineup document when positions payload has forbidden keys', async () => {
-        const user = await new UserModel(createUserData()).save();
-        const userId = user._id.toString();
-        const initialPositions = createPositions();
+        test('Should throw for a nonexistent playoff PN user', async () => {
+            const userId = new mongoose.Types.ObjectId().toString();
+            await expect(
+                StartingLineupPlayoffModel.getPrimusNominatusForAdmin(
+                    1,
+                    userId
+                )
+            ).rejects.toThrow(
+                `Invalid userId: ${userId}`
+            );
+        });
 
-        const lineup = await new StartingLineupPlayoffModel({
-            userId,
-            roundNumber: 12,
-            ...initialPositions
-        }).save();
-        const invalidPositions = {
-            ...createPositions(),
-            forbiddenKey: new mongoose.Types.ObjectId().toString()
-        } as unknown as PlayerPostions;
+        test('Should return null when the playoff lineup does not exist', async () => {
+            const user = await UserModel.create(createUserData());
+            expect(
+                await StartingLineupPlayoffModel.getPrimusNominatusForAdmin(
+                    1,
+                    user._id.toString()
+                )
+            ).toBeNull();
+        });
 
-        await expect(
-            lineup.updatePlayersPosition(invalidPositions)
-        ).rejects.toThrow('Invalid positions payload');
+        test.each([1, 4])(
+            'Should return the assigned playoff PN rider and enabled default for boundary round %i',
+            async roundNumber => {
+                const user = await UserModel.create(createUserData());
+                const data = createPositions();
+                await StartingLineupPlayoffModel.create({
+                    ...data,
+                    userId: user._id,
+                    roundNumber,
+                    roles: {
+                        ...data.roles,
+                        pn: { playerId: data.roles.pn.playerId }
+                    }
+                });
 
-        const refreshed = await StartingLineupPlayoffModel.findById(
-            lineup._id
-        ).exec();
-
-        expect(refreshed?.playerOne?.toString()).toBe(
-            initialPositions.playerOne
-        );
-        expect(refreshed?.playerTwo?.toString()).toBe(
-            initialPositions.playerTwo
-        );
-        expect(refreshed?.playerThree?.toString()).toBe(
-            initialPositions.playerThree
-        );
-        expect(refreshed?.playerFour?.toString()).toBe(
-            initialPositions.playerFour
-        );
-        expect(refreshed?.playerFive?.toString()).toBe(
-            initialPositions.playerFive
+                expect(
+                    await StartingLineupPlayoffModel.getPrimusNominatusForAdmin(
+                        roundNumber,
+                        user._id.toString()
+                    )
+                ).toEqual({
+                    playerId: data.roles.pn.playerId,
+                    isDisabled: false
+                });
+            }
         );
     });
 
-    test('Should remove all documents from the collection when deleteAll is called', async () => {
-        const user = await new UserModel(createUserData()).save();
+    describe('savePrimusNominatusForAdmin', () => {
+        test.each([0, 5])(
+            'Should throw for playoff PN save round %i outside 1 - 4',
+            async roundNumber => {
+                await expect(
+                    StartingLineupPlayoffModel.savePrimusNominatusForAdmin(
+                        roundNumber,
+                        new mongoose.Types.ObjectId().toString(),
+                        true
+                    )
+                ).rejects.toThrow(
+                    `Invalid roundNumber: ${roundNumber}. Must be between 1 and 4`
+                );
+            }
+        );
 
-        await new StartingLineupPlayoffModel({
-            userId: user._id.toString(),
-            roundNumber: 1,
-            ...createPositions()
-        }).save();
+        test('Should throw for a nonexistent playoff PN save user', async () => {
+            const userId = new mongoose.Types.ObjectId().toString();
+            await expect(
+                StartingLineupPlayoffModel.savePrimusNominatusForAdmin(
+                    1,
+                    userId,
+                    true
+                )
+            ).rejects.toThrow(
+                `Invalid userId: ${userId}`
+            );
+        });
 
-        await StartingLineupPlayoffModel.deleteAll();
+        test('Should throw when saving playoff PN without a starting lineup', async () => {
+            const user = await UserModel.create(createUserData());
+            await expect(
+                StartingLineupPlayoffModel.savePrimusNominatusForAdmin(
+                    1,
+                    user._id.toString(),
+                    true
+                )
+            ).rejects.toThrow(
+                'No starting lineup for user and round'
+            );
+        });
 
-        const remainingDocuments =
-            await StartingLineupPlayoffModel.find().exec();
+        test('Should reject a nonboolean playoff PN flag without changing the saved value', async () => {
+            const user = await UserModel.create(createUserData());
+            const userId = user._id.toString();
+            const data = createPositions();
+            await StartingLineupPlayoffModel.setPlayersPosition(data, userId, 1);
 
-        expect(remainingDocuments).toHaveLength(0);
+            await expect(
+                StartingLineupPlayoffModel.savePrimusNominatusForAdmin(
+                    1,
+                    userId,
+                    'disabled' as unknown as boolean
+                )
+            ).rejects.toThrow('Expected boolean, received string');
+
+            expect(
+                await StartingLineupPlayoffModel.getPrimusNominatusForAdmin(
+                    1,
+                    userId
+                )
+            ).toEqual({ playerId: data.roles.pn.playerId, isDisabled: false });
+        });
+
+        test('Should disable and reenable PN only for the requested playoff user and round', async () => {
+            const [user, otherUser] = await UserModel.create([
+                createUserData(),
+                createUserData({
+                    username: 'user-two',
+                    email: 'user-two@example.com'
+                })
+            ]);
+            const userId = user._id.toString();
+            const otherUserId = otherUser._id.toString();
+            const data = createPositions();
+            await StartingLineupPlayoffModel.setPlayersPosition(data, otherUserId, 1);
+            await StartingLineupPlayoffModel.setPlayersPosition(data, userId, 4);
+            await StartingLineupPlayoffModel.setPlayersPosition(data, userId, 1);
+
+            await StartingLineupPlayoffModel.savePrimusNominatusForAdmin(1, userId, true);
+
+            expect(
+                await StartingLineupPlayoffModel.getPrimusNominatusForAdmin(
+                    1,
+                    userId
+                )
+            ).toEqual({
+                playerId: data.roles.pn.playerId,
+                isDisabled: true
+            });
+            expect(
+                await StartingLineupPlayoffModel.getPrimusNominatusForAdmin(
+                    4,
+                    userId
+                )
+            ).toEqual({
+                playerId: data.roles.pn.playerId,
+                isDisabled: false
+            });
+            expect(
+                await StartingLineupPlayoffModel.getPrimusNominatusForAdmin(
+                    1,
+                    otherUserId
+                )
+            ).toEqual({
+                playerId: data.roles.pn.playerId,
+                isDisabled: false
+            });
+            const savedLineup =
+                await StartingLineupPlayoffModel.getUserStartingLineupByRound(
+                    userId,
+                    1
+                );
+            expect(
+                savedLineup.toObject({ flattenObjectIds: true })
+            ).toMatchObject({
+                ...data,
+                roles: {
+                    ...data.roles,
+                    pn: { playerId: data.roles.pn.playerId, isDisabled: true }
+                }
+            });
+
+            await StartingLineupPlayoffModel.savePrimusNominatusForAdmin(1, userId, false);
+
+            expect(
+                await StartingLineupPlayoffModel.getPrimusNominatusForAdmin(
+                    1,
+                    userId
+                )
+            ).toEqual({
+                playerId: data.roles.pn.playerId,
+                isDisabled: false
+            });
+        });
+    });
+
+    describe('deleteAll', () => {
+        test('Should remove all documents from the collection when deleteAll is called', async () => {
+            const user = await new UserModel(createUserData()).save();
+
+            await new StartingLineupPlayoffModel({
+                userId: user._id.toString(),
+                roundNumber: 1,
+                ...createPositions()
+            }).save();
+
+            await StartingLineupPlayoffModel.deleteAll();
+
+            const remainingDocuments =
+                await StartingLineupPlayoffModel.find().exec();
+
+            expect(remainingDocuments).toHaveLength(0);
+        });
     });
 
     describe('getStartingLineupPlayersByRound', () => {

@@ -1,9 +1,9 @@
+import type { PlayerPositionsAndRolesType } from '@/db/models/schema.types';
+
 import mongoose from 'mongoose';
 
 import { DBClient } from '@/db/db-client';
-import StartingLineupModel, {
-    PlayerPositionsAndRolesType
-} from '@/db/models/games/starting-lineup';
+import StartingLineupModel from '@/db/models/games/starting-lineup';
 import PlayersModel from '@/db/models/players';
 import UserModel, { UserType } from '@/db/models/user';
 
