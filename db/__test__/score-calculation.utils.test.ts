@@ -701,6 +701,40 @@ describe('calculateMatchScores', () => {
             'Kapitan 4, PN 3, Remis 3/6 (limit 10), NCD6 6'
         );
     });
+    test('Should calculate 17 points for a KB rider with two actual bonuses and two GS copies', () => {
+        const teamOne = createTeam();
+        teamOne.players[4] = { ...createPlayer([3, 3, 3]), playerId: 'five' };
+        teamOne.players[4].heatTwo.bonus = true;
+        teamOne.players[4].heatThree.bonus = true;
+        teamOne.startingLineup.roles.kb = 'five';
+        teamOne.setPlayList = [
+            {
+                selectedSetPlayId: 'gs',
+                setPlayId: 'gs',
+                name: 'GS',
+                type: SetPlayEnumType.GwarancjaStartow,
+                userData: { playerId: 'five' }
+            }
+        ];
+        const before = structuredClone(teamOne);
+        const result = calculateMatchScores({
+            roundNumber: 2,
+            teamOne,
+            teamTwo: createTeam()
+        });
+        const player = result.teamOne.players[4];
+        expect(player.setPlay).toBe(8);
+        expect(player.comment).toBe('KB 2, GS 6');
+        expect(
+            player.heatOne.value! +
+                player.heatTwo.value! +
+                player.heatThree.value! +
+                player.setPlay
+        ).toBe(17);
+        expect(result.teamOne.trainer.heatFive).toBe(3);
+        expect(teamOne).toEqual(before);
+    });
+
     test('Should keep GS virtual starts separate while applying their allowed function and trainer effects', () => {
         const teamOne = createTeam();
         teamOne.players[0] = { ...createPlayer([3, 3, 3]), playerId: 'leader' };
@@ -730,7 +764,7 @@ describe('calculateMatchScores', () => {
             teamTwo: createTeam()
         });
         expect(result.teamOne.players[0].comment).toBe(
-            'Lider 5, KB 3, GS 2/6 (limit 10)'
+            'Lider 5, KB 1, GS 4/6 (limit 10)'
         );
         expect(result.teamOne.players[0].heatFour.value).toBeNull();
         expect(result.teamOne.players[4].setPlay).toBe(6);

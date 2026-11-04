@@ -448,7 +448,7 @@ function calculateTeamScore(
         if (!slot.isReserve && player.playerId === roles.kb) {
             modifiers.push({
                 name: 'KB',
-                points: calculateKrolBonusow({ player: effectivePlayer }),
+                points: calculateKrolBonusow({ player: actualPlayer }),
                 countsTowardsLimit: true
             });
         }
