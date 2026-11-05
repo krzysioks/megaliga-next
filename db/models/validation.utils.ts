@@ -1,4 +1,4 @@
-import type { SetPlayPayloadType } from '@/db/models/games/set-plays-data';
+import type { SetPlayPayloadType } from '@/db/models/set-play-payload.schema';
 
 import { z } from 'zod';
 

@@ -7,7 +7,7 @@ import type {
 import type {
     SetPlayAdminDataType,
     SetPlayUserDataType
-} from '@/db/models/games/set-plays-data';
+} from '@/db/models/set-play-payload.schema';
 
 import {
     CALCULATION_HEAT_KEYS,

@@ -977,7 +977,7 @@ describe('getSetPlayListByStartingLineupId', () => {
         ).rejects.toThrow(TypeError);
     });
 
-    test('Should return an empty list when no set-plays-data document exists', async () => {
+    test('Should return an empty list when no set plays document exists for the starting lineup', async () => {
         expect(
             await SetPlaysDataModel.getSetPlayListByStartingLineupId(
                 startingLineupId
@@ -1057,7 +1057,7 @@ describe('getSetPlaysForUser', () => {
         ).rejects.toThrow('Missing catalog entry for selected set play');
     });
 
-    test('Should return an empty list when no set-plays-data document exists', async () => {
+    test('Should return an empty list when no set plays document exists for the starting lineup', async () => {
         expect(
             await SetPlaysDataModel.getSetPlaysForUser(startingLineupId)
         ).toEqual([]);
@@ -1858,7 +1858,7 @@ describe('getSetPlaysForAdmin', () => {
         }
     );
 
-    test('Should throw error for a nonexistent user', async () => {
+    test('Should throw for a nonexistent user', async () => {
         const nonexistentUserId = new mongoose.Types.ObjectId().toString();
         await expect(
             SetPlaysDataModel.getSetPlaysForAdmin(2, nonexistentUserId)
@@ -1872,19 +1872,19 @@ describe('getSetPlaysForAdmin', () => {
         ).rejects.toThrow('Missing catalog entry for selected set play');
     });
 
-    test('Should return empty list when given starting lineup does not exist', async () => {
+    test('Should return an empty list when the starting lineup does not exist', async () => {
         expect(
             await SetPlaysDataModel.getSetPlaysForAdmin(1, ownUserId)
         ).toEqual([]);
     });
 
-    test('Should return empty array when the strting lineup has no set-plays-data document', async () => {
+    test('Should return an empty list when no set plays document exists for the starting lineup', async () => {
         expect(
             await SetPlaysDataModel.getSetPlaysForAdmin(2, ownUserId)
         ).toEqual([]);
     });
 
-    test('Should return empty array when the selected set play list is empty', async () => {
+    test('Should return an empty list when the selected set play list is empty', async () => {
         await SetPlaysDataModel.create({ startingLineupId: startingLineupId });
         expect(
             await SetPlaysDataModel.getSetPlaysForAdmin(2, ownUserId)

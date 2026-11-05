@@ -1,8 +1,10 @@
 import mongoose from 'mongoose';
 
 import { DBClient } from '@/db/db-client';
+import SetPlayPlayoffDataModel from '@/db/models/games/set-play-playoff-data';
 import SetPlaysDataModel from '@/db/models/games/set-plays-data';
 import StartingLineupModel from '@/db/models/games/starting-lineup';
+import StartingLineupPlayoffModel from '@/db/models/games/starting-lineup-playoff';
 import { SetPlayEnumType } from '@/db/models/schema.types';
 import SetPlaysModel, {
     SetPlaysReturnType,
@@ -46,6 +48,12 @@ const lineupPlayers = {
     playerFive: new mongoose.Types.ObjectId().toString()
 };
 
+const lineupRoles = {
+    pn: { playerId: lineupPlayers.playerOne, isDisabled: false },
+    kb: lineupPlayers.playerTwo,
+    p: lineupPlayers.playerThree
+};
+
 beforeAll(async () => {
     jest.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -53,6 +61,8 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
+    await SetPlayPlayoffDataModel.deleteMany();
+    await StartingLineupPlayoffModel.deleteMany();
     await SetPlaysDataModel.deleteMany();
     await SetPlaysModel.deleteMany();
     await StartingLineupModel.deleteMany();
@@ -71,16 +81,14 @@ beforeEach(async () => {
         userId,
         roundNumber: 2,
         ...lineupPlayers,
-        roles: {
-            pn: { playerId: lineupPlayers.playerOne, isDisabled: false },
-            kb: lineupPlayers.playerTwo,
-            p: lineupPlayers.playerThree
-        }
+        roles: lineupRoles
     });
     startingLineupId = lineup._id.toString();
 });
 
 afterAll(async () => {
+    await SetPlayPlayoffDataModel.deleteMany();
+    await StartingLineupPlayoffModel.deleteMany();
     await SetPlaysDataModel.deleteMany();
     await SetPlaysModel.deleteMany();
     await StartingLineupModel.deleteMany();
@@ -113,11 +121,7 @@ describe('Test SetPlaysModel methods and static functions', () => {
                     userId,
                     roundNumber,
                     ...lineupPlayers,
-                    roles: {
-                        pn: { playerId: lineupPlayers.playerOne, isDisabled: false },
-                        kb: lineupPlayers.playerTwo,
-                        p: lineupPlayers.playerThree
-                    }
+                    roles: lineupRoles
                 });
 
                 expect(
@@ -235,6 +239,167 @@ describe('Test SetPlaysModel methods and static functions', () => {
             await expect(
                 SetPlaysModel.getAvailableSetPlays(userId, 3)
             ).rejects.toThrow('Starting lineup not found');
+        });
+    });
+    describe('getAvailableSetPlaysForPlayoff', () => {
+        let playoffStartingLineupId: string;
+
+        beforeEach(async () => {
+            const lineup = await StartingLineupPlayoffModel.create({
+                userId,
+                roundNumber: 2,
+                ...lineupPlayers,
+                roles: lineupRoles
+            });
+            playoffStartingLineupId = lineup._id.toString();
+        });
+
+        test.each([0, 5])(
+            'Should throw error for playoff round %i outside 1 - 4',
+            async roundNumber => {
+                await expect(
+                    SetPlaysModel.getAvailableSetPlaysForPlayoff(
+                        userId,
+                        roundNumber
+                    )
+                ).rejects.toThrow(
+                    `Invalid roundNumber: ${roundNumber}. Must be between 1 and 4`
+                );
+            }
+        );
+
+        test('Should throw error for a nonexistent user', async () => {
+            const nonexistentUserId = new mongoose.Types.ObjectId().toString();
+            await expect(
+                SetPlaysModel.getAvailableSetPlaysForPlayoff(nonexistentUserId, 2)
+            ).rejects.toThrow(`Invalid userId: ${nonexistentUserId}`);
+        });
+
+        test('Should throw error when only the regular-season starting lineup exists', async () => {
+            await StartingLineupPlayoffModel.deleteMany();
+            await expect(
+                SetPlaysModel.getAvailableSetPlaysForPlayoff(userId, 2)
+            ).rejects.toThrow('Starting lineup not found');
+        });
+
+        test('Should throw error when no set plays are defined', async () => {
+            await expect(
+                SetPlaysModel.getAvailableSetPlaysForPlayoff(userId, 2)
+            ).rejects.toThrow('No set plays found');
+        });
+
+        test.each([1, 4])(
+            'Should return available set plays for playoff boundary round %i',
+            async roundNumber => {
+                await StartingLineupPlayoffModel.create({
+                    userId,
+                    roundNumber,
+                    ...lineupPlayers,
+                    roles: lineupRoles
+                });
+                const play = await SetPlaysModel.create({
+                    name: 'Spartacus',
+                    type: SetPlayEnumType.Spartacus
+                });
+                expect(
+                    await SetPlaysModel.getAvailableSetPlaysForPlayoff(
+                        userId,
+                        roundNumber
+                    )
+                ).toEqual([{ id: play._id, name: play.name, type: play.type }]);
+            }
+        );
+
+        test('Should return all supported set plays when no playoff selections exist', async () => {
+            const definitions = await SetPlaysModel.create(setPlaysToCreate);
+            const available =
+                await SetPlaysModel.getAvailableSetPlaysForPlayoff(userId, 2);
+            expect(available).toHaveLength(definitions.length);
+            expect(available).toEqual(
+                expect.arrayContaining(
+                    definitions.map(play => {
+                        return { id: play._id, name: play.name, type: play.type };
+                    })
+                )
+            );
+        });
+
+        test('Should return all supported set plays for an empty playoff selection document', async () => {
+            await SetPlaysModel.create(setPlaysToCreate);
+            await SetPlayPlayoffDataModel.create({
+                startingLineupId: playoffStartingLineupId
+            });
+            const available =
+                await SetPlaysModel.getAvailableSetPlaysForPlayoff(userId, 2);
+            expect(available.map(play => play.type).sort()).toEqual(
+                Object.values(SetPlayEnumType).sort()
+            );
+        });
+
+        test('Should filter playoff selection limits independently of the same user and round in regular season', async () => {
+            const [draw, reserve, marketReserve, mushroom] = await SetPlaysModel.create([
+                { name: 'Remis', type: SetPlayEnumType.Remis },
+                { name: 'Rezerwa', type: SetPlayEnumType.Rezerwa },
+                { name: 'Rezerwa giełda', type: SetPlayEnumType.RezerwaGielda },
+                { name: 'Muchomor', type: SetPlayEnumType.Muchomor }
+            ]);
+            await SetPlayPlayoffDataModel.create({
+                startingLineupId: playoffStartingLineupId,
+                setPlayList: [
+                    { setPlayId: draw._id },
+                    { setPlayId: draw._id },
+                    {
+                        setPlayId: reserve._id,
+                        userData: { playerId: lineupPlayers.playerOne }
+                    },
+                    {
+                        setPlayId: marketReserve._id,
+                        userData: { playerId: lineupPlayers.playerTwo }
+                    }
+                ]
+            });
+            await SetPlaysDataModel.create({
+                startingLineupId,
+                setPlayList: [
+                    { setPlayId: mushroom._id },
+                    { setPlayId: mushroom._id }
+                ]
+            });
+            expect(
+                await SetPlaysModel.getAvailableSetPlaysForPlayoff(userId, 2)
+            ).toEqual([
+                { id: mushroom._id, name: mushroom.name, type: mushroom.type }
+            ]);
+            const regularSeasonAvailable =
+                await SetPlaysModel.getAvailableSetPlays(userId, 2);
+            const expectedRegularSeason = [draw, reserve, marketReserve].map(
+                play => {
+                    return { id: play._id, name: play.name, type: play.type };
+                }
+            );
+            expect(regularSeasonAvailable).toHaveLength(
+                expectedRegularSeason.length
+            );
+            expect(regularSeasonAvailable).toEqual(
+                expect.arrayContaining(expectedRegularSeason)
+            );
+        });
+
+        test('Should return no available playoff set plays after six selections', async () => {
+            const definitions = await SetPlaysModel.create([
+                { name: 'Remis', type: SetPlayEnumType.Remis },
+                { name: 'Muchomor', type: SetPlayEnumType.Muchomor },
+                { name: 'Taktyczna', type: SetPlayEnumType.Taktyczna }
+            ]);
+            await SetPlayPlayoffDataModel.create({
+                startingLineupId: playoffStartingLineupId,
+                setPlayList: [...definitions, ...definitions].map(play => {
+                    return { setPlayId: play._id };
+                })
+            });
+            expect(
+                await SetPlaysModel.getAvailableSetPlaysForPlayoff(userId, 2)
+            ).toEqual([]);
         });
     });
 });
