@@ -1,14 +1,17 @@
+import type { GetSetPlaysDetailsReturnType } from '@/db/db.types';
 import type {
     PlayerScoresType,
     PlayerScoresInputType
 } from '@/db/models/schema.types';
 
-import { HydratedDocument, model, Model, Schema } from 'mongoose';
+import { HydratedDocument, model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
+import { getSetPlaysDetails } from '@/db/db.utils';
 import SchedulePlayoffModel, {
     SchedulePlayoffType
 } from '@/db/models/games/schedule-playoff';
+import SetPlayPlayoffDataModel from '@/db/models/games/set-play-playoff-data';
 import {
     StartingLineupPlayoffPlayersByRoundReturnType,
     StartingLineupPlayoffType
@@ -50,26 +53,36 @@ type PopulatedScoreDetailsPlayoffPlayerType = Omit<
     playerId: Pick<PlayersType, 'extraligaPlayerName'>;
 };
 
+type PopulatedScoreDetailsPlayoffStartingLineupType = {
+    _id: Types.ObjectId;
+    roles: StartingLineupPlayoffType['roles'];
+};
+
+type PopulatedScoreDetailsPlayoffTeamWithLineupType = Omit<
+    ScoreDetailsPlayoffType['teamOne'],
+    'startingLineupId'
+> & {
+    startingLineupId?: PopulatedScoreDetailsPlayoffStartingLineupType | null;
+};
+
 type PopulatedScoreDetailsPlayoffType = Omit<
     ScoreDetailsPlayoffType,
     'scheduleId' | 'teamOne' | 'teamTwo'
 > & {
     scheduleId: Pick<SchedulePlayoffType, 'userOneScore' | 'userTwoScore'>;
     teamOne: Omit<
-        ScoreDetailsPlayoffType['teamOne'],
-        'userId' | 'players' | 'startingLineupId'
+        PopulatedScoreDetailsPlayoffTeamWithLineupType,
+        'userId' | 'players'
     > & {
         userId: Pick<UserType, 'teamName'>;
         players: PopulatedScoreDetailsPlayoffPlayerType[];
-        startingLineupId: Pick<StartingLineupPlayoffType, 'setPlays'>;
     };
     teamTwo: Omit<
-        ScoreDetailsPlayoffType['teamTwo'],
-        'userId' | 'players' | 'startingLineupId'
+        PopulatedScoreDetailsPlayoffTeamWithLineupType,
+        'userId' | 'players'
     > & {
         userId: Pick<UserType, 'teamName'>;
         players: PopulatedScoreDetailsPlayoffPlayerType[];
-        startingLineupId: Pick<StartingLineupPlayoffType, 'setPlays'>;
     };
 };
 
@@ -83,11 +96,10 @@ type ScoreDetailsPlayoffTeamPlayerReturnType = Omit<
     extraligaPlayerName: PlayersType['extraligaPlayerName'];
 };
 
-type ScoreDetailsPlayoffTeamReturnType = {
+type ScoreDetailsPlayoffTeamReturnType = GetSetPlaysDetailsReturnType & {
     teamName: PopulatedScoreDetailsPlayoffType['teamOne']['userId']['teamName'];
     players: ScoreDetailsPlayoffTeamPlayerReturnType[];
     trainer: PopulatedScoreDetailsPlayoffType['teamOne']['trainer'];
-    setPlays: PopulatedScoreDetailsPlayoffType['teamOne']['startingLineupId']['setPlays'];
 };
 
 export type ScoreDetailsPlayoffReturnType = {
@@ -101,7 +113,7 @@ export type ScoreDetailsPlayoffReturnType = {
 type ScoreDetailsPlayoffForHistoryTeamReturnType = {
     players: HistoryPlayerType[];
     trainer: ScoreDetailsPlayoffType['teamOne']['trainer'];
-    setPlays: StartingLineupPlayoffType['setPlays'];
+    setPlays: string;
 };
 
 export type ScoreDetailsPlayoffForHistoryReturnType = {
@@ -114,12 +126,8 @@ type PopulatedScoreDetailsPlayoffForHistoryType = Omit<
     ScoreDetailsPlayoffType,
     'teamOne' | 'teamTwo'
 > & {
-    teamOne: Omit<ScoreDetailsPlayoffType['teamOne'], 'startingLineupId'> & {
-        startingLineupId?: Pick<StartingLineupPlayoffType, 'setPlays'>;
-    };
-    teamTwo: Omit<ScoreDetailsPlayoffType['teamTwo'], 'startingLineupId'> & {
-        startingLineupId?: Pick<StartingLineupPlayoffType, 'setPlays'>;
-    };
+    teamOne: PopulatedScoreDetailsPlayoffTeamWithLineupType;
+    teamTwo: PopulatedScoreDetailsPlayoffTeamWithLineupType;
 };
 
 type PopulatedScoreDetailsPlayoffForHistoryFindType =
@@ -319,29 +327,25 @@ scoreDetailsPlayoffSchema.static(
                     path: 'scheduleId',
                     select: 'userOneScore userTwoScore'
                 })
-                .populate({
+                .populate<PopulatedFindType>({
                     path: 'teamOne.userId',
                     select: 'teamName'
                 })
-                .populate({
+                .populate<PopulatedFindType>({
                     path: 'teamTwo.userId',
                     select: 'teamName'
                 })
-                .populate({
+                .populate<PopulatedFindType>({
                     path: 'teamOne.players.playerId',
                     select: 'extraligaPlayerName'
                 })
-                .populate({
+                .populate<PopulatedFindType>({
                     path: 'teamTwo.players.playerId',
                     select: 'extraligaPlayerName'
                 })
-                .populate({
-                    path: 'teamOne.startingLineupId',
-                    select: 'setPlays'
-                })
-                .populate({
-                    path: 'teamTwo.startingLineupId',
-                    select: 'setPlays'
+                .populate<PopulatedFindType>({
+                    path: 'teamOne.startingLineupId teamTwo.startingLineupId',
+                    select: 'roles'
                 })
                 .exec();
 
@@ -351,9 +355,19 @@ scoreDetailsPlayoffSchema.static(
                 );
             }
 
-            const mapTeam = (
+            const mapTeam = async (
                 team: PopulatedScoreDetailsPlayoffType['teamOne']
-            ): ScoreDetailsPlayoffTeamReturnType => {
+            ): Promise<ScoreDetailsPlayoffTeamReturnType> => {
+                const { setPlayList } = team.startingLineupId
+                    ? await SetPlayPlayoffDataModel.getSetPlayListByStartingLineupId(
+                          team.startingLineupId._id.toString()
+                      )
+                    : { setPlayList: [] };
+                const setPlaysDetails = await getSetPlaysDetails({
+                    setPlayList,
+                    roles: team.startingLineupId?.roles
+                });
+
                 return {
                     teamName: team.userId?.teamName ?? '',
                     players: (team.players ?? []).map(player => {
@@ -368,14 +382,19 @@ scoreDetailsPlayoffSchema.static(
                     trainer: team.trainer
                         ? trainerSchema.parse(team.trainer)
                         : undefined,
-                    setPlays: team.startingLineupId?.setPlays
+                    ...setPlaysDetails
                 };
             };
 
+            const [teamOne, teamTwo] = await Promise.all([
+                mapTeam(document.teamOne),
+                mapTeam(document.teamTwo)
+            ]);
+
             return {
                 roundNumber: document.roundNumber,
-                teamOne: mapTeam(document.teamOne),
-                teamTwo: mapTeam(document.teamTwo),
+                teamOne,
+                teamTwo,
                 userOneScore: document.scheduleId?.userOneScore,
                 userTwoScore: document.scheduleId?.userTwoScore
             };
@@ -393,12 +412,8 @@ scoreDetailsPlayoffSchema.static(
             const documents: PopulatedScoreDetailsPlayoffForHistoryFindType[] =
                 await this.find()
                     .populate<PopulatedScoreDetailsPlayoffForHistoryFindType>({
-                        path: 'teamOne.startingLineupId',
-                        select: 'setPlays'
-                    })
-                    .populate<PopulatedScoreDetailsPlayoffForHistoryFindType>({
-                        path: 'teamTwo.startingLineupId',
-                        select: 'setPlays'
+                        path: 'teamOne.startingLineupId teamTwo.startingLineupId',
+                        select: 'roles'
                     })
                     .exec();
 
@@ -406,9 +421,19 @@ scoreDetailsPlayoffSchema.static(
                 throw new Error('Score details not found');
             }
 
-            const mapTeam = (
-                team: PopulatedScoreDetailsPlayoffForHistoryType['teamOne']
-            ): ScoreDetailsPlayoffForHistoryTeamReturnType => {
+            const mapTeam = async (
+                team: PopulatedScoreDetailsPlayoffTeamWithLineupType
+            ): Promise<ScoreDetailsPlayoffForHistoryTeamReturnType> => {
+                const { setPlayList } = team.startingLineupId
+                    ? await SetPlayPlayoffDataModel.getSetPlayListByStartingLineupId(
+                          team.startingLineupId._id.toString()
+                      )
+                    : { setPlayList: [] };
+                const setPlaysDetails = await getSetPlaysDetails({
+                    setPlayList,
+                    roles: team.startingLineupId?.roles
+                });
+
                 return {
                     players: (team.players ?? []).map(player => {
                         return historyPlayerSchema.parse({
@@ -427,17 +452,24 @@ scoreDetailsPlayoffSchema.static(
                     trainer: team.trainer
                         ? trainerSchema.parse(team.trainer)
                         : undefined,
-                    setPlays: team.startingLineupId?.setPlays
+                    setPlays: setPlaysDetails.setPlayDescriptions
                 };
             };
 
-            return documents.map(document => {
-                return {
-                    scheduleId: document.scheduleId,
-                    teamOne: mapTeam(document.teamOne),
-                    teamTwo: mapTeam(document.teamTwo)
-                };
-            });
+            return await Promise.all(
+                documents.map(async document => {
+                    const [teamOne, teamTwo] = await Promise.all([
+                        mapTeam(document.teamOne),
+                        mapTeam(document.teamTwo)
+                    ]);
+
+                    return {
+                        scheduleId: document.scheduleId,
+                        teamOne,
+                        teamTwo
+                    };
+                })
+            );
         } catch (error) {
             console.error(
                 'Error fetching score details playoff data for history:',

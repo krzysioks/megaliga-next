@@ -11,7 +11,7 @@ const players = [
 ];
 
 describe('formatSetPlaysComment', () => {
-    test('Should format roles and selected player details in saved order without merging repeated selections', () => {
+    test('Should format roles and selected player details in saved order without merging duplicate selected set plays', () => {
         const descriptions = formatSetPlaysComment({
             roles: { p: 'three', pn: { playerId: 'one', isDisabled: false }, kb: 'two' },
             players,
@@ -145,7 +145,7 @@ describe('formatSetPlaysComment', () => {
         );
     });
 
-    test('Should return an empty summary without selections and keep roles when no plays are selected', () => {
+    test('Should return an empty summary without selected set plays and keep roles when no plays are selected', () => {
         expect(formatSetPlaysComment({ setPlays: [], players: [] })).toBe('');
         expect(
             formatSetPlaysComment({

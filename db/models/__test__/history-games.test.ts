@@ -5,6 +5,7 @@ import ScheduleModel from '@/db/models/games/schedule';
 import SchedulePlayoffModel from '@/db/models/games/schedule-playoff';
 import ScoreDetailsModel from '@/db/models/games/score-details';
 import ScoreDetailsPlayoffModel from '@/db/models/games/score-details-playoff';
+import SetPlayPlayoffDataModel from '@/db/models/games/set-play-playoff-data';
 import SetPlaysDataModel from '@/db/models/games/set-plays-data';
 import StartingLineupModel from '@/db/models/games/starting-lineup';
 import StartingLineupPlayoffModel from '@/db/models/games/starting-lineup-playoff';
@@ -35,6 +36,7 @@ beforeEach(async () => {
     await SeasonOpsModel.deleteMany();
     await ScheduleModel.deleteMany();
     await SchedulePlayoffModel.deleteMany();
+    await SetPlayPlayoffDataModel.deleteMany();
     await SetPlaysDataModel.deleteMany();
     await SetPlaysModel.deleteMany();
     await ScoreDetailsModel.deleteMany();
@@ -53,6 +55,7 @@ afterAll(async () => {
     await SeasonOpsModel.deleteMany();
     await ScheduleModel.deleteMany();
     await SchedulePlayoffModel.deleteMany();
+    await SetPlayPlayoffDataModel.deleteMany();
     await SetPlaysDataModel.deleteMany();
     await SetPlaysModel.deleteMany();
     await ScoreDetailsModel.deleteMany();
@@ -758,7 +761,7 @@ describe('Test HistoryGamesModel methods and static functions', () => {
             );
         });
 
-        test('Should save playoff games with scalar heat values, signed modifiers and numeric trainer scores', async () => {
+        test('Should archive playoff games with scalar heats, signed modifiers, and numeric trainer scores, preserving the archived description after a live edit', async () => {
             const [userOne, userTwo, userThree] = await UserModel.create([
                 createUserData(0, {
                     teamName: 'Team Alpha',
@@ -811,7 +814,6 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                     {
                         userId: userOne._id.toString(),
                         roundNumber: 3,
-                        setPlays: 'team-one-setplay',
                         playerOne: players[0]._id.toString(),
                         playerTwo: players[1]._id.toString(),
                         playerThree: players[2]._id.toString(),
@@ -826,7 +828,6 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                     {
                         userId: userTwo._id.toString(),
                         roundNumber: 3,
-                        setPlays: 'team-two-setplay',
                         playerOne: players[0]._id.toString(),
                         playerTwo: players[1]._id.toString(),
                         playerThree: players[2]._id.toString(),
@@ -844,7 +845,6 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                     {
                         userId: userThree._id.toString(),
                         roundNumber: 4,
-                        setPlays: 'team-three-setplay',
                         playerOne: players[0]._id.toString(),
                         playerTwo: players[1]._id.toString(),
                         playerThree: players[2]._id.toString(),
@@ -859,7 +859,6 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                     {
                         userId: userOne._id.toString(),
                         roundNumber: 4,
-                        setPlays: 'team-one-second-setplay',
                         playerOne: players[0]._id.toString(),
                         playerTwo: players[1]._id.toString(),
                         playerThree: players[2]._id.toString(),
@@ -872,6 +871,41 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                         }
                     }
                 ]);
+
+            const [guarantee, reserve, prediction] = await SetPlaysModel.create([
+                {
+                    name: 'Gwarancja Startów',
+                    type: SetPlayEnumType.GwarancjaStartow
+                },
+                { name: 'Rezerwa Giełda', type: SetPlayEnumType.RezerwaGielda },
+                { name: 'NCD6', type: SetPlayEnumType.Ncd6 }
+            ]);
+            const selectedSetPlays = await SetPlayPlayoffDataModel.create({
+                startingLineupId: startingLineupOne._id,
+                setPlayList: [
+                    {
+                        setPlayId: guarantee._id,
+                        userData: { playerId: players[0]._id.toString() }
+                    },
+                    {
+                        setPlayId: reserve._id,
+                        userData: { playerId: players[4]._id.toString() }
+                    },
+                    {
+                        setPlayId: prediction._id,
+                        userData: { playerId: players[1]._id.toString() },
+                        adminData: {
+                            playerIdList: players.slice(0, 4).map(player => {
+                                return player._id.toString();
+                            })
+                        }
+                    }
+                ]
+            });
+            const rolesDescription =
+                'PN - Player One, KB - Player Two, P - Player Three';
+            const archivedDescription =
+                'PN - Player One, KB - Player Two, P - Player Three, GS: Player One, Rezerwa Giełda: Player Five, NCD6: Player Two';
 
             await ScoreDetailsPlayoffModel.create([
                 {
@@ -1016,8 +1050,8 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                     .lean()
                     .exec();
 
-            expect(firstScoreDetails?.teamOne.setPlays).toBe('team-one-setplay');
-            expect(firstScoreDetails?.teamTwo.setPlays).toBe('team-two-setplay');
+            expect(firstScoreDetails?.teamOne.setPlays).toBe(archivedDescription);
+            expect(firstScoreDetails?.teamTwo.setPlays).toBe(rolesDescription);
 
             expect(firstScoreDetails?.teamOne.score).toBe(44);
             expect(firstScoreDetails?.teamTwo.score).toBe(40);
@@ -1083,29 +1117,24 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                 comment: 'Solid ride'
             });
             expect(archived.teamTwo.players[0].heatOne).toBe(2);
+            expect(archived.teamOne.setPlays).toBe(archivedDescription);
+            expect(archived.teamTwo.setPlays).toBe(rolesDescription);
             expect(archived.teamOne.trainer?.heatOne).toBe(1);
             expect(archived.teamTwo.trainer?.heatOne).toBe(0);
 
-            const live =
-                await ScoreDetailsPlayoffModel.getScoreDetailsByScheduleAndRoundId(
-                    scheduleOne._id.toString(),
-                    3
+            await SetPlayPlayoffDataModel.updateSetPlay(
+                startingLineupOne._id.toString(),
+                selectedSetPlays.setPlayList[0]._id.toString(),
+                {
+                    setPlayId: guarantee._id.toString(),
+                    userData: { playerId: players[1]._id.toString() }
+                }
+            );
+            const savedSnapshot =
+                await HistoryGamesScoreDetailsModel.getHistoryScoreDetailsById(
+                    firstGame!.scoreDetails!.toString()
                 );
-            expect(live.teamOne.players[0].heatOne).toEqual({
-                value: 3,
-                bonus: true,
-                isNominated: false
-            });
-            expect(live.teamOne.players[0].heatTwo).toEqual({
-                value: 0,
-                bonus: false,
-                isNominated: true
-            });
-            expect(live.teamTwo.players[0].heatOne).toEqual({
-                value: 2,
-                bonus: true,
-                isNominated: true
-            });
+            expect(savedSnapshot.teamOne.setPlays).toBe(archivedDescription);
         });
     });
 });

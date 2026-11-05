@@ -293,7 +293,7 @@ describe('Test StartingLineupModel methods and static functions', () => {
     });
 
     describe('getUserStartingLineupByRound', () => {
-        test('Should return null when lineup does not exist for given userId or roundNumber', async () => {
+        test('Should return null when starting lineup does not exist for given userId or roundNumber', async () => {
             const user = await new UserModel(createUserData()).save();
             const userId = user._id.toString();
             const positions = createPositions();
@@ -349,7 +349,7 @@ describe('Test StartingLineupModel methods and static functions', () => {
     });
 
     describe('setPlayersPosition', () => {
-        test('Should reject duplicate role IDs without creating a lineup', async () => {
+        test('Should reject duplicate role IDs without creating a starting lineup', async () => {
             const user = await new UserModel(createUserData()).save();
             const data = createPositions();
             data.roles.kb = data.roles.pn.playerId;
@@ -369,7 +369,7 @@ describe('Test StartingLineupModel methods and static functions', () => {
             ).toBeNull();
         });
 
-        test('Should not add lineup when userId is invalid', async () => {
+        test('Should not add starting lineup when userId is invalid', async () => {
             const invalidUserId = new mongoose.Types.ObjectId().toString();
 
             await expect(
@@ -383,7 +383,7 @@ describe('Test StartingLineupModel methods and static functions', () => {
             expect(await StartingLineupModel.countDocuments()).toBe(0);
         });
 
-        test('Should not add lineup when positions payload has forbidden keys', async () => {
+        test('Should not add starting lineup when positions payload has forbidden keys', async () => {
             const user = await new UserModel(createUserData()).save();
             const userId = user._id.toString();
             const invalidPositions = {
@@ -404,7 +404,7 @@ describe('Test StartingLineupModel methods and static functions', () => {
             expect(await StartingLineupModel.countDocuments()).toBe(0);
         });
 
-        test('Should not add lineup when document for userId and roundNumber already exists', async () => {
+        test('Should not add starting lineup when document for userId and roundNumber already exists', async () => {
             const user = await new UserModel(createUserData()).save();
             const userId = user._id.toString();
             const roundNumber = 10;
@@ -475,7 +475,7 @@ describe('Test StartingLineupModel methods and static functions', () => {
     });
 
     describe('updatePlayersPosition', () => {
-        test('Should reject duplicate role IDs and preserve the saved lineup', async () => {
+        test('Should reject duplicate role IDs and preserve the saved starting lineup', async () => {
             const user = await new UserModel(createUserData()).save();
             const data = createPositions();
             const lineup = await new StartingLineupModel({

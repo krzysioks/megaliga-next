@@ -6,8 +6,13 @@ import ScoreDetailsPlayoffModel, {
     ScoreDetailsPlayoffReturnType,
     ScoreDetailsPlayoffInputType
 } from '@/db/models/games/score-details-playoff';
+import SetPlayPlayoffDataModel from '@/db/models/games/set-play-playoff-data';
+import SetPlaysDataModel from '@/db/models/games/set-plays-data';
+import StartingLineupModel from '@/db/models/games/starting-lineup';
 import StartingLineupPlayoffModel from '@/db/models/games/starting-lineup-playoff';
 import PlayersModel from '@/db/models/players';
+import { SetPlayEnumType } from '@/db/models/schema.types';
+import SetPlaysModel from '@/db/models/set-plays';
 import UserModel, { UserType } from '@/db/models/user';
 
 const createUserData = (index: number): UserType => ({
@@ -32,6 +37,10 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
+    await SetPlayPlayoffDataModel.deleteMany();
+    await SetPlaysDataModel.deleteMany();
+    await SetPlaysModel.deleteMany();
+    await StartingLineupModel.deleteMany();
     await ScoreDetailsPlayoffModel.deleteMany();
     await SchedulePlayoffModel.deleteMany();
     await StartingLineupPlayoffModel.deleteMany();
@@ -40,6 +49,10 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
+    await SetPlayPlayoffDataModel.deleteMany();
+    await SetPlaysDataModel.deleteMany();
+    await SetPlaysModel.deleteMany();
+    await StartingLineupModel.deleteMany();
     await ScoreDetailsPlayoffModel.deleteMany();
     await SchedulePlayoffModel.deleteMany();
     await StartingLineupPlayoffModel.deleteMany();
@@ -108,7 +121,6 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
             const startingLineupOne = await new StartingLineupPlayoffModel({
                 userId: userOne._id.toString(),
                 roundNumber: 1,
-                setPlays: 'playoff-team-one-setplay',
                 playerOne: players[0]._id.toString(),
                 playerTwo: players[1]._id.toString(),
                 playerThree: players[2]._id.toString(),
@@ -124,7 +136,6 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
             const startingLineupTwo = await new StartingLineupPlayoffModel({
                 userId: userTwo._id.toString(),
                 roundNumber: 1,
-                setPlays: 'playoff-team-two-setplay',
                 playerOne: players[5]._id.toString(),
                 playerTwo: players[6]._id.toString(),
                 playerThree: players[7]._id.toString(),
@@ -250,8 +261,12 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
             expect(result.teamOne.teamName).toBe(userOne.teamName);
             expect(result.teamTwo.teamName).toBe(userTwo.teamName);
 
-            expect(result.teamOne.setPlays).toBe(startingLineupOne.setPlays);
-            expect(result.teamTwo.setPlays).toBe(startingLineupTwo.setPlays);
+            expect(result.teamOne.setPlays).toEqual([]);
+            expect(result.teamTwo.setPlays).toEqual([]);
+            expect(result.teamOne).toHaveProperty(
+                'setPlayDescriptions',
+                'PN - Playoff Player One, KB - Playoff Player Two, P - Playoff Player Three'
+            );
 
             expect(result.teamOne.players).toHaveLength(2);
             expect(result.teamTwo.players).toHaveLength(2);
@@ -293,6 +308,244 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
                 (result.teamOne as Record<string, unknown>).startingLineupId
             ).toBeUndefined();
         });
+        test('Should return playoff roles and selected set plays with rider names while excluding admin data and regular-season set plays', async () => {
+            const [userOne, userTwo] = await UserModel.create([
+                createUserData(70),
+                createUserData(71)
+            ]);
+            const players = await PlayersModel.create([
+                { extraligaPlayerName: 'Player One' },
+                { extraligaPlayerName: 'Player Two' },
+                { extraligaPlayerName: 'Player Three' },
+                { extraligaPlayerName: 'Player Four' },
+                { extraligaPlayerName: 'Player Five' },
+                { extraligaPlayerName: 'Reserve Rider' },
+                { extraligaPlayerName: 'Opponent Rider' }
+            ]);
+            const lineupData = {
+                userId: userOne._id.toString(),
+                roundNumber: 1,
+                playerOne: players[0]._id.toString(),
+                playerTwo: players[1]._id.toString(),
+                playerThree: players[2]._id.toString(),
+                playerFour: players[3]._id.toString(),
+                playerFive: players[4]._id.toString(),
+                roles: {
+                    pn: {
+                        playerId: players[0]._id.toString(),
+                        isDisabled: true
+                    },
+                    kb: players[1]._id.toString(),
+                    p: players[2]._id.toString()
+                }
+            };
+            const regularLineup = await StartingLineupModel.create(lineupData);
+            const playoffLineup =
+                await StartingLineupPlayoffModel.create(lineupData);
+            const [ncd, reserve, spartacus, ncd6] = await SetPlaysModel.create([
+                { name: 'NCD', type: SetPlayEnumType.Ncd },
+                { name: 'Rezerwa Giełda', type: SetPlayEnumType.RezerwaGielda },
+                { name: 'Spartacus', type: SetPlayEnumType.Spartacus },
+                { name: 'NCD6', type: SetPlayEnumType.Ncd6 }
+            ]);
+            await SetPlaysDataModel.saveSetPlay(
+                regularLineup._id.toString(),
+                {
+                    setPlayId: ncd6._id.toString(),
+                    userData: { playerId: players[1]._id.toString() }
+                },
+                SetPlayEnumType.Ncd6
+            );
+            await SetPlayPlayoffDataModel.saveSetPlay(
+                playoffLineup._id.toString(),
+                {
+                    setPlayId: ncd._id.toString(),
+                    userData: { playerId: players[0]._id.toString() }
+                },
+                SetPlayEnumType.Ncd
+            );
+            await SetPlayPlayoffDataModel.saveSetPlay(
+                playoffLineup._id.toString(),
+                {
+                    setPlayId: reserve._id.toString(),
+                    userData: { playerId: players[5]._id.toString() }
+                },
+                SetPlayEnumType.RezerwaGielda
+            );
+            const selected = await SetPlayPlayoffDataModel.saveSetPlay(
+                playoffLineup._id.toString(),
+                {
+                    setPlayId: spartacus._id.toString(),
+                    userData: {
+                        ownPlayerId: players[0]._id.toString(),
+                        opponentPlayerId: players[6]._id.toString()
+                    }
+                },
+                SetPlayEnumType.Spartacus
+            );
+            await SetPlayPlayoffDataModel.saveAdminSetPlay(
+                '1',
+                userOne._id.toString(),
+                [
+                    {
+                        ...selected[0],
+                        adminData: {
+                            playerIdList: players
+                                .slice(0, 4)
+                                .map(player => player._id.toString())
+                        }
+                    },
+                    {
+                        ...selected[2],
+                        adminData: { ownAverage: 1, opponentAverage: 2 }
+                    }
+                ]
+            );
+            const schedule = await SchedulePlayoffModel.create({
+                userOneId: userOne._id,
+                userTwoId: userTwo._id,
+                roundNumber: 1,
+                userOneSeed: 1,
+                userTwoSeed: 4,
+                stage: 'semifinal'
+            });
+            await ScoreDetailsPlayoffModel.create({
+                scheduleId: schedule._id,
+                roundNumber: 1,
+                teamOne: {
+                    userId: userOne._id,
+                    startingLineupId: playoffLineup._id,
+                    players: [{ playerId: players[0]._id }]
+                },
+                teamTwo: { userId: userTwo._id }
+            });
+
+            const result =
+                await ScoreDetailsPlayoffModel.getScoreDetailsByScheduleAndRoundId(
+                    schedule._id.toString(),
+                    1
+                );
+            expect(result.teamOne.roles).toEqual(lineupData.roles);
+            expect(result.teamOne.setPlays).toEqual([
+                {
+                    name: 'NCD',
+                    type: SetPlayEnumType.Ncd,
+                    userData: { playerId: players[0]._id.toString() }
+                },
+                {
+                    name: 'Rezerwa Giełda',
+                    type: SetPlayEnumType.RezerwaGielda,
+                    userData: { playerId: players[5]._id.toString() }
+                },
+                {
+                    name: 'Spartacus',
+                    type: SetPlayEnumType.Spartacus,
+                    userData: {
+                        ownPlayerId: players[0]._id.toString(),
+                        opponentPlayerId: players[6]._id.toString()
+                    }
+                }
+            ]);
+            expect(result.teamOne.setPlayPlayers).toHaveLength(5);
+            expect(result.teamOne.setPlayPlayers).toEqual(
+                expect.arrayContaining([
+                    {
+                        playerId: players[0]._id.toString(),
+                        extraligaPlayerName: 'Player One'
+                    },
+                    {
+                        playerId: players[1]._id.toString(),
+                        extraligaPlayerName: 'Player Two'
+                    },
+                    {
+                        playerId: players[2]._id.toString(),
+                        extraligaPlayerName: 'Player Three'
+                    },
+                    {
+                        playerId: players[5]._id.toString(),
+                        extraligaPlayerName: 'Reserve Rider'
+                    },
+                    {
+                        playerId: players[6]._id.toString(),
+                        extraligaPlayerName: 'Opponent Rider'
+                    }
+                ])
+            );
+            expect(result.teamOne.setPlayDescriptions).toBe(
+                'PN - Player One, KB - Player Two, P - Player Three, NCD: Player One, Rezerwa Giełda: Reserve Rider, Spartacus: Player One vs Opponent Rider'
+            );
+            expect(result.teamTwo).toMatchObject({
+                roles: null,
+                setPlays: [],
+                setPlayPlayers: [],
+                setPlayDescriptions: ''
+            });
+        });
+        test('Should return empty set play lists for a missing starting lineup reference or a starting lineup without selected set plays', async () => {
+            const [userOne, userTwo] = await UserModel.create([
+                createUserData(72),
+                createUserData(73)
+            ]);
+            const players = await PlayersModel.create([
+                { extraligaPlayerName: 'Player One' },
+                { extraligaPlayerName: 'Player Two' },
+                { extraligaPlayerName: 'Player Three' },
+                { extraligaPlayerName: 'Player Four' },
+                { extraligaPlayerName: 'Player Five' }
+            ]);
+            const startingLineup = await StartingLineupPlayoffModel.create({
+                userId: userTwo._id,
+                roundNumber: 1,
+                playerOne: players[0]._id,
+                playerTwo: players[1]._id,
+                playerThree: players[2]._id,
+                playerFour: players[3]._id,
+                playerFive: players[4]._id,
+                roles: {
+                    pn: { playerId: players[0]._id, isDisabled: false },
+                    kb: players[1]._id,
+                    p: players[2]._id
+                }
+            });
+            await SetPlayPlayoffDataModel.create({
+                startingLineupId: startingLineup._id
+            });
+            const schedule = await SchedulePlayoffModel.create({
+                userOneId: userOne._id,
+                userTwoId: userTwo._id,
+                roundNumber: 1,
+                userOneSeed: 1,
+                userTwoSeed: 4,
+                stage: 'semifinal'
+            });
+            await ScoreDetailsPlayoffModel.create({
+                scheduleId: schedule._id,
+                roundNumber: 1,
+                teamOne: {
+                    userId: userOne._id,
+                    startingLineupId: new mongoose.Types.ObjectId()
+                },
+                teamTwo: {
+                    userId: userTwo._id,
+                    startingLineupId: startingLineup._id
+                }
+            });
+            const result =
+                await ScoreDetailsPlayoffModel.getScoreDetailsByScheduleAndRoundId(
+                    schedule._id.toString(),
+                    1
+                );
+            expect(result.teamOne).toMatchObject({
+                roles: null,
+                setPlays: [],
+                setPlayPlayers: [],
+                setPlayDescriptions: ''
+            });
+            expect(result.teamTwo.setPlays).toEqual([]);
+            expect(result.teamTwo.setPlayDescriptions).toBe(
+                'PN - Player One, KB - Player Two, P - Player Three'
+            );
+        });
     });
 
     describe('getScoreDetailsForHistory', () => {
@@ -302,7 +555,7 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
             ).rejects.toThrow('Score details not found');
         });
 
-        test('Should return all playoff score details documents with players, trainer and setPlays populated for both teams', async () => {
+        test('Should return playoff history with scalar player heats, numeric trainer scores, and formatted set-play descriptions for both teams', async () => {
             const userOne = await new UserModel(createUserData(20)).save();
             const userTwo = await new UserModel(createUserData(21)).save();
 
@@ -322,7 +575,6 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
             const startingLineupOne = await new StartingLineupPlayoffModel({
                 userId: userOne._id.toString(),
                 roundNumber: 1,
-                setPlays: 'playoff-team-one-setplay',
                 playerOne: players[0]._id.toString(),
                 playerTwo: players[1]._id.toString(),
                 playerThree: players[2]._id.toString(),
@@ -338,7 +590,6 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
             const startingLineupTwo = await new StartingLineupPlayoffModel({
                 userId: userTwo._id.toString(),
                 roundNumber: 1,
-                setPlays: 'playoff-team-two-setplay',
                 playerOne: players[5]._id.toString(),
                 playerTwo: players[6]._id.toString(),
                 playerThree: players[7]._id.toString(),
@@ -419,10 +670,10 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
             const [scoreDetails] = result;
 
             expect(scoreDetails.teamOne.setPlays).toBe(
-                startingLineupOne.setPlays
+                'PN - Playoff Player One, KB - Playoff Player Two, P - Playoff Player Three'
             );
             expect(scoreDetails.teamTwo.setPlays).toBe(
-                startingLineupTwo.setPlays
+                'PN - Playoff Player Six, KB - Playoff Player Seven, P - Playoff Player Eight'
             );
 
             expect(scoreDetails.teamOne.trainer?.heatOne).toBe(1);
@@ -456,6 +707,24 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
             expect(scoreDetails.teamTwo.players[0].comment).toBe(
                 'Playoff strong start'
             );
+        });
+        test('Should return empty history summaries for absent or missing starting lineup references', async () => {
+            const [userOne, userTwo] = await UserModel.create([
+                createUserData(74),
+                createUserData(75)
+            ]);
+            await ScoreDetailsPlayoffModel.create({
+                roundNumber: 1,
+                teamOne: { userId: userOne._id },
+                teamTwo: {
+                    userId: userTwo._id,
+                    startingLineupId: new mongoose.Types.ObjectId()
+                }
+            });
+            const [result] =
+                await ScoreDetailsPlayoffModel.getScoreDetailsForHistory();
+            expect(result.teamOne.setPlays).toBe('');
+            expect(result.teamTwo.setPlays).toBe('');
         });
     });
 

@@ -132,7 +132,7 @@ describe('saveSetPlay', () => {
         ).rejects.toThrow(`Invalid startingLineupId: ${invalidId}`);
     });
 
-    test('Should reject a regular-season lineup ID', async () => {
+    test('Should reject a regular-season starting lineup ID', async () => {
         const regularLineup = await createRegularLineup();
         await expect(
             SetPlayPlayoffDataModel.saveSetPlay(
@@ -164,7 +164,7 @@ describe('saveSetPlay', () => {
         SetPlayEnumType.Rezerwa,
         SetPlayEnumType.RezerwaGielda
     ])(
-        'Should throw when %s has reached its occurrence limit without changing saved selections',
+        'Should throw when %s has reached its occurrence limit without changing saved set plays',
         async type => {
             const maximum = type === SetPlayEnumType.Ncd ? 2 : 1;
             for (let index = 0; index < maximum; index++) {
@@ -195,7 +195,7 @@ describe('saveSetPlay', () => {
         }
     );
 
-    test('Should throw when six plays are already selected without changing saved selections', async () => {
+    test('Should throw when six set plays are already selected without changing saved set plays', async () => {
         for (const type of [
             SetPlayEnumType.Ncd,
             SetPlayEnumType.Ncd6,
@@ -226,7 +226,7 @@ describe('saveSetPlay', () => {
         ).toEqual(before);
     });
 
-    test('Should create playoff selections and append a second prediction without overwriting the first', async () => {
+    test('Should create playoff set plays and append a second prediction without overwriting the first', async () => {
         const first = await savePrediction();
         const second = await SetPlayPlayoffDataModel.saveSetPlay(
             startingLineupId,
@@ -374,7 +374,7 @@ describe('updateSetPlay', () => {
         ).toEqual(before);
     });
 
-    test('Should update selected set play data and return the complete mapped list with two selections of different types', async () => {
+    test('Should update selected set play data and return the complete mapped list with two selected set plays of different types', async () => {
         await savePrediction();
         const before = await SetPlayPlayoffDataModel.saveSetPlay(
             startingLineupId,
@@ -416,7 +416,7 @@ describe('removeSetPlay', () => {
         ).rejects.toThrow('Selected set play not found');
     });
 
-    test('Should remove only the requested playoff item and keep regular-season selections unchanged', async () => {
+    test('Should remove only the requested playoff item and keep regular-season set plays unchanged', async () => {
         const regularLineup = await createRegularLineup();
         const regular = await SetPlaysDataModel.saveSetPlay(
             regularLineup._id.toString(),
@@ -714,7 +714,7 @@ describe('saveAdminSetPlay', () => {
         ).toEqual({ setPlayList: selected });
     });
 
-    test('Should accept an empty submission without changing selections', async () => {
+    test('Should accept an empty submission without changing selected set plays', async () => {
         const selected = await savePrediction();
         await expect(
             SetPlayPlayoffDataModel.saveAdminSetPlay('1', userId, [])

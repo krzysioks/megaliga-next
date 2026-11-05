@@ -172,7 +172,7 @@ describe('Test SetPlaysModel methods and static functions', () => {
             });
         });
 
-        test('Should return all set plays when the selections document is empty', async () => {
+        test('Should return all set plays when the selected set plays document is empty', async () => {
             await SetPlaysModel.create(setPlaysToCreate);
             await SetPlaysDataModel.create({ startingLineupId });
 
@@ -310,7 +310,7 @@ describe('Test SetPlaysModel methods and static functions', () => {
             }
         );
 
-        test('Should return all supported set plays when no playoff selections exist', async () => {
+        test('Should return all supported set plays when no playoff set plays are selected', async () => {
             const definitions = await SetPlaysModel.create(setPlaysToCreate);
             const available =
                 await SetPlaysModel.getAvailableSetPlaysForPlayoff(userId, 2);
@@ -385,7 +385,7 @@ describe('Test SetPlaysModel methods and static functions', () => {
             );
         });
 
-        test('Should return no available playoff set plays after six selections', async () => {
+        test('Should return no available playoff set plays after six set plays are selected', async () => {
             const definitions = await SetPlaysModel.create([
                 { name: 'Remis', type: SetPlayEnumType.Remis },
                 { name: 'Muchomor', type: SetPlayEnumType.Muchomor },

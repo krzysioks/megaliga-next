@@ -418,7 +418,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             ).toBeUndefined();
         });
 
-        test('Should return roles without selected plays and empty summary data for a missing lineup', async () => {
+        test('Should return roles without selected plays and empty summary data for a missing starting lineup', async () => {
             const userOne = await UserModel.create(createUserData(40));
             const userTwo = await UserModel.create(createUserData(41));
             const players = await PlayersModel.create([
@@ -696,7 +696,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             );
         });
 
-        test('Should export roles without selected plays and an empty comment for a missing lineup', async () => {
+        test('Should export roles without selected plays and an empty comment for a missing starting lineup', async () => {
             const userOne = await UserModel.create(createUserData(40));
             const userTwo = await UserModel.create(createUserData(41));
             const players = await PlayersModel.create([

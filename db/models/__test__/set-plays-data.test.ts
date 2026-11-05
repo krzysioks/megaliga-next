@@ -196,7 +196,7 @@ describe('saveSetPlay', () => {
         expect(await getStoredSetPlays(startingLineupId)).toEqual([]);
     });
 
-    test('Should throw when six plays are already selected without changing saved selections', async () => {
+    test('Should throw when six set plays are already selected without changing saved set plays', async () => {
         const six: SetPlayDataType[] = [
             {
                 setPlayId: getSetPlayId(SetPlayEnumType.Ncd),
@@ -243,7 +243,7 @@ describe('saveSetPlay', () => {
         [SetPlayEnumType.Rezerwa, 1],
         [SetPlayEnumType.RezerwaGielda, 1]
     ])(
-        'Should throw when %s has reached its occurrence limit without changing saved selections',
+        'Should throw when %s has reached its occurrence limit without changing saved set plays',
         async (type, maximum) => {
             const setPlayData: SetPlayDataType = {
                 setPlayId: getSetPlayId(type),
@@ -459,11 +459,11 @@ describe('updateSetPlay', () => {
     test.each([
         { scenario: 'one selection', otherType: undefined },
         {
-            scenario: 'two selections of the same type',
+            scenario: 'two selected set plays of the same type',
             otherType: SetPlayEnumType.GwarancjaStartow
         },
         {
-            scenario: 'two selections of different types',
+            scenario: 'two selected set plays of different types',
             otherType: SetPlayEnumType.RyszardKowalski
         }
     ])(
@@ -518,7 +518,7 @@ describe('updateSetPlay', () => {
         SetPlayEnumType.Ncd6,
         SetPlayEnumType.Awatar
     ])(
-        'Should update %s rider selections while preserving the selected ID and admin data',
+        'Should update %s rider data while preserving the selected ID and admin data',
         async type => {
             const playerId =
                 type === SetPlayEnumType.Awatar
@@ -722,7 +722,7 @@ describe('removeSetPlay', () => {
         });
     });
 
-    test('Should remove only the selected set play when two selections have the same type', async () => {
+    test('Should remove only the selected set play when two selected set plays have the same type', async () => {
         const document = await SetPlaysDataModel.create({
             startingLineupId,
             setPlayList: [
@@ -860,7 +860,7 @@ describe('saveSelectedSetPlay', () => {
         expect(await getStoredSetPlays(startingLineupId)).toEqual(saved);
     });
 
-    test('Should save an appended set play and return three different types without overwriting existing selections', async () => {
+    test('Should save an appended set play and return three different types without overwriting existing set plays', async () => {
         const document = await SetPlaysDataModel.create({
             startingLineupId,
             setPlayList: [
@@ -1239,7 +1239,7 @@ describe('saveAdminSetPlay', () => {
     });
 
     test(
-        'Should throw for missing selectedSetPlayId without changing saved selections',
+        'Should throw for missing selectedSetPlayId without changing saved set plays',
         async () => {
             await SetPlaysDataModel.create({
                 startingLineupId,

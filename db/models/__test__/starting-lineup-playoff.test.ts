@@ -87,7 +87,7 @@ afterAll(async () => {
 
 describe('Test StartingLineupPlayoffModel methods and static functions', () => {
     describe('getUserStartingLineupByRound', () => {
-        test('Should return null when playoff lineup does not exist for given userId or roundNumber', async () => {
+        test('Should return null when playoff starting lineup does not exist for given userId or roundNumber', async () => {
             const user = await new UserModel(createUserData()).save();
             const userId = user._id.toString();
             const positions = createPositions();
@@ -143,7 +143,7 @@ describe('Test StartingLineupPlayoffModel methods and static functions', () => {
     });
 
     describe('setPlayersPosition', () => {
-        test('Should reject assigning one playoff rider to multiple roles without creating a lineup', async () => {
+        test('Should reject assigning one playoff rider to multiple roles without creating a starting lineup', async () => {
             const user = await UserModel.create(createUserData());
             const data = createPositions();
             data.roles.kb = data.roles.pn.playerId;
@@ -164,7 +164,7 @@ describe('Test StartingLineupPlayoffModel methods and static functions', () => {
             ).toBeNull();
         });
 
-        test('Should not add playoff lineup when userId is invalid', async () => {
+        test('Should not add playoff starting lineup when userId is invalid', async () => {
             const invalidUserId = new mongoose.Types.ObjectId().toString();
 
             await expect(
@@ -178,7 +178,7 @@ describe('Test StartingLineupPlayoffModel methods and static functions', () => {
             expect(await StartingLineupPlayoffModel.countDocuments()).toBe(0);
         });
 
-        test('Should not add playoff lineup when positions payload has forbidden keys', async () => {
+        test('Should not add playoff starting lineup when positions payload has forbidden keys', async () => {
             const user = await new UserModel(createUserData()).save();
             const userId = user._id.toString();
             const invalidPositions = {
@@ -199,7 +199,7 @@ describe('Test StartingLineupPlayoffModel methods and static functions', () => {
             expect(await StartingLineupPlayoffModel.countDocuments()).toBe(0);
         });
 
-        test('Should not add playoff lineup when document for userId and roundNumber already exists', async () => {
+        test('Should not add playoff starting lineup when document for userId and roundNumber already exists', async () => {
             const user = await new UserModel(createUserData()).save();
             const userId = user._id.toString();
             const roundNumber = 2;
@@ -228,7 +228,7 @@ describe('Test StartingLineupPlayoffModel methods and static functions', () => {
             ).toBe(1);
         });
 
-        test('Should save all roles and keep PN enabled when creating a playoff lineup', async () => {
+        test('Should save all roles and keep PN enabled when creating a playoff starting lineup', async () => {
             const user = await UserModel.create(createUserData());
             const positions = createPositions();
             const data = {
@@ -265,7 +265,7 @@ describe('Test StartingLineupPlayoffModel methods and static functions', () => {
     });
 
     describe('updatePlayersPosition', () => {
-        test('Should reject assigning one playoff rider to multiple roles without changing the lineup', async () => {
+        test('Should reject assigning one playoff rider to multiple roles without changing the starting lineup', async () => {
             const user = await UserModel.create(createUserData());
             const data = createPositions();
             await StartingLineupPlayoffModel.setPlayersPosition(data, user._id.toString(), 1);
@@ -291,7 +291,7 @@ describe('Test StartingLineupPlayoffModel methods and static functions', () => {
             ).toMatchObject(data);
         });
 
-        test('Should not update playoff lineup document when positions payload has forbidden keys', async () => {
+        test('Should not update playoff starting lineup document when positions payload has forbidden keys', async () => {
             const user = await new UserModel(createUserData()).save();
             const userId = user._id.toString();
             const initialPositions = createPositions();
@@ -446,7 +446,7 @@ describe('Test StartingLineupPlayoffModel methods and static functions', () => {
             );
         });
 
-        test('Should return null when the playoff lineup does not exist', async () => {
+        test('Should return null when the playoff starting lineup does not exist', async () => {
             const user = await UserModel.create(createUserData());
             expect(
                 await StartingLineupPlayoffModel.getPrimusNominatusForAdmin(

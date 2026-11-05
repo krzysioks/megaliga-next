@@ -9,17 +9,15 @@ import {
     playerPositionsZodSchema,
     playerPositionsAndRolesZodSchema,
     playerRolesZodSchema,
-    roundNumberSchema,
-    standardStringSchema
+    roundNumberSchema
 } from '@/db/models/schema.types';
 import UserModel from '@/db/models/user';
 
-//StartingLineupPlayoff is representation of megaliga_starting_lineup_playoff of old megaliga database. Will be used for displaying selected starting lineup for given match. Used in dashboard in form to select lineup before match. Also will be used in ScoreDetailsPlayoff model to populate setplays
+//StartingLineupPlayoff is representation of megaliga_starting_lineup_playoff of old megaliga database. Will be used for displaying selected starting lineup for given match. Used in dashboard in form to select lineup before match.
 
 export const startingLineupPlayoffZodSchema = playerPositionsZodSchema.extend({
     userId: objectIdSchema, //Reference to User model, to know to whom this lineup belongs
     roundNumber: roundNumberSchema,
-    setPlays: standardStringSchema.optional(), //TODOKP: for now it will be string, until business logic for setplays will be defined
     roles: playerRolesZodSchema
 });
 
@@ -104,7 +102,6 @@ const startingLineupPlayoffSchema = new Schema<
 >({
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     roundNumber: { type: Number, required: true },
-    setPlays: { type: String },
     playerOne: { type: Schema.Types.ObjectId, ref: 'Players', required: true },
     playerTwo: { type: Schema.Types.ObjectId, ref: 'Players', required: true },
     playerThree: {

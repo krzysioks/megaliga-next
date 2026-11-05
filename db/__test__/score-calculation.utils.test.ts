@@ -1608,7 +1608,7 @@ describe('calculateMatchScores', () => {
         );
     });
 
-    test('Should leave the lineup unchanged when using a reserve does not improve its score', () => {
+    test('Should leave the starting lineup unchanged when using a reserve does not improve its score', () => {
         const teamOne = createTeam();
         teamOne.players = teamOne.players.map(player => {
             return {
@@ -2179,7 +2179,7 @@ describe('calculateMatchScores', () => {
         expect(result.teamOne.trainer.comment).toBe('Paulo Sousa 0');
     });
 
-    test('Should count Muchomor zeros from the opponent lineup after reserve replacements', () => {
+    test('Should count Muchomor zeros from the opponent starting lineup after reserve replacements', () => {
         const teamOne = createTeam();
         const teamTwo = createTeam('opponent-');
         teamOne.setPlayList = [
