@@ -95,7 +95,10 @@ export const playerScoresZodSchema = z.object({
     heatSeven: playerHeatZodSchema
 });
 
-// Numeric heat scores are used by trainers, Typer, history, and playoff views.
+export type PlayerScoresType = z.infer<typeof playerScoresZodSchema>;
+export type PlayerScoresInputType = z.input<typeof playerScoresZodSchema>;
+
+// Numeric heat scores are used by trainers, Typer, and history.
 export const heatScoresSchema = z.object({
     heatOne: heatSchema,
     heatTwo: heatSchema,
@@ -114,21 +117,18 @@ export const attemptZodSchema = heatScoresSchema.pick({
 });
 
 // Player schema for individual player stats in a game.
-export const playerSchema = heatScoresSchema.extend({
+export const playerSchema = playerScoresZodSchema.extend({
     playerId: objectIdSchema, // Reference to player's document in Players collection
     // TODOKP Idea is to keep players in Players collection even if they are no more active in megaliga. We will add new field status to indicate if should be shown in draft for current season or not. Keeping players in Players collection will help to collect and keep statistics
-    setPlay: heatSchema,
-    comment: standardStringSchema.optional()
-});
-
-export const regularSeasonPlayerSchema = playerScoresZodSchema.extend({
-    playerId: objectIdSchema,
     setPlay: z.number().max(100).default(0),
     comment: standardStringSchema.optional()
 });
 
 // Trainer schema for trainer stats in a game
-export const trainerSchema = playerSchema.omit({ playerId: true });
+export const trainerSchema = heatScoresSchema.extend({
+    setPlay: heatSchema,
+    comment: standardStringSchema.optional()
+});
 
 const historyHeatScoresSchema = z.object({
     heatOne: heatSchema.nullable().default(null),
@@ -162,10 +162,6 @@ export const teamSchema = z.object({
     players: z.array(playerSchema).optional(),
     trainer: trainerSchema.optional(),
     startingLineupId: objectIdSchema.optional() // Reference to StartingLineup model, from which we will populate setplays
-});
-
-export const regularSeasonTeamSchema = teamSchema.extend({
-    players: z.array(regularSeasonPlayerSchema).optional()
 });
 
 // Shared schemas for common patterns

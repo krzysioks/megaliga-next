@@ -3,6 +3,10 @@ import type {
     CalculateMatchScoresReturnType,
     GetSetPlaysDetailsReturnType
 } from '@/db/db.types';
+import type {
+    PlayerScoresType,
+    PlayerScoresInputType
+} from '@/db/models/schema.types';
 
 import { HydratedDocument, model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
@@ -27,8 +31,8 @@ import {
     HistoryPlayerType,
     historyPlayerSchema,
     playerScoresZodSchema,
-    regularSeasonPlayerSchema,
-    regularSeasonTeamSchema,
+    playerSchema,
+    teamSchema,
     trainerSchema,
     objectIdSchema,
     roundNumberSchema,
@@ -38,21 +42,13 @@ import SeasonOpsModel from '@/db/models/season-ops';
 import UserModel, { UserType } from '@/db/models/user';
 import { calculateMatchScores } from '@/db/score-calculation.utils';
 
-export type RegularSeasonPlayerScoreDetailsType = z.infer<
-    typeof playerScoresZodSchema
->;
-
-export type RegularSeasonPlayerScoreDetailsInputType = z.input<
-    typeof playerScoresZodSchema
->;
-
 //ScoreDetails is representation of megaliga_scores of old megaliga database. Will be used for displaying detailed scores of given match.
 
 export const scoreDetailsZodSchema = z.object({
     scheduleId: objectIdSchema, //Reference to Schedule model, from which we will populate main scores
     roundNumber: roundNumberSchema, //needed to properly identify document for different use cases
-    teamOne: regularSeasonTeamSchema,
-    teamTwo: regularSeasonTeamSchema
+    teamOne: teamSchema,
+    teamTwo: teamSchema
 });
 
 export type ScoreDetailsType = z.infer<typeof scoreDetailsZodSchema>;
@@ -149,7 +145,7 @@ type ScoreDetailsTeamType = 'teamOne' | 'teamTwo';
 export type PlayerScoreDetailsReturnType = {
     scoreDetailsId: string | null;
     teamType: ScoreDetailsTeamType | null;
-    playerScoreDetails: RegularSeasonPlayerScoreDetailsType;
+    playerScoreDetails: PlayerScoresType;
 };
 
 export type SavePlayerScoreDetailsReturnType = {
@@ -172,7 +168,7 @@ interface ScoreDetailsModelType extends Model<ScoreDetailsType> {
     savePlayerScoreDetails: (
         playerData: StartingLineupPlayersByRoundReturnType,
         roundNumber: number,
-        playerScore: RegularSeasonPlayerScoreDetailsInputType
+        playerScore: PlayerScoresInputType
     ) => Promise<SavePlayerScoreDetailsReturnType>;
     isScoreCalculationsEnabled: (roundNumber: number) => Promise<boolean>;
     calculateScoresByRound: (roundNumber: number) => Promise<void>;
@@ -403,7 +399,7 @@ scoreDetailsSchema.static(
                     teamName: team.userId?.teamName ?? '',
                     players: (team.players ?? []).map(player => {
                         return {
-                            ...regularSeasonPlayerSchema
+                            ...playerSchema
                                 .omit({ playerId: true })
                                 .parse(player),
                             extraligaPlayerName:
@@ -571,7 +567,7 @@ scoreDetailsSchema.static(
                 player => player.playerId?.toString() === playerId
             );
 
-            const playerScoreDetails: RegularSeasonPlayerScoreDetailsType =
+            const playerScoreDetails: PlayerScoresType =
                 playerScoresZodSchema.parse(playerEntry ?? {});
 
             return {
@@ -591,7 +587,7 @@ scoreDetailsSchema.static(
     async function savePlayerScoreDetails(
         playerData: StartingLineupPlayersByRoundReturnType,
         roundNumber: number,
-        playerScore: RegularSeasonPlayerScoreDetailsInputType
+        playerScore: PlayerScoresInputType
     ) {
         try {
             const normalizedPlayerScore =
@@ -634,7 +630,7 @@ scoreDetailsSchema.static(
                     };
                 } else {
                     players.push(
-                        regularSeasonPlayerSchema.parse({
+                        playerSchema.parse({
                             playerId: playerData.playerId,
                             ...normalizedPlayerScore
                         })
@@ -862,7 +858,7 @@ scoreDetailsSchema.static(
                     teamTwo: teams[1]
                 });
                 for (const team of [result.teamOne, result.teamTwo]) {
-                    regularSeasonPlayerSchema.array().parse(team.players);
+                    playerSchema.array().parse(team.players);
                     trainerSchema.parse(team.trainer);
                 }
                 calculations.push({ document, result });

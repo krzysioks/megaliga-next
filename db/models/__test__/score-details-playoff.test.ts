@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import { DBClient } from '@/db/db-client';
 import SchedulePlayoffModel from '@/db/models/games/schedule-playoff';
 import ScoreDetailsPlayoffModel, {
-    ScoreDetailsPlayoffDtoType,
+    ScoreDetailsPlayoffReturnType,
     ScoreDetailsPlayoffInputType
 } from '@/db/models/games/score-details-playoff';
 import StartingLineupPlayoffModel from '@/db/models/games/starting-lineup-playoff';
@@ -49,209 +49,259 @@ afterAll(async () => {
 });
 
 describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
-    test('Should return playoff score details with all referenced data populated correctly', async () => {
-        const userOne = await new UserModel(createUserData(0)).save();
-        const userTwo = await new UserModel(createUserData(1)).save();
+    describe('getScoreDetailsByScheduleAndRoundId', () => {
+        test('Should throw error if invalid scheduleId is provided', async () => {
+            const invalidScheduleId = new mongoose.Types.ObjectId().toString();
 
-        const players = await PlayersModel.create([
-            { extraligaPlayerName: 'Playoff Player One' },
-            { extraligaPlayerName: 'Playoff Player Two' },
-            { extraligaPlayerName: 'Playoff Player Three' },
-            { extraligaPlayerName: 'Playoff Player Four' },
-            { extraligaPlayerName: 'Playoff Player Five' },
-            { extraligaPlayerName: 'Playoff Player Six' },
-            { extraligaPlayerName: 'Playoff Player Seven' },
-            { extraligaPlayerName: 'Playoff Player Eight' },
-            { extraligaPlayerName: 'Playoff Player Nine' },
-            { extraligaPlayerName: 'Playoff Player Ten' }
-        ]);
+            await expect(
+                ScoreDetailsPlayoffModel.getScoreDetailsByScheduleAndRoundId(
+                    invalidScheduleId,
+                    1
+                )
+            ).rejects.toThrow(`Invalid scheduleId: ${invalidScheduleId}`);
+        });
 
-        const startingLineupOne = await new StartingLineupPlayoffModel({
-            userId: userOne._id.toString(),
-            roundNumber: 1,
-            setPlays: 'playoff-team-one-setplay',
-            playerOne: players[0]._id.toString(),
-            playerTwo: players[1]._id.toString(),
-            playerThree: players[2]._id.toString(),
-            playerFour: players[3]._id.toString(),
-            playerFive: players[4]._id.toString(),
-            roles: {
-                pn: { playerId: players[0]._id, isDisabled: false },
-                kb: players[1]._id,
-                p: players[2]._id
-            }
-        }).save();
+        test('Should throw error if playoff score details document not found', async () => {
+            const userOne = await new UserModel(createUserData(10)).save();
+            const userTwo = await new UserModel(createUserData(11)).save();
 
-        const startingLineupTwo = await new StartingLineupPlayoffModel({
-            userId: userTwo._id.toString(),
-            roundNumber: 1,
-            setPlays: 'playoff-team-two-setplay',
-            playerOne: players[5]._id.toString(),
-            playerTwo: players[6]._id.toString(),
-            playerThree: players[7]._id.toString(),
-            playerFour: players[8]._id.toString(),
-            playerFive: players[9]._id.toString(),
-            roles: {
-                pn: { playerId: players[5]._id, isDisabled: false },
-                kb: players[6]._id,
-                p: players[7]._id
-            }
-        }).save();
+            const schedule = await new SchedulePlayoffModel({
+                userOneId: userOne._id.toString(),
+                userTwoId: userTwo._id.toString(),
+                roundNumber: 2,
+                userOneScore: 55,
+                userTwoScore: 35,
+                userOneSeed: 1,
+                userTwoSeed: 4,
+                stage: 'final'
+            }).save();
 
-        const schedule = await new SchedulePlayoffModel({
-            userOneId: userOne._id.toString(),
-            userTwoId: userTwo._id.toString(),
-            roundNumber: 1,
-            userOneScore: 50,
-            userTwoScore: 40,
-            userOneSeed: 1,
-            userTwoSeed: 4,
-            stage: 'semifinal'
-        }).save();
+            const missingRoundNumber = 99;
 
-        const scoreDetailsToCreate: ScoreDetailsPlayoffInputType = {
-            scheduleId: schedule._id.toString(),
-            roundNumber: 1,
-            teamOne: {
+            await expect(
+                ScoreDetailsPlayoffModel.getScoreDetailsByScheduleAndRoundId(
+                    schedule._id.toString(),
+                    missingRoundNumber
+                )
+            ).rejects.toThrow(
+                `Score details for scheduleId: ${schedule._id.toString()} and roundNumber: ${missingRoundNumber} not found`
+            );
+        });
+
+        test('Should return playoff score details with all referenced data populated correctly', async () => {
+            const userOne = await new UserModel(createUserData(0)).save();
+            const userTwo = await new UserModel(createUserData(1)).save();
+
+            const players = await PlayersModel.create([
+                { extraligaPlayerName: 'Playoff Player One' },
+                { extraligaPlayerName: 'Playoff Player Two' },
+                { extraligaPlayerName: 'Playoff Player Three' },
+                { extraligaPlayerName: 'Playoff Player Four' },
+                { extraligaPlayerName: 'Playoff Player Five' },
+                { extraligaPlayerName: 'Playoff Player Six' },
+                { extraligaPlayerName: 'Playoff Player Seven' },
+                { extraligaPlayerName: 'Playoff Player Eight' },
+                { extraligaPlayerName: 'Playoff Player Nine' },
+                { extraligaPlayerName: 'Playoff Player Ten' }
+            ]);
+
+            const startingLineupOne = await new StartingLineupPlayoffModel({
                 userId: userOne._id.toString(),
-                players: [
-                    {
-                        playerId: players[0]._id.toString(),
-                        heatOne: 3,
-                        heatTwo: 2,
-                        setPlay: 1,
-                        comment: 'Playoff solid ride'
-                    },
-                    {
-                        playerId: players[1]._id.toString(),
-                        heatOne: 1,
-                        heatTwo: 3,
-                        setPlay: 0,
-                        comment: 'Playoff good finish'
-                    }
-                ],
-                trainer: {
-                    heatOne: 1,
-                    setPlay: 0,
-                    comment: 'Playoff trainer one'
-                },
-                startingLineupId: startingLineupOne._id.toString()
-            },
-            teamTwo: {
+                roundNumber: 1,
+                setPlays: 'playoff-team-one-setplay',
+                playerOne: players[0]._id.toString(),
+                playerTwo: players[1]._id.toString(),
+                playerThree: players[2]._id.toString(),
+                playerFour: players[3]._id.toString(),
+                playerFive: players[4]._id.toString(),
+                roles: {
+                    pn: { playerId: players[0]._id, isDisabled: false },
+                    kb: players[1]._id,
+                    p: players[2]._id
+                }
+            }).save();
+
+            const startingLineupTwo = await new StartingLineupPlayoffModel({
                 userId: userTwo._id.toString(),
-                players: [
-                    {
-                        playerId: players[2]._id.toString(),
-                        heatOne: 2,
-                        heatTwo: 3,
-                        setPlay: 1,
-                        comment: 'Playoff strong start'
-                    },
-                    {
-                        playerId: players[3]._id.toString(),
-                        heatOne: 0,
-                        heatTwo: 1,
+                roundNumber: 1,
+                setPlays: 'playoff-team-two-setplay',
+                playerOne: players[5]._id.toString(),
+                playerTwo: players[6]._id.toString(),
+                playerThree: players[7]._id.toString(),
+                playerFour: players[8]._id.toString(),
+                playerFive: players[9]._id.toString(),
+                roles: {
+                    pn: { playerId: players[5]._id, isDisabled: false },
+                    kb: players[6]._id,
+                    p: players[7]._id
+                }
+            }).save();
+
+            const schedule = await new SchedulePlayoffModel({
+                userOneId: userOne._id.toString(),
+                userTwoId: userTwo._id.toString(),
+                roundNumber: 1,
+                userOneScore: 50,
+                userTwoScore: 40,
+                userOneSeed: 1,
+                userTwoSeed: 4,
+                stage: 'semifinal'
+            }).save();
+
+            const scoreDetailsToCreate: ScoreDetailsPlayoffInputType = {
+                scheduleId: schedule._id.toString(),
+                roundNumber: 1,
+                teamOne: {
+                    userId: userOne._id.toString(),
+                    players: [
+                        {
+                            playerId: players[0]._id.toString(),
+                            heatOne: {
+                                value: 3,
+                                bonus: true,
+                                isNominated: true
+                            },
+                            heatTwo: {
+                                value: 2,
+                                bonus: false,
+                                isNominated: false
+                            },
+                            setPlay: 1,
+                            comment: 'Playoff solid ride'
+                        },
+                        {
+                            playerId: players[1]._id.toString(),
+                            heatOne: {
+                                value: 1,
+                                bonus: false,
+                                isNominated: false
+                            },
+                            heatTwo: {
+                                value: 3,
+                                bonus: false,
+                                isNominated: false
+                            },
+                            setPlay: 0,
+                            comment: 'Playoff good finish'
+                        }
+                    ],
+                    trainer: {
+                        heatOne: 1,
                         setPlay: 0,
-                        comment: 'Playoff needs improvement'
-                    }
-                ],
-                trainer: {
-                    heatOne: 0,
-                    setPlay: 1,
-                    comment: 'Playoff trainer two'
+                        comment: 'Playoff trainer one'
+                    },
+                    startingLineupId: startingLineupOne._id.toString()
                 },
-                startingLineupId: startingLineupTwo._id.toString()
-            }
-        };
+                teamTwo: {
+                    userId: userTwo._id.toString(),
+                    players: [
+                        {
+                            playerId: players[2]._id.toString(),
+                            heatOne: {
+                                value: 2,
+                                bonus: false,
+                                isNominated: false
+                            },
+                            heatTwo: {
+                                value: 3,
+                                bonus: false,
+                                isNominated: false
+                            },
+                            setPlay: 1,
+                            comment: 'Playoff strong start'
+                        },
+                        {
+                            playerId: players[3]._id.toString(),
+                            heatOne: {
+                                value: 0,
+                                bonus: false,
+                                isNominated: false
+                            },
+                            heatTwo: {
+                                value: 1,
+                                bonus: false,
+                                isNominated: false
+                            },
+                            setPlay: 0,
+                            comment: 'Playoff needs improvement'
+                        }
+                    ],
+                    trainer: {
+                        heatOne: 0,
+                        setPlay: 1,
+                        comment: 'Playoff trainer two'
+                    },
+                    startingLineupId: startingLineupTwo._id.toString()
+                }
+            };
 
-        await new ScoreDetailsPlayoffModel(scoreDetailsToCreate).save();
+            await new ScoreDetailsPlayoffModel(scoreDetailsToCreate).save();
 
-        const result: ScoreDetailsPlayoffDtoType =
-            await ScoreDetailsPlayoffModel.getScoreDetailsByScheduleAndRoundId(
-                schedule._id.toString(),
-                1
+            const result: ScoreDetailsPlayoffReturnType =
+                await ScoreDetailsPlayoffModel.getScoreDetailsByScheduleAndRoundId(
+                    schedule._id.toString(),
+                    1
+                );
+
+            expect(result.roundNumber).toBe(1);
+            expect(result.userOneScore).toBe(50);
+            expect(result.userTwoScore).toBe(40);
+
+            expect(result.teamOne.teamName).toBe(userOne.teamName);
+            expect(result.teamTwo.teamName).toBe(userTwo.teamName);
+
+            expect(result.teamOne.setPlays).toBe(startingLineupOne.setPlays);
+            expect(result.teamTwo.setPlays).toBe(startingLineupTwo.setPlays);
+
+            expect(result.teamOne.players).toHaveLength(2);
+            expect(result.teamTwo.players).toHaveLength(2);
+
+            expect(result.teamOne.players[0].extraligaPlayerName).toBe(
+                'Playoff Player One'
+            );
+            expect(result.teamOne.players[1].extraligaPlayerName).toBe(
+                'Playoff Player Two'
+            );
+            expect(result.teamTwo.players[0].extraligaPlayerName).toBe(
+                'Playoff Player Three'
+            );
+            expect(result.teamTwo.players[1].extraligaPlayerName).toBe(
+                'Playoff Player Four'
             );
 
-        expect(result.roundNumber).toBe(1);
-        expect(result.userOneScore).toBe(50);
-        expect(result.userTwoScore).toBe(40);
+            expect(result.teamOne.players[0].heatOne).toEqual({
+                value: 3,
+                bonus: true,
+                isNominated: true
+            });
+            expect(result.teamOne.players[0].comment).toBe(
+                'Playoff solid ride'
+            );
+            expect(result.teamTwo.players[0].heatTwo).toEqual({
+                value: 3,
+                bonus: false,
+                isNominated: false
+            });
 
-        expect(result.teamOne.teamName).toBe(userOne.teamName);
-        expect(result.teamTwo.teamName).toBe(userTwo.teamName);
-
-        expect(result.teamOne.setPlays).toBe(startingLineupOne.setPlays);
-        expect(result.teamTwo.setPlays).toBe(startingLineupTwo.setPlays);
-
-        expect(result.teamOne.players).toHaveLength(2);
-        expect(result.teamTwo.players).toHaveLength(2);
-
-        expect(result.teamOne.players[0].extraligaPlayerName).toBe(
-            'Playoff Player One'
-        );
-        expect(result.teamOne.players[1].extraligaPlayerName).toBe(
-            'Playoff Player Two'
-        );
-        expect(result.teamTwo.players[0].extraligaPlayerName).toBe(
-            'Playoff Player Three'
-        );
-        expect(result.teamTwo.players[1].extraligaPlayerName).toBe(
-            'Playoff Player Four'
-        );
-
-        expect(result.teamOne.players[0].heatOne).toBe(3);
-        expect(result.teamOne.players[0].comment).toBe('Playoff solid ride');
-        expect(result.teamTwo.players[0].heatTwo).toBe(3);
-
-        expect(
-            (result.teamOne.players[0] as Record<string, unknown>).playerId
-        ).toBeUndefined();
-        expect(
-            (result.teamOne as Record<string, unknown>).userId
-        ).toBeUndefined();
-        expect(
-            (result.teamOne as Record<string, unknown>).startingLineupId
-        ).toBeUndefined();
-    });
-
-    test('Should throw error if invalid scheduleId is provided', async () => {
-        const invalidScheduleId = new mongoose.Types.ObjectId().toString();
-
-        await expect(
-            ScoreDetailsPlayoffModel.getScoreDetailsByScheduleAndRoundId(
-                invalidScheduleId,
-                1
-            )
-        ).rejects.toThrow(`Invalid scheduleId: ${invalidScheduleId}`);
-    });
-
-    test('Should throw error if playoff score details document not found', async () => {
-        const userOne = await new UserModel(createUserData(10)).save();
-        const userTwo = await new UserModel(createUserData(11)).save();
-
-        const schedule = await new SchedulePlayoffModel({
-            userOneId: userOne._id.toString(),
-            userTwoId: userTwo._id.toString(),
-            roundNumber: 2,
-            userOneScore: 55,
-            userTwoScore: 35,
-            userOneSeed: 1,
-            userTwoSeed: 4,
-            stage: 'final'
-        }).save();
-
-        const missingRoundNumber = 99;
-
-        await expect(
-            ScoreDetailsPlayoffModel.getScoreDetailsByScheduleAndRoundId(
-                schedule._id.toString(),
-                missingRoundNumber
-            )
-        ).rejects.toThrow(
-            `Score details for scheduleId: ${schedule._id.toString()} and roundNumber: ${missingRoundNumber} not found`
-        );
+            expect(
+                (result.teamOne.players[0] as Record<string, unknown>).playerId
+            ).toBeUndefined();
+            expect(
+                (result.teamOne as Record<string, unknown>).userId
+            ).toBeUndefined();
+            expect(
+                (result.teamOne as Record<string, unknown>).startingLineupId
+            ).toBeUndefined();
+        });
     });
 
     describe('getScoreDetailsForHistory', () => {
+        test('Should throw error when there is no playoff score details data', async () => {
+            await expect(
+                ScoreDetailsPlayoffModel.getScoreDetailsForHistory()
+            ).rejects.toThrow('Score details not found');
+        });
+
         test('Should return all playoff score details documents with players, trainer and setPlays populated for both teams', async () => {
             const userOne = await new UserModel(createUserData(20)).save();
             const userTwo = await new UserModel(createUserData(21)).save();
@@ -320,7 +370,11 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
                     players: [
                         {
                             playerId: players[0]._id.toString(),
-                            heatOne: 3,
+                            heatOne: {
+                                value: 3,
+                                bonus: false,
+                                isNominated: false
+                            },
                             setPlay: 1,
                             comment: 'Playoff solid ride'
                         }
@@ -337,7 +391,11 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
                     players: [
                         {
                             playerId: players[1]._id.toString(),
-                            heatOne: 2,
+                            heatOne: {
+                                value: 2,
+                                bonus: false,
+                                isNominated: false
+                            },
                             setPlay: 0,
                             comment: 'Playoff strong start'
                         }
@@ -398,12 +456,6 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
             expect(scoreDetails.teamTwo.players[0].comment).toBe(
                 'Playoff strong start'
             );
-        });
-
-        test('Should throw error when there is no playoff score details data', async () => {
-            await expect(
-                ScoreDetailsPlayoffModel.getScoreDetailsForHistory()
-            ).rejects.toThrow('Score details not found');
         });
     });
 
@@ -501,8 +553,16 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
                     players: [
                         {
                             playerId: playerOne._id.toString(),
-                            heatOne: 3,
-                            heatTwo: 2,
+                            heatOne: {
+                                value: 3,
+                                bonus: false,
+                                isNominated: false
+                            },
+                            heatTwo: {
+                                value: 2,
+                                bonus: false,
+                                isNominated: false
+                            },
                             setPlay: 1,
                             comment: 'Solid ride'
                         }
@@ -513,8 +573,16 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
                     players: [
                         {
                             playerId: playerTwo._id.toString(),
-                            heatOne: 1,
-                            heatTwo: 1,
+                            heatOne: {
+                                value: 1,
+                                bonus: false,
+                                isNominated: false
+                            },
+                            heatTwo: {
+                                value: 1,
+                                bonus: false,
+                                isNominated: false
+                            },
                             setPlay: 0,
                             comment: 'Weak ride'
                         }
@@ -531,8 +599,16 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
 
             expect(result.scoreDetailsId).toBe(scoreDetails._id.toString());
             expect(result.teamType).toBe('teamOne');
-            expect(result.playerScoreDetails.heatOne).toBe(3);
-            expect(result.playerScoreDetails.heatTwo).toBe(2);
+            expect(result.playerScoreDetails.heatOne).toEqual({
+                value: 3,
+                bonus: false,
+                isNominated: false
+            });
+            expect(result.playerScoreDetails.heatTwo).toEqual({
+                value: 2,
+                bonus: false,
+                isNominated: false
+            });
             expect(
                 (result.playerScoreDetails as Record<string, unknown>).setPlay
             ).toBeUndefined();
@@ -541,7 +617,38 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
             ).toBeUndefined();
         });
 
-        test('Should return object with default zero values if for given playerId score details have not been saved yet', async () => {
+        test('Should return empty heat inputs for an unsubmitted player without changing stored heat values', async () => {
+            const user = await new UserModel(createUserData(45)).save();
+            const [player] = await PlayersModel.create([
+                { extraligaPlayerName: 'Unsubmitted player' }
+            ]);
+            const document = await ScoreDetailsPlayoffModel.create({
+                roundNumber: 1,
+                teamOne: {
+                    userId: user._id,
+                    players: [{ playerId: player._id }]
+                },
+                teamTwo: { userId: new mongoose.Types.ObjectId(), players: [] }
+            });
+            const result =
+                await ScoreDetailsPlayoffModel.getPlayerScoreDetailsByRoundAndUserId(
+                    1,
+                    user._id.toString(),
+                    player._id.toString()
+                );
+            expect(result.scoreDetailsId).toBe(document._id.toString());
+            expect(result.playerScoreDetails.heatOne).toEqual({
+                value: null,
+                bonus: false,
+                isNominated: false
+            });
+            const stored = await ScoreDetailsPlayoffModel.findById(document._id)
+                .orFail()
+                .exec();
+            expect(stored.teamOne.players?.[0].heatOne.value).toBeUndefined();
+        });
+
+        test('Should return empty heat inputs without saving score details when the player has no scores', async () => {
             const userOne = await new UserModel(createUserData(44)).save();
             const [player] = await PlayersModel.create([
                 { extraligaPlayerName: 'Player One' }
@@ -556,13 +663,42 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
 
             expect(result.scoreDetailsId).toBeNull();
             expect(result.teamType).toBeNull();
-            expect(result.playerScoreDetails.heatOne).toBe(0);
-            expect(result.playerScoreDetails.heatTwo).toBe(0);
-            expect(result.playerScoreDetails.heatThree).toBe(0);
-            expect(result.playerScoreDetails.heatFour).toBe(0);
-            expect(result.playerScoreDetails.heatFive).toBe(0);
-            expect(result.playerScoreDetails.heatSix).toBe(0);
-            expect(result.playerScoreDetails.heatSeven).toBe(0);
+            expect(await ScoreDetailsPlayoffModel.countDocuments()).toBe(0);
+            expect(result.playerScoreDetails.heatOne).toEqual({
+                value: null,
+                bonus: false,
+                isNominated: false
+            });
+            expect(result.playerScoreDetails.heatTwo).toEqual({
+                value: null,
+                bonus: false,
+                isNominated: false
+            });
+            expect(result.playerScoreDetails.heatThree).toEqual({
+                value: null,
+                bonus: false,
+                isNominated: false
+            });
+            expect(result.playerScoreDetails.heatFour).toEqual({
+                value: null,
+                bonus: false,
+                isNominated: false
+            });
+            expect(result.playerScoreDetails.heatFive).toEqual({
+                value: null,
+                bonus: false,
+                isNominated: false
+            });
+            expect(result.playerScoreDetails.heatSix).toEqual({
+                value: null,
+                bonus: false,
+                isNominated: false
+            });
+            expect(result.playerScoreDetails.heatSeven).toEqual({
+                value: null,
+                bonus: false,
+                isNominated: false
+            });
         });
     });
 
@@ -582,14 +718,14 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
 
             await expect(
                 ScoreDetailsPlayoffModel.savePlayerScoreDetails(playerData, 3, {
-                    heatOne: 3
+                    heatOne: { value: 3, bonus: false, isNominated: false }
                 })
             ).rejects.toThrow(
                 `Schedule not found for userId: ${userOne._id.toString()} and roundNumber: 3`
             );
         });
 
-        test('Should fill in all missing heats with 0', async () => {
+        test('Should fill in all missing heats with null', async () => {
             const userOne = await new UserModel(createUserData(61)).save();
             const userTwo = await new UserModel(createUserData(62)).save();
             const [player] = await PlayersModel.create([
@@ -615,7 +751,7 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
             await ScoreDetailsPlayoffModel.savePlayerScoreDetails(
                 playerData,
                 4,
-                { heatFour: 2 }
+                { heatFour: { value: 2, bonus: false, isNominated: false } }
             );
 
             const savedDocument = await ScoreDetailsPlayoffModel.findOne({
@@ -623,13 +759,41 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
             }).exec();
             const savedPlayer = savedDocument?.teamOne.players?.[0];
 
-            expect(savedPlayer?.heatOne).toBe(0);
-            expect(savedPlayer?.heatTwo).toBe(0);
-            expect(savedPlayer?.heatThree).toBe(0);
-            expect(savedPlayer?.heatFour).toBe(2);
-            expect(savedPlayer?.heatFive).toBe(0);
-            expect(savedPlayer?.heatSix).toBe(0);
-            expect(savedPlayer?.heatSeven).toBe(0);
+            expect(savedPlayer?.heatOne).toEqual({
+                value: null,
+                bonus: false,
+                isNominated: false
+            });
+            expect(savedPlayer?.heatTwo).toEqual({
+                value: null,
+                bonus: false,
+                isNominated: false
+            });
+            expect(savedPlayer?.heatThree).toEqual({
+                value: null,
+                bonus: false,
+                isNominated: false
+            });
+            expect(savedPlayer?.heatFour).toEqual({
+                value: 2,
+                bonus: false,
+                isNominated: false
+            });
+            expect(savedPlayer?.heatFive).toEqual({
+                value: null,
+                bonus: false,
+                isNominated: false
+            });
+            expect(savedPlayer?.heatSix).toEqual({
+                value: null,
+                bonus: false,
+                isNominated: false
+            });
+            expect(savedPlayer?.heatSeven).toEqual({
+                value: null,
+                bonus: false,
+                isNominated: false
+            });
         });
 
         test('Should create score details document and save player under teamOne when userId matches schedule userOneId', async () => {
@@ -660,7 +824,10 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
                 await ScoreDetailsPlayoffModel.savePlayerScoreDetails(
                     playerData,
                     1,
-                    { heatOne: 3, heatTwo: 2 }
+                    {
+                        heatOne: { value: 3, bonus: false, isNominated: false },
+                        heatTwo: { value: 2, bonus: false, isNominated: false }
+                    }
                 );
 
             expect(result).toEqual({ success: true });
@@ -680,10 +847,26 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
             expect(
                 savedDocument?.teamOne.players?.[0]?.playerId?.toString()
             ).toBe(player!._id.toString());
-            expect(savedDocument?.teamOne.players?.[0]?.heatOne).toBe(3);
-            expect(savedDocument?.teamOne.players?.[0]?.heatTwo).toBe(2);
-            expect(savedDocument?.teamOne.players?.[0]?.heatThree).toBe(0);
-            expect(savedDocument?.teamOne.players?.[0]?.heatSeven).toBe(0);
+            expect(savedDocument?.teamOne.players?.[0]?.heatOne).toEqual({
+                value: 3,
+                bonus: false,
+                isNominated: false
+            });
+            expect(savedDocument?.teamOne.players?.[0]?.heatTwo).toEqual({
+                value: 2,
+                bonus: false,
+                isNominated: false
+            });
+            expect(savedDocument?.teamOne.players?.[0]?.heatThree).toEqual({
+                value: null,
+                bonus: false,
+                isNominated: false
+            });
+            expect(savedDocument?.teamOne.players?.[0]?.heatSeven).toEqual({
+                value: null,
+                bonus: false,
+                isNominated: false
+            });
         });
 
         test('Should save player under teamTwo when userId matches schedule userTwoId', async () => {
@@ -713,7 +896,7 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
             await ScoreDetailsPlayoffModel.savePlayerScoreDetails(
                 playerData,
                 2,
-                { heatThree: 1 }
+                { heatThree: { value: 1, bonus: false, isNominated: false } }
             );
 
             const savedDocument = await ScoreDetailsPlayoffModel.findOne({
@@ -723,12 +906,24 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
             expect(savedDocument?.teamTwo.userId?.toString()).toBe(
                 userTwo._id.toString()
             );
-            expect(savedDocument?.teamTwo.players?.[0]?.heatThree).toBe(1);
-            expect(savedDocument?.teamTwo.players?.[0]?.heatOne).toBe(0);
-            expect(savedDocument?.teamTwo.players?.[0]?.heatTwo).toBe(0);
+            expect(savedDocument?.teamTwo.players?.[0]?.heatThree).toEqual({
+                value: 1,
+                bonus: false,
+                isNominated: false
+            });
+            expect(savedDocument?.teamTwo.players?.[0]?.heatOne).toEqual({
+                value: null,
+                bonus: false,
+                isNominated: false
+            });
+            expect(savedDocument?.teamTwo.players?.[0]?.heatTwo).toEqual({
+                value: null,
+                bonus: false,
+                isNominated: false
+            });
         });
 
-        test('Should update existing player entry instead of duplicating it', async () => {
+        test('Should preserve heat values and flags when editing, clearing and resubmitting without duplicating the player', async () => {
             const userOne = await new UserModel(createUserData(55)).save();
             const userTwo = await new UserModel(createUserData(56)).save();
             const [player] = await PlayersModel.create([
@@ -754,22 +949,81 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
             await ScoreDetailsPlayoffModel.savePlayerScoreDetails(
                 playerData,
                 3,
-                { heatOne: 1 }
+                {
+                    heatOne: { value: 0, bonus: false, isNominated: true },
+                    heatTwo: { value: 2, bonus: false, isNominated: false }
+                }
             );
+            const first =
+                await ScoreDetailsPlayoffModel.getPlayerScoreDetailsByRoundAndUserId(
+                    3,
+                    userOne._id.toString(),
+                    player._id.toString()
+                );
+            expect(first.playerScoreDetails.heatOne).toEqual({
+                value: 0,
+                bonus: false,
+                isNominated: true
+            });
+
+            const editedScores = {
+                heatOne: { value: 3, bonus: false, isNominated: false },
+                heatTwo: { value: 2, bonus: true, isNominated: true }
+            };
             await ScoreDetailsPlayoffModel.savePlayerScoreDetails(
                 playerData,
                 3,
-                { heatOne: 4, heatTwo: 3 }
+                editedScores
             );
+            const edited =
+                await ScoreDetailsPlayoffModel.getPlayerScoreDetailsByRoundAndUserId(
+                    3,
+                    userOne._id.toString(),
+                    player._id.toString()
+                );
+            expect(edited.playerScoreDetails).toMatchObject(editedScores);
+
+            await ScoreDetailsPlayoffModel.savePlayerScoreDetails(
+                playerData,
+                3,
+                {
+                    heatOne: { bonus: false, isNominated: false },
+                    heatTwo: { value: null, bonus: false, isNominated: false }
+                }
+            );
+            const cleared =
+                await ScoreDetailsPlayoffModel.getPlayerScoreDetailsByRoundAndUserId(
+                    3,
+                    userOne._id.toString(),
+                    player._id.toString()
+                );
+            expect(cleared.playerScoreDetails.heatOne).toEqual({
+                value: null,
+                bonus: false,
+                isNominated: false
+            });
+            expect(cleared.playerScoreDetails.heatTwo).toEqual({
+                value: null,
+                bonus: false,
+                isNominated: false
+            });
+            await ScoreDetailsPlayoffModel.savePlayerScoreDetails(
+                playerData,
+                3,
+                cleared.playerScoreDetails
+            );
+            expect(
+                await ScoreDetailsPlayoffModel.getPlayerScoreDetailsByRoundAndUserId(
+                    3,
+                    userOne._id.toString(),
+                    player._id.toString()
+                )
+            ).toEqual(cleared);
 
             const savedDocument = await ScoreDetailsPlayoffModel.findOne({
                 roundNumber: 3
             }).exec();
-
             expect(savedDocument?.teamOne.players).toHaveLength(1);
-            expect(savedDocument?.teamOne.players?.[0]?.heatOne).toBe(4);
-            expect(savedDocument?.teamOne.players?.[0]?.heatTwo).toBe(3);
-            expect(savedDocument?.teamOne.players?.[0]?.heatThree).toBe(0);
         });
 
         test('Should save score details for a player assigned to two different users across two schedules', async () => {
@@ -812,7 +1066,7 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
                 await ScoreDetailsPlayoffModel.savePlayerScoreDetails(
                     playerData,
                     1,
-                    { heatOne: 5 }
+                    { heatOne: { value: 5, bonus: false, isNominated: false } }
                 );
 
             expect(result).toEqual({ success: true });
@@ -834,10 +1088,26 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
                     userFour._id.toString()
             );
 
-            expect(documentForUserOne?.teamOne.players?.[0]?.heatOne).toBe(5);
-            expect(documentForUserFour?.teamTwo.players?.[0]?.heatOne).toBe(5);
-            expect(documentForUserOne?.teamOne.players?.[0]?.heatTwo).toBe(0);
-            expect(documentForUserFour?.teamTwo.players?.[0]?.heatTwo).toBe(0);
+            expect(documentForUserOne?.teamOne.players?.[0]?.heatOne).toEqual({
+                value: 5,
+                bonus: false,
+                isNominated: false
+            });
+            expect(documentForUserFour?.teamTwo.players?.[0]?.heatOne).toEqual({
+                value: 5,
+                bonus: false,
+                isNominated: false
+            });
+            expect(documentForUserOne?.teamOne.players?.[0]?.heatTwo).toEqual({
+                value: null,
+                bonus: false,
+                isNominated: false
+            });
+            expect(documentForUserFour?.teamTwo.players?.[0]?.heatTwo).toEqual({
+                value: null,
+                bonus: false,
+                isNominated: false
+            });
         });
     });
 });

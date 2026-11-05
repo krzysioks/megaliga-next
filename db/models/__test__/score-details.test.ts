@@ -1,9 +1,10 @@
+import type { PlayerScoresType } from '@/db/models/schema.types';
+
 import mongoose from 'mongoose';
 
 import { DBClient } from '@/db/db-client';
 import ScheduleModel from '@/db/models/games/schedule';
 import ScoreDetailsModel, {
-    RegularSeasonPlayerScoreDetailsType,
     ScoreDetailsReturnType,
     ScoreDetailsInputType
 } from '@/db/models/games/score-details';
@@ -22,7 +23,7 @@ const playerHeat = (
 ) => ({ value, bonus, isNominated });
 
 const expectPlayerHeat = (
-    actual: RegularSeasonPlayerScoreDetailsType['heatOne'] | undefined,
+    actual: PlayerScoresType['heatOne'] | undefined,
     expected: ReturnType<typeof playerHeat>
 ) => {
     expect(actual?.value).toBe(expected.value);
@@ -864,7 +865,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             expect(result.scoreDetailsId).toBe(scoreDetails._id.toString());
             expect(result.teamType).toBe('teamOne');
 
-            const playerScoreDetails: RegularSeasonPlayerScoreDetailsType =
+            const playerScoreDetails: PlayerScoresType =
                 result.playerScoreDetails;
 
             expect(playerScoreDetails.heatOne).toEqual(playerHeat(3, true, true));
@@ -893,7 +894,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             expect(result.scoreDetailsId).toBeNull();
             expect(result.teamType).toBeNull();
 
-            const playerScoreDetails: RegularSeasonPlayerScoreDetailsType =
+            const playerScoreDetails: PlayerScoresType =
                 result.playerScoreDetails;
 
             expect(playerScoreDetails.heatOne).toEqual(playerHeat(null));

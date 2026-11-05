@@ -716,7 +716,7 @@ describe('Test HistoryGamesModel methods and static functions', () => {
     });
 
     describe('saveSchedulePlayoffToHistory', () => {
-        test('should throw error if await SchedulePlayoffModel.getScheduleForHistory() will not return data', async () => {
+        test('Should throw when the playoff schedule does not exist', async () => {
             const seasonId = new mongoose.Types.ObjectId().toString();
 
             await expect(
@@ -724,7 +724,7 @@ describe('Test HistoryGamesModel methods and static functions', () => {
             ).rejects.toThrow('Schedule not found');
         });
 
-        test('should throw error if await HistoryTeamModel.getHistoryTeamIdByNameAndCoachName will not return data', async () => {
+        test('Should throw when the history team does not exist', async () => {
             const [userOne, userTwo] = await UserModel.create([
                 createUserData(0),
                 createUserData(1)
@@ -758,7 +758,7 @@ describe('Test HistoryGamesModel methods and static functions', () => {
             );
         });
 
-        test('should properly create a document with history games data with correct type and values', async () => {
+        test('Should save playoff games with scalar heat values, signed modifiers and numeric trainer scores', async () => {
             const [userOne, userTwo, userThree] = await UserModel.create([
                 createUserData(0, {
                     teamName: 'Team Alpha',
@@ -883,8 +883,22 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                         players: [
                             {
                                 playerId: players[0]._id.toString(),
-                                heatOne: 3,
-                                setPlay: 1,
+                                heatOne: {
+                                    value: 3,
+                                    bonus: true,
+                                    isNominated: false
+                                },
+                                heatTwo: {
+                                    value: 0,
+                                    bonus: false,
+                                    isNominated: true
+                                },
+                                heatThree: {
+                                    value: null,
+                                    bonus: false,
+                                    isNominated: false
+                                },
+                                setPlay: -2,
                                 comment: 'Solid ride'
                             }
                         ],
@@ -900,7 +914,11 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                         players: [
                             {
                                 playerId: players[1]._id.toString(),
-                                heatOne: 2,
+                                heatOne: {
+                                    value: 2,
+                                    bonus: true,
+                                    isNominated: true
+                                },
                                 setPlay: 0,
                                 comment: 'Strong start'
                             }
@@ -1026,6 +1044,15 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                 firstScoreDetails?.teamOne.players?.[0].playerId?.toString()
             ).toBe(players[0]._id.toString());
             expect(firstScoreDetails?.teamOne.players?.[0].heatOne).toBe(3);
+            expect(firstScoreDetails?.teamOne.players?.[0].heatTwo).toBe(0);
+            expect(firstScoreDetails?.teamOne.players?.[0].heatThree).toBeNull();
+            expect(firstScoreDetails?.teamOne.players?.[0].setPlay).toBe(-2);
+            expect(firstScoreDetails?.teamOne.players?.[0]).not.toHaveProperty(
+                'heatOne.bonus'
+            );
+            expect(firstScoreDetails?.teamTwo.players?.[0]).not.toHaveProperty(
+                'heatOne.isNominated'
+            );
             expect(firstScoreDetails?.teamOne.players?.[0].comment).toBe(
                 'Solid ride'
             );
@@ -1038,6 +1065,47 @@ describe('Test HistoryGamesModel methods and static functions', () => {
             expect(firstScoreDetails?.teamTwo.players?.[0].comment).toBe(
                 'Strong start'
             );
+
+            const archived =
+                await HistoryGamesScoreDetailsModel.getHistoryScoreDetailsById(
+                    firstGame!.scoreDetails!.toString()
+                );
+            expect(archived.teamOne.players[0]).toEqual({
+                extraligaPlayerName: 'Player One',
+                heatOne: 3,
+                heatTwo: 0,
+                heatThree: null,
+                heatFour: null,
+                heatFive: null,
+                heatSix: null,
+                heatSeven: null,
+                setPlay: -2,
+                comment: 'Solid ride'
+            });
+            expect(archived.teamTwo.players[0].heatOne).toBe(2);
+            expect(archived.teamOne.trainer?.heatOne).toBe(1);
+            expect(archived.teamTwo.trainer?.heatOne).toBe(0);
+
+            const live =
+                await ScoreDetailsPlayoffModel.getScoreDetailsByScheduleAndRoundId(
+                    scheduleOne._id.toString(),
+                    3
+                );
+            expect(live.teamOne.players[0].heatOne).toEqual({
+                value: 3,
+                bonus: true,
+                isNominated: false
+            });
+            expect(live.teamOne.players[0].heatTwo).toEqual({
+                value: 0,
+                bonus: false,
+                isNominated: true
+            });
+            expect(live.teamTwo.players[0].heatOne).toEqual({
+                value: 2,
+                bonus: true,
+                isNominated: true
+            });
         });
     });
 });

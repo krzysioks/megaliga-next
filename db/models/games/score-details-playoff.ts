@@ -1,11 +1,11 @@
+import type {
+    PlayerScoresType,
+    PlayerScoresInputType
+} from '@/db/models/schema.types';
+
 import { HydratedDocument, model, Model, Schema } from 'mongoose';
 import { z } from 'zod';
 
-import {
-    DEFAULT_PLAYER_SCORE_DETAILS,
-    PlayerScoreDetailsType,
-    PlayerScoreDetailsInputType
-} from '@/db/db.types';
 import SchedulePlayoffModel, {
     SchedulePlayoffType
 } from '@/db/models/games/schedule-playoff';
@@ -15,7 +15,9 @@ import {
 } from '@/db/models/games/starting-lineup-playoff';
 import PlayersModel, { PlayersType } from '@/db/models/players';
 import {
-    heatScoresSchema,
+    HistoryPlayerType,
+    historyPlayerSchema,
+    playerScoresZodSchema,
     playerSchema,
     trainerSchema,
     objectIdSchema,
@@ -26,7 +28,7 @@ import UserModel, { UserType } from '@/db/models/user';
 
 //ScoreDetailsPLayoff is representation of megaliga_scores_playoff of old megaliga database. Will be used for displaying detailed scores of given match in plaoffs.
 
-export const scoreDetailsPLayoffZodSchema = z.object({
+export const scoreDetailsPlayoffZodSchema = z.object({
     scheduleId: objectIdSchema, //Reference to SchedulePlayoff model, from which we will populate main scores and round number
     roundNumber: roundNumberSchema, //needed to properly identify document for different use cases
     teamOne: teamSchema,
@@ -34,11 +36,11 @@ export const scoreDetailsPLayoffZodSchema = z.object({
 });
 
 export type ScoreDetailsPlayoffType = z.infer<
-    typeof scoreDetailsPLayoffZodSchema
+    typeof scoreDetailsPlayoffZodSchema
 >;
 
 export type ScoreDetailsPlayoffInputType = z.input<
-    typeof scoreDetailsPLayoffZodSchema
+    typeof scoreDetailsPlayoffZodSchema
 >;
 
 type PopulatedScoreDetailsPlayoffPlayerType = Omit<
@@ -74,38 +76,38 @@ type PopulatedScoreDetailsPlayoffType = Omit<
 export type PopulatedFindType =
     HydratedDocument<PopulatedScoreDetailsPlayoffType>;
 
-type ScoreDetailsPlayoffTeamPlayerDtoType = Omit<
+type ScoreDetailsPlayoffTeamPlayerReturnType = Omit<
     PopulatedScoreDetailsPlayoffPlayerType,
     'playerId'
 > & {
     extraligaPlayerName: PlayersType['extraligaPlayerName'];
 };
 
-type ScoreDetailsPlayoffTeamDtoType = {
+type ScoreDetailsPlayoffTeamReturnType = {
     teamName: PopulatedScoreDetailsPlayoffType['teamOne']['userId']['teamName'];
-    players: ScoreDetailsPlayoffTeamPlayerDtoType[];
+    players: ScoreDetailsPlayoffTeamPlayerReturnType[];
     trainer: PopulatedScoreDetailsPlayoffType['teamOne']['trainer'];
     setPlays: PopulatedScoreDetailsPlayoffType['teamOne']['startingLineupId']['setPlays'];
 };
 
-export type ScoreDetailsPlayoffDtoType = {
+export type ScoreDetailsPlayoffReturnType = {
     roundNumber: ScoreDetailsPlayoffType['roundNumber'];
-    teamOne: ScoreDetailsPlayoffTeamDtoType;
-    teamTwo: ScoreDetailsPlayoffTeamDtoType;
+    teamOne: ScoreDetailsPlayoffTeamReturnType;
+    teamTwo: ScoreDetailsPlayoffTeamReturnType;
     userOneScore: PopulatedScoreDetailsPlayoffType['scheduleId']['userOneScore'];
     userTwoScore: PopulatedScoreDetailsPlayoffType['scheduleId']['userTwoScore'];
 };
 
-type ScoreDetailsPlayoffForHistoryTeamDtoType = {
-    players: NonNullable<ScoreDetailsPlayoffType['teamOne']['players']>;
+type ScoreDetailsPlayoffForHistoryTeamReturnType = {
+    players: HistoryPlayerType[];
     trainer: ScoreDetailsPlayoffType['teamOne']['trainer'];
     setPlays: StartingLineupPlayoffType['setPlays'];
 };
 
 export type ScoreDetailsPlayoffForHistoryReturnType = {
     scheduleId: ScoreDetailsPlayoffType['scheduleId'];
-    teamOne: ScoreDetailsPlayoffForHistoryTeamDtoType;
-    teamTwo: ScoreDetailsPlayoffForHistoryTeamDtoType;
+    teamOne: ScoreDetailsPlayoffForHistoryTeamReturnType;
+    teamTwo: ScoreDetailsPlayoffForHistoryTeamReturnType;
 };
 
 type PopulatedScoreDetailsPlayoffForHistoryType = Omit<
@@ -120,14 +122,15 @@ type PopulatedScoreDetailsPlayoffForHistoryType = Omit<
     };
 };
 
-type ScoreDetailsPlayoffTeamType = 'teamOne' | 'teamTwo';
+type PopulatedScoreDetailsPlayoffForHistoryFindType =
+    HydratedDocument<PopulatedScoreDetailsPlayoffForHistoryType>;
 
-export type PlayerScoreDetailsPlayoffType = PlayerScoreDetailsType;
+type ScoreDetailsPlayoffTeamType = 'teamOne' | 'teamTwo';
 
 export type PlayerScoreDetailsPlayoffReturnType = {
     scoreDetailsId: string | null;
     teamType: ScoreDetailsPlayoffTeamType | null;
-    playerScoreDetails: PlayerScoreDetailsPlayoffType;
+    playerScoreDetails: PlayerScoresType;
 };
 
 export type SavePlayerScoreDetailsPlayoffReturnType = {
@@ -138,7 +141,7 @@ interface ScoreDetailsPlayoffModelType extends Model<ScoreDetailsPlayoffType> {
     getScoreDetailsByScheduleAndRoundId: (
         scheduleId: string,
         roundNumber: number
-    ) => Promise<ScoreDetailsPlayoffDtoType>;
+    ) => Promise<ScoreDetailsPlayoffReturnType>;
     getScoreDetailsForHistory: () => Promise<
         ScoreDetailsPlayoffForHistoryReturnType[]
     >;
@@ -150,7 +153,7 @@ interface ScoreDetailsPlayoffModelType extends Model<ScoreDetailsPlayoffType> {
     savePlayerScoreDetails: (
         playerData: StartingLineupPlayoffPlayersByRoundReturnType,
         roundNumber: number,
-        playerScore: PlayerScoreDetailsInputType
+        playerScore: PlayerScoresInputType
     ) => Promise<SavePlayerScoreDetailsPlayoffReturnType>;
     deleteAll: () => Promise<void>;
 }
@@ -170,13 +173,42 @@ const scoreDetailsPlayoffSchema = new Schema<
                     ref: 'Players',
                     required: true
                 },
-                heatOne: { type: Number },
-                heatTwo: { type: Number },
-                heatThree: { type: Number },
-                heatFour: { type: Number },
-                heatFive: { type: Number },
-                heatSix: { type: Number },
-                heatSeven: { type: Number },
+                heatOne: {
+                    // For all heats: undefined means not submitted; null means saved with no start.
+                    value: { type: Number },
+                    bonus: { type: Boolean, default: false },
+                    isNominated: { type: Boolean, default: false }
+                },
+                heatTwo: {
+                    value: { type: Number },
+                    bonus: { type: Boolean, default: false },
+                    isNominated: { type: Boolean, default: false }
+                },
+                heatThree: {
+                    value: { type: Number },
+                    bonus: { type: Boolean, default: false },
+                    isNominated: { type: Boolean, default: false }
+                },
+                heatFour: {
+                    value: { type: Number },
+                    bonus: { type: Boolean, default: false },
+                    isNominated: { type: Boolean, default: false }
+                },
+                heatFive: {
+                    value: { type: Number },
+                    bonus: { type: Boolean, default: false },
+                    isNominated: { type: Boolean, default: false }
+                },
+                heatSix: {
+                    value: { type: Number },
+                    bonus: { type: Boolean, default: false },
+                    isNominated: { type: Boolean, default: false }
+                },
+                heatSeven: {
+                    value: { type: Number },
+                    bonus: { type: Boolean, default: false },
+                    isNominated: { type: Boolean, default: false }
+                },
                 setPlay: { type: Number },
                 comment: { type: String }
             }
@@ -206,13 +238,42 @@ const scoreDetailsPlayoffSchema = new Schema<
                     ref: 'Players',
                     required: true
                 },
-                heatOne: { type: Number },
-                heatTwo: { type: Number },
-                heatThree: { type: Number },
-                heatFour: { type: Number },
-                heatFive: { type: Number },
-                heatSix: { type: Number },
-                heatSeven: { type: Number },
+                heatOne: {
+                    // For all heats: undefined means not submitted; null means saved with no start.
+                    value: { type: Number },
+                    bonus: { type: Boolean, default: false },
+                    isNominated: { type: Boolean, default: false }
+                },
+                heatTwo: {
+                    value: { type: Number },
+                    bonus: { type: Boolean, default: false },
+                    isNominated: { type: Boolean, default: false }
+                },
+                heatThree: {
+                    value: { type: Number },
+                    bonus: { type: Boolean, default: false },
+                    isNominated: { type: Boolean, default: false }
+                },
+                heatFour: {
+                    value: { type: Number },
+                    bonus: { type: Boolean, default: false },
+                    isNominated: { type: Boolean, default: false }
+                },
+                heatFive: {
+                    value: { type: Number },
+                    bonus: { type: Boolean, default: false },
+                    isNominated: { type: Boolean, default: false }
+                },
+                heatSix: {
+                    value: { type: Number },
+                    bonus: { type: Boolean, default: false },
+                    isNominated: { type: Boolean, default: false }
+                },
+                heatSeven: {
+                    value: { type: Number },
+                    bonus: { type: Boolean, default: false },
+                    isNominated: { type: Boolean, default: false }
+                },
                 setPlay: { type: Number },
                 comment: { type: String }
             }
@@ -237,7 +298,7 @@ const scoreDetailsPlayoffSchema = new Schema<
 
 scoreDetailsPlayoffSchema.static(
     'getScoreDetailsByScheduleAndRoundId',
-    async function getScoreDetailsByScheduleIdAndRound(
+    async function getScoreDetailsByScheduleAndRoundId(
         scheduleId: string,
         roundNumber: number
     ) {
@@ -250,11 +311,11 @@ scoreDetailsPlayoffSchema.static(
                 throw new Error(`Invalid scheduleId: ${scheduleId}`);
             }
 
-            const document = (await this.findOne({
+            const document: PopulatedFindType | null = await this.findOne({
                 scheduleId,
                 roundNumber
             })
-                .populate({
+                .populate<PopulatedFindType>({
                     path: 'scheduleId',
                     select: 'userOneScore userTwoScore'
                 })
@@ -282,7 +343,7 @@ scoreDetailsPlayoffSchema.static(
                     path: 'teamTwo.startingLineupId',
                     select: 'setPlays'
                 })
-                .exec()) as PopulatedFindType | null;
+                .exec();
 
             if (!document) {
                 throw new Error(
@@ -292,18 +353,24 @@ scoreDetailsPlayoffSchema.static(
 
             const mapTeam = (
                 team: PopulatedScoreDetailsPlayoffType['teamOne']
-            ): ScoreDetailsPlayoffTeamDtoType => ({
-                teamName: team.userId?.teamName ?? '',
-                players: (team.players ?? []).map(player => ({
-                    ...trainerSchema.parse(player),
-                    extraligaPlayerName:
-                        player.playerId?.extraligaPlayerName ?? ''
-                })),
-                trainer: team.trainer
-                    ? trainerSchema.parse(team.trainer)
-                    : undefined,
-                setPlays: team.startingLineupId?.setPlays
-            });
+            ): ScoreDetailsPlayoffTeamReturnType => {
+                return {
+                    teamName: team.userId?.teamName ?? '',
+                    players: (team.players ?? []).map(player => {
+                        return {
+                            ...playerSchema
+                                .omit({ playerId: true })
+                                .parse(player),
+                            extraligaPlayerName:
+                                player.playerId?.extraligaPlayerName ?? ''
+                        };
+                    }),
+                    trainer: team.trainer
+                        ? trainerSchema.parse(team.trainer)
+                        : undefined,
+                    setPlays: team.startingLineupId?.setPlays
+                };
+            };
 
             return {
                 roundNumber: document.roundNumber,
@@ -323,17 +390,13 @@ scoreDetailsPlayoffSchema.static(
     'getScoreDetailsForHistory',
     async function getScoreDetailsForHistory() {
         try {
-            const documents: PopulatedScoreDetailsPlayoffForHistoryType[] =
+            const documents: PopulatedScoreDetailsPlayoffForHistoryFindType[] =
                 await this.find()
-                    .populate<{
-                        teamOne: PopulatedScoreDetailsPlayoffForHistoryType['teamOne'];
-                    }>({
+                    .populate<PopulatedScoreDetailsPlayoffForHistoryFindType>({
                         path: 'teamOne.startingLineupId',
                         select: 'setPlays'
                     })
-                    .populate<{
-                        teamTwo: PopulatedScoreDetailsPlayoffForHistoryType['teamTwo'];
-                    }>({
+                    .populate<PopulatedScoreDetailsPlayoffForHistoryFindType>({
                         path: 'teamTwo.startingLineupId',
                         select: 'setPlays'
                     })
@@ -345,12 +408,22 @@ scoreDetailsPlayoffSchema.static(
 
             const mapTeam = (
                 team: PopulatedScoreDetailsPlayoffForHistoryType['teamOne']
-            ): ScoreDetailsPlayoffForHistoryTeamDtoType => {
+            ): ScoreDetailsPlayoffForHistoryTeamReturnType => {
                 return {
-                    players: (team.players ?? []).map(player => ({
-                        ...trainerSchema.parse(player),
-                        playerId: player.playerId?.toString()
-                    })),
+                    players: (team.players ?? []).map(player => {
+                        return historyPlayerSchema.parse({
+                            playerId: player.playerId?.toString(),
+                            heatOne: player.heatOne.value,
+                            heatTwo: player.heatTwo.value,
+                            heatThree: player.heatThree.value,
+                            heatFour: player.heatFour.value,
+                            heatFive: player.heatFive.value,
+                            heatSix: player.heatSix.value,
+                            heatSeven: player.heatSeven.value,
+                            setPlay: player.setPlay,
+                            comment: player.comment
+                        });
+                    }),
                     trainer: team.trainer
                         ? trainerSchema.parse(team.trainer)
                         : undefined,
@@ -422,7 +495,7 @@ scoreDetailsPlayoffSchema.static(
                 return {
                     scoreDetailsId: null,
                     teamType: null,
-                    playerScoreDetails: DEFAULT_PLAYER_SCORE_DETAILS
+                    playerScoreDetails: playerScoresZodSchema.parse({})
                 };
             }
 
@@ -435,10 +508,8 @@ scoreDetailsPlayoffSchema.static(
                 player => player.playerId?.toString() === playerId
             );
 
-            const playerScoreDetails: PlayerScoreDetailsPlayoffType =
-                playerEntry
-                    ? heatScoresSchema.parse(playerEntry)
-                    : DEFAULT_PLAYER_SCORE_DETAILS;
+            const playerScoreDetails: PlayerScoresType =
+                playerScoresZodSchema.parse(playerEntry ?? {});
 
             return {
                 scoreDetailsId: document._id.toString(),
@@ -460,10 +531,11 @@ scoreDetailsPlayoffSchema.static(
     async function savePlayerScoreDetails(
         playerData: StartingLineupPlayoffPlayersByRoundReturnType,
         roundNumber: number,
-        playerScore: PlayerScoreDetailsInputType
+        playerScore: PlayerScoresInputType
     ) {
         try {
-            const normalizedPlayerScore = heatScoresSchema.parse(playerScore);
+            const normalizedPlayerScore =
+                playerScoresZodSchema.parse(playerScore);
 
             for (let index = 0; index < playerData.userId.length; index++) {
                 const userId = playerData.userId[index];

@@ -1,7 +1,4 @@
-import type {
-    RegularSeasonPlayerScoreDetailsType,
-    ScoreDetailsType
-} from '@/db/models/games/score-details';
+import type { ScoreDetailsType } from '@/db/models/games/score-details';
 import type {
     SetPlaysDataForUserReturnType,
     SetPlaysDataSelectionReturnType,
@@ -9,15 +6,11 @@ import type {
 } from '@/db/models/games/set-plays-data';
 import type { StartingLineupType } from '@/db/models/games/starting-lineup';
 import type { PlayersReturnType, PlayersType } from '@/db/models/players';
+import type { PlayerScoresType } from '@/db/models/schema.types';
 
 import mongoose from 'mongoose';
-import { z } from 'zod';
 
-import {
-    SetPlayEnumType,
-    heatScoresSchema,
-    playerSchema
-} from '@/db/models/schema.types';
+import { SetPlayEnumType } from '@/db/models/schema.types';
 
 export type ConnectType = Promise<void | typeof mongoose>;
 
@@ -48,17 +41,7 @@ export interface AreRoundScoresCompleteParamsType {
     }[];
 }
 
-export type PlayerScoreDetailsType = Omit<
-    z.infer<typeof playerSchema>,
-    'playerId' | 'comment' | 'setPlay'
->;
-
-export type PlayerScoreDetailsInputType = z.input<typeof heatScoresSchema>;
-
-export const DEFAULT_PLAYER_SCORE_DETAILS: PlayerScoreDetailsType =
-    heatScoresSchema.parse({});
-
-export type CalculationPlayerType = RegularSeasonPlayerScoreDetailsType & {
+export type CalculationPlayerType = PlayerScoresType & {
     playerId: string;
     isJunior: PlayersType['isJunior'];
     setPlay: number;
@@ -139,7 +122,7 @@ export interface CalculateReplacementParamsType {
     player: CalculationPlayerType;
     playerId: string;
     isJunior: boolean;
-    scores: RegularSeasonPlayerScoreDetailsType;
+    scores: PlayerScoresType;
 }
 
 export interface ScoreTeamParamsType {
