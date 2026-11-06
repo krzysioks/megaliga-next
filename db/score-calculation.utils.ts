@@ -308,6 +308,7 @@ function selectReserveLineup(
                 opponentSlots: slots,
                 opponentSpartacusSlots: params.opponentSpartacusSlots,
                 opponentTeamData: params.teamData,
+                seasonStage: params.seasonStage,
                 roundNumber: params.roundNumber,
                 includeCompetitiveAwards: false
             })
@@ -574,7 +575,10 @@ function calculateTeamScore(
                                     `Missing Spartacus opponent: ${setPlay.userData.opponentPlayerId}`
                                 );
                             }
-                            if (params.roundNumber >= SPARTACUS_MIN_ROUND) {
+                            if (
+                                params.seasonStage === 'playoff' ||
+                                params.roundNumber >= SPARTACUS_MIN_ROUND
+                            ) {
                                 points = calculateSpartacus({
                                     player: actualPlayer,
                                     opponentPlayer,
@@ -751,6 +755,7 @@ function calculateTeamScore(
 export function calculateMatchScores(
     params: CalculateMatchScoresParamsType
 ): CalculateMatchScoresReturnType {
+    const seasonStage = params.seasonStage ?? 'regularSeason';
     const nominalOne = prepareTeam(params.teamOne);
     const nominalTwo = prepareTeam(params.teamTwo);
     const spartacusSlotsOne = generateStartingLineupMatrix({
@@ -766,6 +771,7 @@ export function calculateMatchScores(
         nominal: nominalOne,
         slots: spartacusSlotsOne,
         opponentSpartacusSlots: spartacusSlotsTwo,
+        seasonStage,
         roundNumber: params.roundNumber
     });
     const slotsTwo = selectReserveLineup({
@@ -773,6 +779,7 @@ export function calculateMatchScores(
         nominal: nominalTwo,
         slots: spartacusSlotsTwo,
         opponentSpartacusSlots: spartacusSlotsOne,
+        seasonStage,
         roundNumber: params.roundNumber
     });
     const teamOne = calculateTeamScore({
@@ -783,6 +790,7 @@ export function calculateMatchScores(
         opponentSlots: slotsTwo,
         opponentSpartacusSlots: spartacusSlotsTwo,
         opponentTeamData: params.teamTwo,
+        seasonStage,
         roundNumber: params.roundNumber,
         includeCompetitiveAwards: true
     });
@@ -794,6 +802,7 @@ export function calculateMatchScores(
         opponentSlots: slotsOne,
         opponentSpartacusSlots: spartacusSlotsOne,
         opponentTeamData: params.teamOne,
+        seasonStage,
         roundNumber: params.roundNumber,
         includeCompetitiveAwards: true
     });

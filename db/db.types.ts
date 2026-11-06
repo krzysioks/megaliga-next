@@ -1,4 +1,3 @@
-import type { ScoreDetailsType } from '@/db/models/games/score-details';
 import type {
     SetPlaysDataForUserReturnType,
     SetPlaysDataSelectionReturnType,
@@ -6,7 +5,15 @@ import type {
 } from '@/db/models/games/set-plays-data';
 import type { StartingLineupType } from '@/db/models/games/starting-lineup';
 import type { PlayersReturnType, PlayersType } from '@/db/models/players';
-import type { PlayerScoresType } from '@/db/models/schema.types';
+import type {
+    PlayerScoresType,
+    playerPositionsZodSchema,
+    playerRolesZodSchema,
+    trainerSchema,
+    playerSchema,
+    stageEnumSchema
+} from '@/db/models/schema.types';
+import type { z } from 'zod';
 
 import mongoose from 'mongoose';
 
@@ -35,9 +42,10 @@ export type GetSetPlaysDetailsReturnType = {
 };
 
 export interface AreRoundScoresCompleteParamsType {
+    minimumMatchCount: number;
     documents: {
-        teamOne: Pick<ScoreDetailsType['teamOne'], 'players'>;
-        teamTwo: Pick<ScoreDetailsType['teamTwo'], 'players'>;
+        teamOne: { players?: z.infer<typeof playerSchema>[] };
+        teamTwo: { players?: z.infer<typeof playerSchema>[] };
     }[];
 }
 
@@ -50,12 +58,18 @@ export type CalculationPlayerType = PlayerScoresType & {
 
 export interface CalculationTeamType {
     players: CalculationPlayerType[];
-    startingLineup: Omit<StartingLineupType, 'userId' | 'roundNumber'>;
+    startingLineup: z.infer<typeof playerPositionsZodSchema> & {
+        roles: z.infer<typeof playerRolesZodSchema>;
+    };
     setPlayList: SetPlaysDataListByStartingLineupIdReturnType['setPlayList'];
     replacementPlayers?: Pick<CalculationPlayerType, 'playerId' | 'isJunior'>[];
 }
 
 export interface CalculateMatchScoresParamsType {
+    seasonStage?: Extract<
+        z.infer<typeof stageEnumSchema>,
+        'regularSeason' | 'playoff'
+    >;
     roundNumber: number;
     teamOne: CalculationTeamType;
     teamTwo: CalculationTeamType;
@@ -63,7 +77,7 @@ export interface CalculateMatchScoresParamsType {
 
 export interface CalculationTeamReturnType {
     players: CalculationPlayerType[];
-    trainer: NonNullable<ScoreDetailsType['teamOne']['trainer']>;
+    trainer: z.infer<typeof trainerSchema>;
 }
 
 export interface CalculateMatchScoresReturnType {
@@ -126,6 +140,7 @@ export interface CalculateReplacementParamsType {
 }
 
 export interface ScoreTeamParamsType {
+    seasonStage: NonNullable<CalculateMatchScoresParamsType['seasonStage']>;
     teamData: CalculationTeamType;
     nominal: CalculationTeamReturnType;
     spartacusSlots: CalculationSlotType[];
@@ -138,6 +153,7 @@ export interface ScoreTeamParamsType {
 }
 
 export interface SelectReserveLineupParamsType {
+    seasonStage: NonNullable<CalculateMatchScoresParamsType['seasonStage']>;
     teamData: CalculationTeamType;
     nominal: CalculationTeamReturnType;
     slots: CalculationSlotType[];

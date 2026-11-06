@@ -13,7 +13,6 @@ import {
     CALCULATION_HEAT_KEYS,
     MAX_SELECTIONS_PER_SET_PLAY,
     MAX_SELECTIONS_PER_RESERVE_SET_PLAY,
-    MIN_REGULAR_SEASON_MATCH_COUNT,
     STARTING_LINEUP_PLAYER_COUNT
 } from '@/db/db.constants';
 import PlayersModel from '@/db/models/players';
@@ -212,7 +211,7 @@ export function areRoundScoresComplete(
     params: AreRoundScoresCompleteParamsType
 ): boolean {
     return (
-        params.documents.length >= MIN_REGULAR_SEASON_MATCH_COUNT &&
+        params.documents.length >= params.minimumMatchCount &&
         params.documents.every(document => {
             return [document.teamOne, document.teamTwo].every(team => {
                 const players = team.players ?? [];

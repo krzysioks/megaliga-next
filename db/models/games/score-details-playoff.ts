@@ -1,4 +1,8 @@
-import type { GetSetPlaysDetailsReturnType } from '@/db/db.types';
+import type {
+    CalculationTeamType,
+    CalculateMatchScoresReturnType,
+    GetSetPlaysDetailsReturnType
+} from '@/db/db.types';
 import type {
     PlayerScoresType,
     PlayerScoresInputType
@@ -7,7 +11,14 @@ import type {
 import { HydratedDocument, model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
-import { getSetPlaysDetails } from '@/db/db.utils';
+import {
+    MIN_PLAYOFF_ROUND,
+    MAX_PLAYOFF_ROUND,
+    PLAYOFF_MATCH_COUNT,
+    STARTING_LINEUP_PLAYER_COUNT,
+    STARTING_LINEUP_POSITION_KEYS
+} from '@/db/db.constants';
+import { areRoundScoresComplete, getSetPlaysDetails } from '@/db/db.utils';
 import SchedulePlayoffModel, {
     SchedulePlayoffType
 } from '@/db/models/games/schedule-playoff';
@@ -25,9 +36,13 @@ import {
     trainerSchema,
     objectIdSchema,
     roundNumberSchema,
-    teamSchema
+    teamSchema,
+    SetPlayEnumType
 } from '@/db/models/schema.types';
+import SeasonOpsModel from '@/db/models/season-ops';
+import { setPlayPayloadZodSchema } from '@/db/models/set-play-payload.schema';
 import UserModel, { UserType } from '@/db/models/user';
+import { calculateMatchScores } from '@/db/score-calculation.utils';
 
 //ScoreDetailsPLayoff is representation of megaliga_scores_playoff of old megaliga database. Will be used for displaying detailed scores of given match in plaoffs.
 
@@ -163,8 +178,36 @@ interface ScoreDetailsPlayoffModelType extends Model<ScoreDetailsPlayoffType> {
         roundNumber: number,
         playerScore: PlayerScoresInputType
     ) => Promise<SavePlayerScoreDetailsPlayoffReturnType>;
+    calculateScoresByRound: (roundNumber: number) => Promise<void>;
+    isScoreCalculationsEnabled: (roundNumber: number) => Promise<boolean>;
     deleteAll: () => Promise<void>;
 }
+
+type PopulatedScoreDetailsPlayoffCalculationTeamType = Omit<
+    ScoreDetailsPlayoffType['teamOne'],
+    'startingLineupId'
+> & {
+    startingLineupId:
+        | (StartingLineupPlayoffType & { _id: Types.ObjectId })
+        | null;
+};
+
+type PopulatedScoreDetailsPlayoffCalculationType = Omit<
+    ScoreDetailsPlayoffType,
+    'scheduleId' | 'teamOne' | 'teamTwo'
+> & {
+    scheduleId: (SchedulePlayoffType & { _id: Types.ObjectId }) | null;
+    teamOne: PopulatedScoreDetailsPlayoffCalculationTeamType;
+    teamTwo: PopulatedScoreDetailsPlayoffCalculationTeamType;
+};
+
+type PopulatedScoreDetailsPlayoffCalculationFindType =
+    HydratedDocument<PopulatedScoreDetailsPlayoffCalculationType>;
+
+type ScoreDetailsPlayoffRoundCalculationType = {
+    document: PopulatedScoreDetailsPlayoffCalculationFindType;
+    result: CalculateMatchScoresReturnType;
+};
 
 const scoreDetailsPlayoffSchema = new Schema<
     ScoreDetailsPlayoffType,
@@ -629,6 +672,266 @@ scoreDetailsPlayoffSchema.static(
             return { success: true };
         } catch (error) {
             console.error('Error saving playoff player score details:', error);
+            throw error;
+        }
+    }
+);
+
+scoreDetailsPlayoffSchema.static(
+    'isScoreCalculationsEnabled',
+    async function isScoreCalculationsEnabled(roundNumber: number) {
+        try {
+            if (
+                roundNumber < MIN_PLAYOFF_ROUND ||
+                roundNumber > MAX_PLAYOFF_ROUND
+            ) {
+                throw new Error(
+                    `Invalid roundNumber: ${roundNumber}. Must be between ${MIN_PLAYOFF_ROUND} and ${MAX_PLAYOFF_ROUND}`
+                );
+            }
+            const documents = await this.find({ roundNumber }).exec();
+            return areRoundScoresComplete({
+                documents,
+                minimumMatchCount: PLAYOFF_MATCH_COUNT
+            });
+        } catch (error) {
+            console.error(
+                'Error checking playoff score calculations status:',
+                error
+            );
+            throw error;
+        }
+    }
+);
+
+scoreDetailsPlayoffSchema.static(
+    'calculateScoresByRound',
+    async function calculateScoresByRound(roundNumber: number) {
+        try {
+            if (
+                roundNumber < MIN_PLAYOFF_ROUND ||
+                roundNumber > MAX_PLAYOFF_ROUND
+            ) {
+                throw new Error(
+                    `Invalid roundNumber: ${roundNumber}. Must be between ${MIN_PLAYOFF_ROUND} and ${MAX_PLAYOFF_ROUND}`
+                );
+            }
+            const documents: PopulatedScoreDetailsPlayoffCalculationFindType[] =
+                await this.find({ roundNumber })
+                    .populate<PopulatedScoreDetailsPlayoffCalculationFindType>({
+                        path: 'scheduleId',
+                        select: 'roundNumber userOneId userTwoId'
+                    })
+                    .populate<PopulatedScoreDetailsPlayoffCalculationFindType>({
+                        path: 'teamOne.startingLineupId',
+                        select: 'userId roundNumber playerOne playerTwo playerThree playerFour playerFive roles'
+                    })
+                    .populate<PopulatedScoreDetailsPlayoffCalculationFindType>({
+                        path: 'teamTwo.startingLineupId',
+                        select: 'userId roundNumber playerOne playerTwo playerThree playerFour playerFive roles'
+                    })
+                    .exec();
+            if (
+                !areRoundScoresComplete({
+                    documents,
+                    minimumMatchCount: PLAYOFF_MATCH_COUNT
+                })
+            ) {
+                throw new Error(
+                    `Score details are incomplete for round: ${roundNumber}`
+                );
+            }
+
+            const currentSeason = await SeasonOpsModel.findOne({
+                isCurrentSeason: true
+            }).exec();
+
+            if (!currentSeason) {
+                throw new Error('Current season not found');
+            }
+
+            const scheduleIds = new Set(
+                documents.map(document => document.scheduleId?._id.toString())
+            );
+
+            if (
+                documents.length !== PLAYOFF_MATCH_COUNT ||
+                scheduleIds.size !== documents.length ||
+                (await SchedulePlayoffModel.countDocuments({ roundNumber })) !==
+                    documents.length
+            ) {
+                throw new Error(
+                    `Schedule coverage is incomplete for round: ${roundNumber}`
+                );
+            }
+
+            const calculations: ScoreDetailsPlayoffRoundCalculationType[] = [];
+            for (const document of documents) {
+                const schedule = document.scheduleId;
+                if (
+                    !schedule ||
+                    schedule.roundNumber !== roundNumber ||
+                    schedule.userOneId?.toString() !==
+                        document.teamOne.userId?.toString() ||
+                    schedule.userTwoId?.toString() !==
+                        document.teamTwo.userId?.toString()
+                ) {
+                    throw new Error(
+                        `Invalid schedule for score details: ${document._id}`
+                    );
+                }
+                const teams: CalculationTeamType[] = [];
+                for (const team of [document.teamOne, document.teamTwo]) {
+                    const startingLineup = team.startingLineupId;
+                    const userId = team.userId?.toString();
+                    if (
+                        !startingLineup ||
+                        startingLineup.roundNumber !== roundNumber ||
+                        startingLineup.userId?.toString() !== userId
+                    ) {
+                        throw new Error(
+                            `Invalid starting lineup for user: ${userId}`
+                        );
+                    }
+                    const positions = Object.fromEntries(
+                        STARTING_LINEUP_POSITION_KEYS.map(key => {
+                            return [key, startingLineup[key]?.toString()];
+                        })
+                    );
+                    const positionIds = STARTING_LINEUP_POSITION_KEYS.map(key => {
+                        return startingLineup[key]?.toString();
+                    });
+                    const playerScores = team.players!;
+                    if (
+                        new Set(positionIds).size !==
+                            STARTING_LINEUP_PLAYER_COUNT ||
+                        positionIds.some(id => {
+                            return (
+                                !id ||
+                                !playerScores.some(
+                                    player => player.playerId?.toString() === id
+                                )
+                            );
+                        })
+                    ) {
+                        throw new Error(
+                            `Starting lineup players do not match score details for user: ${userId}`
+                        );
+                    }
+                    const { setPlayList } =
+                        await SetPlayPlayoffDataModel.getSetPlayListByStartingLineupId(
+                            startingLineup._id.toString()
+                        );
+                    for (const setPlay of setPlayList) {
+                        setPlayPayloadZodSchema.parse(setPlay);
+                    }
+                    const replacementIds = setPlayList.flatMap(setPlay => {
+                        return setPlay.type === SetPlayEnumType.Rezerwa ||
+                            setPlay.type === SetPlayEnumType.RezerwaGielda ||
+                            (setPlay.type === SetPlayEnumType.Awatar &&
+                                !setPlay.adminData?.isDisabled)
+                            ? [setPlay.userData.playerId]
+                            : [];
+                    });
+                    const players = await PlayersModel.find({
+                        _id: { $in: [...positionIds, ...replacementIds] }
+                    })
+                        .select('isJunior')
+                        .exec();
+                    const playerMetadata = players.map(player => {
+                        return {
+                            playerId: player._id.toString(),
+                            isJunior: player.isJunior
+                        };
+                    });
+                    const mappedPlayers = playerScores.map(player => {
+                        const playerId = player.playerId!.toString();
+                        const metadata = playerMetadata.find(
+                            item => item.playerId === playerId
+                        );
+                        if (!metadata) {
+                            throw new Error(`Missing player: ${playerId}`);
+                        }
+                        return {
+                            ...playerScoresZodSchema.parse(player),
+                            ...metadata,
+                            setPlay: 0,
+                            comment: ''
+                        };
+                    });
+                    teams.push({
+                        players: mappedPlayers,
+                        startingLineup: {
+                            playerOne: positions.playerOne,
+                            playerTwo: positions.playerTwo,
+                            playerThree: positions.playerThree,
+                            playerFour: positions.playerFour,
+                            playerFive: positions.playerFive,
+                            roles: {
+                                pn: {
+                                    playerId:
+                                        startingLineup.roles.pn.playerId.toString(),
+                                    isDisabled:
+                                        startingLineup.roles.pn.isDisabled
+                                },
+                                kb: startingLineup.roles.kb.toString(),
+                                p: startingLineup.roles.p.toString()
+                            }
+                        },
+                        setPlayList,
+                        replacementPlayers: playerMetadata.filter(player => {
+                            return replacementIds.includes(player.playerId);
+                        })
+                    });
+                }
+                const result = calculateMatchScores({
+                    seasonStage: 'playoff',
+                    roundNumber,
+                    teamOne: teams[0],
+                    teamTwo: teams[1]
+                });
+                for (const team of [result.teamOne, result.teamTwo]) {
+                    playerSchema.array().parse(team.players);
+                    trainerSchema.parse(team.trainer);
+                }
+                calculations.push({ document, result });
+            }
+            const userIds = documents.flatMap(document => {
+                return [document.teamOne.userId, document.teamTwo.userId];
+            });
+            if (
+                (await UserModel.countDocuments({
+                    _id: { $in: userIds }
+                }).exec()) !== userIds.length
+            ) {
+                throw new Error(`Missing team user for round: ${roundNumber}`);
+            }
+            for (const { document, result } of calculations) {
+                document.set({
+                    'teamOne.players': result.teamOne.players,
+                    'teamOne.trainer': result.teamOne.trainer,
+                    'teamTwo.players': result.teamTwo.players,
+                    'teamTwo.trainer': result.teamTwo.trainer
+                });
+                await document.save();
+                await SchedulePlayoffModel.updateOne(
+                    { _id: document.scheduleId!._id, roundNumber },
+                    {
+                        $set: {
+                            userOneScore: result.teamOneScore,
+                            userTwoScore: result.teamTwoScore
+                        }
+                    }
+                );
+            }
+            await currentSeason.updateSeason({
+                isScoreCalculatdedPlayoff: {
+                    ...currentSeason.isScoreCalculatdedPlayoff,
+                    [roundNumber]: true
+                }
+            });
+        } catch (error) {
+            console.error('Error calculating playoff round scores:', error);
             throw error;
         }
     }

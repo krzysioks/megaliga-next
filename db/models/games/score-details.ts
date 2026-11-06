@@ -12,6 +12,7 @@ import { HydratedDocument, model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
 import {
+    MIN_REGULAR_SEASON_MATCH_COUNT,
     MIN_REGULAR_SEASON_ROUND,
     MAX_REGULAR_SEASON_ROUND,
     STARTING_LINEUP_PLAYER_COUNT,
@@ -670,7 +671,10 @@ scoreDetailsSchema.static(
 
             const documents = await this.find({ roundNumber }).exec();
 
-            return areRoundScoresComplete({ documents });
+            return areRoundScoresComplete({
+                documents,
+                minimumMatchCount: MIN_REGULAR_SEASON_MATCH_COUNT
+            });
         } catch (error) {
             console.error('Error checking score calculations status:', error);
             throw error;
@@ -705,7 +709,12 @@ scoreDetailsSchema.static(
                         select: 'userId roundNumber playerOne playerTwo playerThree playerFour playerFive roles'
                     })
                     .exec();
-            if (!areRoundScoresComplete({ documents })) {
+            if (
+                !areRoundScoresComplete({
+                    documents,
+                    minimumMatchCount: MIN_REGULAR_SEASON_MATCH_COUNT
+                })
+            ) {
                 throw new Error(
                     `Score details are incomplete for round: ${roundNumber}`
                 );

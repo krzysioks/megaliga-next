@@ -452,6 +452,37 @@ describe('calculateMatchScores', () => {
         ).toThrow('Invalid KFN interval: 0-22');
     });
 
+    test('Should award Spartacus in playoff round one while suppressing it in regular-season round one', () => {
+        const teamOne = createTeam();
+        teamOne.setPlayList = [
+            {
+                selectedSetPlayId: 'spartacus',
+                setPlayId: 'spartacus',
+                name: 'Spartacus',
+                type: SetPlayEnumType.Spartacus,
+                userData: {
+                    ownPlayerId: 'four',
+                    opponentPlayerId: 'opponent-four'
+                },
+                adminData: { ownAverage: 1, opponentAverage: 2 }
+            }
+        ];
+        const teamTwo = createTeam('opponent-');
+        teamTwo.players[3].heatOne.value = 0;
+        expect(
+            calculateMatchScores({ roundNumber: 1, teamOne, teamTwo }).teamOne
+                .players[3].comment
+        ).toBe('Spartacus 0');
+        expect(
+            calculateMatchScores({
+                roundNumber: 1,
+                seasonStage: 'playoff',
+                teamOne,
+                teamTwo
+            }).teamOne.players[3].comment
+        ).toBe('Spartacus 3');
+    });
+
     test('Should calculate total scores for both teams with no selected set plays', () => {
         const teamOne = createTeam();
         const teamTwo = createTeam();
