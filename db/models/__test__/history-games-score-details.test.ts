@@ -1,14 +1,19 @@
+import type { TeamCalculationDetailsType } from '@/db/models/schema.types';
+
 import mongoose from 'mongoose';
 
 import { DBClient } from '@/db/db-client';
+import { STARTING_LINEUP_PLAYER_COUNT } from '@/db/db.constants';
 import HistoryGamesScoreDetailsModel, {
     HistoryGamesScoreDetailsByIdReturnType,
-    HistoryGamesScoreDetailsInputType
+    HistoryGamesScoreDetailsInputType,
+    historyGamesScoreDetailsZodSchema
 } from '@/db/models/history/history-games-score-details';
 import HistoryTeamModel, {
     HistoryTeamType
 } from '@/db/models/history/history-team';
 import PlayersModel from '@/db/models/players';
+import { SetPlayEnumType } from '@/db/models/schema.types';
 
 beforeAll(async () => {
     jest.spyOn(console, 'error').mockImplementation(() => {});
@@ -171,7 +176,89 @@ describe('Test HistoryGamesScoreDetailsModel methods and static functions', () =
     });
 
     describe('saveScoreDetailToHistory', () => {
-        test('should create a document and return its id', async () => {
+        test('Should preserve both teams calculation details and user identities without adding result IDs', async () => {
+            const playerIds = Array.from(
+                { length: STARTING_LINEUP_PLAYER_COUNT + 1 },
+                () => {
+                    return new mongoose.Types.ObjectId().toString();
+                }
+            );
+            const userId = new mongoose.Types.ObjectId().toString();
+            const setPlayId = new mongoose.Types.ObjectId().toString();
+            const calculationDetails: TeamCalculationDetailsType = {
+                players: playerIds
+                    .slice(0, STARTING_LINEUP_PLAYER_COUNT)
+                    .map((playerId, index) => {
+                        return {
+                            playerId,
+                            nominalPlayerId:
+                                index === 0
+                                    ? playerIds[STARTING_LINEUP_PLAYER_COUNT]
+                                    : playerId,
+                            actualStartCount: 0,
+                            basePoints: 0,
+                            functionPoints: 0,
+                            rolePoints: 0,
+                            setPlayPoints: index === 0 ? -4 : 0,
+                            function: null,
+                            role: null
+                        };
+                    }),
+                trainer: { heatPoints: 0, setPlayPoints: 0 },
+                setPlayResults: [0, 1].map(() => {
+                    return {
+                        selectedSetPlayId:
+                            new mongoose.Types.ObjectId().toString(),
+                        setPlayId,
+                        name: 'NCD6',
+                        type: SetPlayEnumType.Ncd6,
+                        recipients: [
+                            {
+                                recipientType: 'player',
+                                playerId: playerIds[0],
+                                nominalPlayerId:
+                                    playerIds[STARTING_LINEUP_PLAYER_COUNT],
+                                calculatedPoints: -2,
+                                creditedPoints: -2,
+                                setPlayContributionType: 'award'
+                            }
+                        ]
+                    };
+                }),
+                floorAdjustment: 4
+            };
+            const team = {
+                teamId: new mongoose.Types.ObjectId().toString(),
+                userId,
+                score: 0,
+                calculationDetails
+            };
+            const savedId =
+                await HistoryGamesScoreDetailsModel.saveScoreDetailToHistory(
+                    historyGamesScoreDetailsZodSchema.parse({
+                        teamOne: team,
+                        teamTwo: team
+                    })
+                );
+            const savedDocument =
+                await HistoryGamesScoreDetailsModel.findById(savedId).exec();
+            const savedTeams = savedDocument?.toJSON({
+                flattenObjectIds: true
+            });
+
+            expect(savedTeams?.teamOne).toMatchObject({ userId });
+            expect(savedTeams?.teamTwo).toMatchObject({ userId });
+            expect(savedTeams?.teamOne).toHaveProperty(
+                'calculationDetails',
+                calculationDetails
+            );
+            expect(savedTeams?.teamTwo).toHaveProperty(
+                'calculationDetails',
+                calculationDetails
+            );
+        });
+
+        test('Should save history score details without calculation details or user IDs and return its ID', async () => {
             const teamOne = await HistoryTeamModel.create(
                 createHistoryTeamData(
                     new mongoose.Types.ObjectId().toString(),
@@ -252,6 +339,10 @@ describe('Test HistoryGamesScoreDetailsModel methods and static functions', () =
             );
             expect(savedDocument?.teamOne.score).toBe(46);
             expect(savedDocument?.teamTwo.score).toBe(44);
+            expect(savedDocument?.teamOne.calculationDetails).toBeUndefined();
+            expect(savedDocument?.teamTwo.calculationDetails).toBeUndefined();
+            expect(savedDocument?.teamOne.userId).toBeUndefined();
+            expect(savedDocument?.teamTwo.userId).toBeUndefined();
         });
     });
 });

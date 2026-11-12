@@ -1,10 +1,15 @@
-import type { PlayerScoresType } from '@/db/models/schema.types';
+import type {
+    TeamCalculationDetailsType,
+    PlayerScoresType
+} from '@/db/models/schema.types';
 
 import mongoose from 'mongoose';
 
 import { DBClient } from '@/db/db-client';
+import { STARTING_LINEUP_PLAYER_COUNT } from '@/db/db.constants';
 import ScheduleModel from '@/db/models/games/schedule';
 import ScoreDetailsModel, {
+    scoreDetailsZodSchema,
     ScoreDetailsReturnType,
     ScoreDetailsInputType
 } from '@/db/models/games/score-details';
@@ -930,7 +935,110 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             );
         });
 
-        test('Should save heat values and flags while defaulting unused heats to null', async () => {
+        test('Should preserve both teams calculation details while saving player scores', async () => {
+            const userOne = await UserModel.create(createUserData(71));
+            const userTwo = await UserModel.create(createUserData(72));
+            const player = await PlayersModel.create({
+                extraligaPlayerName: 'Result rider'
+            });
+            const schedule = await ScheduleModel.create({
+                userOneId: userOne._id,
+                userTwoId: userTwo._id,
+                roundNumber: 1,
+                ligueGroupsId: new mongoose.Types.ObjectId()
+            });
+            const playerId = player._id.toString();
+            const nominalPlayerId = new mongoose.Types.ObjectId().toString();
+            const calculationDetails: TeamCalculationDetailsType = {
+                players: [
+                    playerId,
+                    ...Array.from(
+                        { length: STARTING_LINEUP_PLAYER_COUNT - 1 },
+                        () => {
+                            return new mongoose.Types.ObjectId().toString();
+                        }
+                    )
+                ].map((id, index) => {
+                    return {
+                        playerId: id,
+                        nominalPlayerId: index === 0 ? nominalPlayerId : id,
+                        actualStartCount: index === 0 ? 7 : 0,
+                        basePoints: index === 0 ? 18 : 0,
+                        functionPoints: index === 0 ? 5 : 0,
+                        rolePoints: 0,
+                        setPlayPoints: index === 0 ? -2 : 0,
+                        function: index === 0 ? 'Lider' : null,
+                        role: index === 0 ? 'PN' : null
+                    };
+                }),
+                trainer: { heatPoints: 9, setPlayPoints: 0 },
+                setPlayResults: [
+                    {
+                        selectedSetPlayId:
+                            new mongoose.Types.ObjectId().toString(),
+                        setPlayId: new mongoose.Types.ObjectId().toString(),
+                        name: 'Awatar',
+                        type: SetPlayEnumType.Awatar,
+                        recipients: [
+                            {
+                                recipientType: 'player',
+                                playerId,
+                                nominalPlayerId,
+                                calculatedPoints: -2,
+                                creditedPoints: -2,
+                                setPlayContributionType: 'replacementDifference'
+                            },
+                            {
+                                recipientType: 'trainer',
+                                calculatedPoints: 0,
+                                creditedPoints: 0,
+                                setPlayContributionType: 'trainerHeatDifference'
+                            }
+                        ]
+                    }
+                ],
+                floorAdjustment: 0
+            };
+            const team = { userId: userOne._id.toString(), calculationDetails };
+            await ScoreDetailsModel.create(
+                scoreDetailsZodSchema.parse({
+                    scheduleId: schedule._id.toString(),
+                    roundNumber: 1,
+                    teamOne: team,
+                    teamTwo: { ...team, userId: userTwo._id.toString() }
+                })
+            );
+
+            await ScoreDetailsModel.savePlayerScoreDetails(
+                {
+                    userId: [userOne._id.toString()],
+                    startingLineupId: [
+                        new mongoose.Types.ObjectId().toString()
+                    ],
+                    playerId,
+                    playerName: player.extraligaPlayerName
+                },
+                1,
+                { heatOne: { value: 3 } }
+            );
+
+            const savedDocument = await ScoreDetailsModel.findOne({
+                scheduleId: schedule._id
+            }).exec();
+            const savedTeams = savedDocument?.toJSON({
+                flattenObjectIds: true
+            });
+            expect(savedTeams?.teamOne).toHaveProperty(
+                'calculationDetails',
+                calculationDetails
+            );
+            expect(savedTeams?.teamTwo).toHaveProperty(
+                'calculationDetails',
+                calculationDetails
+            );
+        });
+
+        test('Should save heat values and flags with null defaults and no calculation details', async () => {
             const userOne = await new UserModel(createUserData(61)).save();
             const userTwo = await new UserModel(createUserData(62)).save();
             const [player] = await PlayersModel.create([
@@ -960,6 +1068,9 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 roundNumber: 12
             }).exec();
             const savedPlayer = savedDocument?.teamOne.players?.[0];
+
+            expect(savedDocument?.teamOne.calculationDetails).toBeUndefined();
+            expect(savedDocument?.teamTwo.calculationDetails).toBeUndefined();
 
             expectPlayerHeat(savedPlayer?.heatOne, playerHeat(null));
             expectPlayerHeat(savedPlayer?.heatTwo, playerHeat(0));

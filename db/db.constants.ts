@@ -1,5 +1,3 @@
-import { playerScoresZodSchema } from '@/db/models/schema.types';
-
 export const MIN_REGULAR_SEASON_ROUND = 1;
 export const MAX_REGULAR_SEASON_ROUND = 14;
 export const MIN_PLAYOFF_ROUND = 1;
@@ -14,7 +12,24 @@ export const MAX_SELECTIONS_PER_RESERVE_SET_PLAY = 1;
 export const STARTING_LINEUP_PLAYER_COUNT = 5;
 export const BRUDNA_PALA_LEADER_COUNT = 4;
 
-export const CALCULATION_HEAT_KEYS = playerScoresZodSchema.keyof().options;
+export const CALCULATION_HEAT_KEYS = [
+    'heatOne',
+    'heatTwo',
+    'heatThree',
+    'heatFour',
+    'heatFive',
+    'heatSix',
+    'heatSeven'
+] as const;
+
+export const CALCULATION_FUNCTIONS = ['Lider', 'Joker', 'Kapitan'] as const;
+export const CALCULATION_ROLES = ['PN', 'KB', 'P'] as const;
+export const CALCULATION_RECIPIENT_TYPES = ['player', 'trainer'] as const;
+export const SET_PLAY_CONTRIBUTION_TYPES = [
+    'award',
+    'replacementDifference',
+    'trainerHeatDifference'
+] as const;
 
 export const STARTING_LINEUP_POSITION_KEYS = [
     'playerOne',

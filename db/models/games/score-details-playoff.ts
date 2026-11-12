@@ -5,7 +5,8 @@ import type {
 } from '@/db/db.types';
 import type {
     PlayerScoresType,
-    PlayerScoresInputType
+    PlayerScoresInputType,
+    TeamCalculationDetailsType
 } from '@/db/models/schema.types';
 
 import { HydratedDocument, model, Model, Schema, Types } from 'mongoose';
@@ -16,7 +17,12 @@ import {
     MAX_PLAYOFF_ROUND,
     PLAYOFF_MATCH_COUNT,
     STARTING_LINEUP_PLAYER_COUNT,
-    STARTING_LINEUP_POSITION_KEYS
+    STARTING_LINEUP_POSITION_KEYS,
+    CALCULATION_FUNCTIONS,
+    CALCULATION_HEAT_KEYS,
+    CALCULATION_RECIPIENT_TYPES,
+    CALCULATION_ROLES,
+    SET_PLAY_CONTRIBUTION_TYPES
 } from '@/db/db.constants';
 import { areRoundScoresComplete, getSetPlaysDetails } from '@/db/db.utils';
 import SchedulePlayoffModel, {
@@ -278,6 +284,102 @@ const scoreDetailsPlayoffSchema = new Schema<
         startingLineupId: {
             type: Schema.Types.ObjectId,
             ref: 'StartingLineupPlayoff'
+        },
+        calculationDetails: {
+            type: new Schema<TeamCalculationDetailsType>(
+                {
+                    players: [
+                        {
+                            _id: false,
+                            playerId: {
+                                type: Schema.Types.ObjectId,
+                                ref: 'Players',
+                                required: true
+                            },
+                            nominalPlayerId: {
+                                type: Schema.Types.ObjectId,
+                                ref: 'Players',
+                                required: true
+                            },
+                            actualStartCount: {
+                                type: Number,
+                                required: true,
+                                min: 0,
+                                max: CALCULATION_HEAT_KEYS.length
+                            },
+                            basePoints: { type: Number, required: true },
+                            functionPoints: { type: Number, required: true },
+                            rolePoints: { type: Number, required: true },
+                            setPlayPoints: { type: Number, required: true },
+                            function: {
+                                type: String,
+                                enum: [...CALCULATION_FUNCTIONS, null]
+                            },
+                            role: {
+                                type: String,
+                                enum: [...CALCULATION_ROLES, null]
+                            }
+                        }
+                    ],
+                    trainer: {
+                        heatPoints: { type: Number, required: true },
+                        setPlayPoints: { type: Number, required: true }
+                    },
+                    setPlayResults: [
+                        {
+                            _id: false,
+                            selectedSetPlayId: {
+                                type: Schema.Types.ObjectId,
+                                required: true
+                            },
+                            setPlayId: {
+                                type: Schema.Types.ObjectId,
+                                required: true
+                            },
+                            name: { type: String, required: true },
+                            type: {
+                                type: String,
+                                enum: Object.values(SetPlayEnumType),
+                                required: true
+                            },
+                            recipients: [
+                                {
+                                    _id: false,
+                                    recipientType: {
+                                        type: String,
+                                        enum: CALCULATION_RECIPIENT_TYPES,
+                                        required: true
+                                    },
+                                    playerId: {
+                                        type: Schema.Types.ObjectId,
+                                        ref: 'Players'
+                                    },
+                                    nominalPlayerId: {
+                                        type: Schema.Types.ObjectId,
+                                        ref: 'Players'
+                                    },
+                                    calculatedPoints: {
+                                        type: Number,
+                                        required: true
+                                    },
+                                    creditedPoints: {
+                                        type: Number,
+                                        required: true
+                                    },
+                                    setPlayContributionType: {
+                                        type: String,
+                                        enum: SET_PLAY_CONTRIBUTION_TYPES,
+                                        required: true
+                                    }
+                                }
+                            ]
+                        }
+                    ],
+                    floorAdjustment: { type: Number, required: true, min: 0 }
+                },
+                { _id: false }
+            ),
+            default: undefined
         }
     },
     teamTwo: {
@@ -343,6 +445,102 @@ const scoreDetailsPlayoffSchema = new Schema<
         startingLineupId: {
             type: Schema.Types.ObjectId,
             ref: 'StartingLineupPlayoff'
+        },
+        calculationDetails: {
+            type: new Schema<TeamCalculationDetailsType>(
+                {
+                    players: [
+                        {
+                            _id: false,
+                            playerId: {
+                                type: Schema.Types.ObjectId,
+                                ref: 'Players',
+                                required: true
+                            },
+                            nominalPlayerId: {
+                                type: Schema.Types.ObjectId,
+                                ref: 'Players',
+                                required: true
+                            },
+                            actualStartCount: {
+                                type: Number,
+                                required: true,
+                                min: 0,
+                                max: CALCULATION_HEAT_KEYS.length
+                            },
+                            basePoints: { type: Number, required: true },
+                            functionPoints: { type: Number, required: true },
+                            rolePoints: { type: Number, required: true },
+                            setPlayPoints: { type: Number, required: true },
+                            function: {
+                                type: String,
+                                enum: [...CALCULATION_FUNCTIONS, null]
+                            },
+                            role: {
+                                type: String,
+                                enum: [...CALCULATION_ROLES, null]
+                            }
+                        }
+                    ],
+                    trainer: {
+                        heatPoints: { type: Number, required: true },
+                        setPlayPoints: { type: Number, required: true }
+                    },
+                    setPlayResults: [
+                        {
+                            _id: false,
+                            selectedSetPlayId: {
+                                type: Schema.Types.ObjectId,
+                                required: true
+                            },
+                            setPlayId: {
+                                type: Schema.Types.ObjectId,
+                                required: true
+                            },
+                            name: { type: String, required: true },
+                            type: {
+                                type: String,
+                                enum: Object.values(SetPlayEnumType),
+                                required: true
+                            },
+                            recipients: [
+                                {
+                                    _id: false,
+                                    recipientType: {
+                                        type: String,
+                                        enum: CALCULATION_RECIPIENT_TYPES,
+                                        required: true
+                                    },
+                                    playerId: {
+                                        type: Schema.Types.ObjectId,
+                                        ref: 'Players'
+                                    },
+                                    nominalPlayerId: {
+                                        type: Schema.Types.ObjectId,
+                                        ref: 'Players'
+                                    },
+                                    calculatedPoints: {
+                                        type: Number,
+                                        required: true
+                                    },
+                                    creditedPoints: {
+                                        type: Number,
+                                        required: true
+                                    },
+                                    setPlayContributionType: {
+                                        type: String,
+                                        enum: SET_PLAY_CONTRIBUTION_TYPES,
+                                        required: true
+                                    }
+                                }
+                            ]
+                        }
+                    ],
+                    floorAdjustment: { type: Number, required: true, min: 0 }
+                },
+                { _id: false }
+            ),
+            default: undefined
         }
     }
 });

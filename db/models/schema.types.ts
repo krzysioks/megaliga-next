@@ -1,5 +1,15 @@
 import { z } from 'zod';
 
+import {
+    CALCULATION_FUNCTIONS,
+    CALCULATION_HEAT_KEYS,
+    CALCULATION_RECIPIENT_TYPES,
+    CALCULATION_ROLES,
+    MAX_SET_PLAYS_PER_ROUND,
+    SET_PLAY_CONTRIBUTION_TYPES,
+    STARTING_LINEUP_PLAYER_COUNT
+} from '@/db/db.constants';
+
 export enum ScheduleStatus {
     Generated = 'schedule generated',
     ReadyForGeneration = 'schedule ready for generation',
@@ -148,20 +158,70 @@ export const historyPlayerSchema = historyHeatScoresSchema.extend({
 
 export type HistoryPlayerType = z.infer<typeof historyPlayerSchema>;
 
+export const calculationPlayerZodSchema = z.object({
+    playerId: objectIdSchema.unwrap(),
+    nominalPlayerId: objectIdSchema.unwrap(),
+    actualStartCount: z.number().int().min(0).max(CALCULATION_HEAT_KEYS.length),
+    basePoints: z.number(),
+    functionPoints: z.number(),
+    rolePoints: z.number(),
+    setPlayPoints: z.number(),
+    function: z.enum(CALCULATION_FUNCTIONS).nullable(),
+    role: z.enum(CALCULATION_ROLES).nullable()
+});
+
+export const calculationSetPlayRecipientZodSchema = z.object({
+    recipientType: z.enum(CALCULATION_RECIPIENT_TYPES),
+    playerId: objectIdSchema,
+    nominalPlayerId: objectIdSchema,
+    calculatedPoints: z.number(),
+    creditedPoints: z.number(),
+    setPlayContributionType: z.enum(SET_PLAY_CONTRIBUTION_TYPES)
+});
+
+export const selectedSetPlayCalculationResultZodSchema = z.object({
+    selectedSetPlayId: objectIdSchema.unwrap(),
+    setPlayId: objectIdSchema.unwrap(),
+    name: standardStringSchema,
+    type: z.nativeEnum(SetPlayEnumType),
+    recipients: z.array(calculationSetPlayRecipientZodSchema)
+});
+
+export const teamCalculationDetailsZodSchema = z.object({
+    players: z
+        .array(calculationPlayerZodSchema)
+        .length(STARTING_LINEUP_PLAYER_COUNT),
+    trainer: z.object({
+        heatPoints: z.number(),
+        setPlayPoints: z.number()
+    }),
+    setPlayResults: z
+        .array(selectedSetPlayCalculationResultZodSchema)
+        .max(MAX_SET_PLAYS_PER_ROUND),
+    floorAdjustment: z.number().min(0)
+});
+
+export type TeamCalculationDetailsType = z.infer<
+    typeof teamCalculationDetailsZodSchema
+>;
+
 // Team schema for team details in a game (used for both teamOne and teamTwo)
 export const historyTeamSchema = z.object({
     teamId: objectIdSchema, // Reference to team in HistoryTeam collection
+    userId: objectIdSchema,
     score: z.number(),
     setPlays: z.string().default(''),
     players: z.array(historyPlayerSchema).optional(),
-    trainer: trainerSchema.optional()
+    trainer: trainerSchema.optional(),
+    calculationDetails: teamCalculationDetailsZodSchema.optional()
 });
 
 export const teamSchema = z.object({
     userId: objectIdSchema, // Reference to  User model, from where we will populate team name
     players: z.array(playerSchema).optional(),
     trainer: trainerSchema.optional(),
-    startingLineupId: objectIdSchema.optional() // Reference to StartingLineup model, from which we will populate setplays
+    startingLineupId: objectIdSchema.optional(), // Reference to StartingLineup model, from which we will populate setplays
+    calculationDetails: teamCalculationDetailsZodSchema.optional()
 });
 
 // Shared schemas for common patterns
