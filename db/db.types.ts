@@ -7,6 +7,7 @@ import type { StartingLineupType } from '@/db/models/games/starting-lineup';
 import type { PlayersReturnType, PlayersType } from '@/db/models/players';
 import type {
     PlayerScoresType,
+    TeamCalculationDetailsType,
     playerPositionsZodSchema,
     playerRolesZodSchema,
     trainerSchema,
@@ -78,6 +79,12 @@ export interface CalculateMatchScoresParamsType {
 export interface CalculationTeamReturnType {
     players: CalculationPlayerType[];
     trainer: z.infer<typeof trainerSchema>;
+    calculationDetails: TeamCalculationDetailsType;
+}
+
+export interface GetSetPlayResultParamsType {
+    setPlayResults: TeamCalculationDetailsType['setPlayResults'];
+    selectedSetPlayId: string;
 }
 
 export interface CalculateMatchScoresReturnType {
@@ -103,11 +110,14 @@ export interface CalculateTrainerParamsType {
     players: CalculationPlayerType[];
 }
 
-export interface ScoreModifierType {
+export type ScoreModifierType = {
     name: string;
     points: number;
     countsTowardsLimit: boolean;
-}
+} & (
+    | { kind: 'function' | 'role' | 'replacement' }
+    | { kind: 'setPlay'; selectedSetPlayId: string }
+);
 
 export interface SetPlayCalculationParamsType<T extends SetPlayEnumType> {
     setPlay: Extract<SetPlaysDataSelectionReturnType, { type: T }>;
@@ -124,11 +134,20 @@ export interface CalculateMortalKombatComboParamsType {
     liderPoints: number;
 }
 
+export interface CalculationReplacementStepType {
+    selectedSetPlayId: string;
+    previousPlayerId: string;
+    replacementPlayerId: string;
+    basePointsDifference: number;
+    trainerHeatPointsDifference: number;
+}
+
 export interface CalculationSlotType {
     player: CalculationPlayerType;
     nominalPlayerId: string;
     isReserve: boolean;
     replacementNames: string[];
+    replacementSteps: CalculationReplacementStepType[];
     isMatchDraw?: boolean;
 }
 

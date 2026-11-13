@@ -1,6 +1,7 @@
 import type {
     CalculateKapitanParamsType,
     GetTrainerHeatTotalParamsType,
+    GetSetPlayResultParamsType,
     CalculateMatchScoresParamsType,
     CalculateMatchScoresReturnType,
     CalculatePlayerParamsType,
@@ -51,6 +52,12 @@ import {
     calculateReplacement
 } from '@/db/set-plays.utils';
 import { SET_PLAY_SHORT_LABELS } from '@/utils/utils.constants';
+
+function getSetPlayResult(params: GetSetPlayResultParamsType) {
+    return params.setPlayResults.find(result => {
+        return result.selectedSetPlayId === params.selectedSetPlayId;
+    })!;
+}
 
 function getTrainerHeatTotal(params: GetTrainerHeatTotalParamsType): number {
     return CALCULATION_HEAT_KEYS.reduce(
@@ -164,7 +171,45 @@ function prepareTeam(params: CalculationTeamType): CalculationTeamReturnType {
             comment: ''
         };
     });
-    return { players, trainer: calculateTrainer({ players }) };
+    return {
+        players,
+        trainer: calculateTrainer({ players }),
+        calculationDetails: {
+            players: players.map(player => {
+                return {
+                    playerId: player.playerId,
+                    nominalPlayerId: player.playerId,
+                    actualStartCount: getActualHeats({ player }).length,
+                    basePoints: getPlayerTotal({ player }),
+                    functionPoints: 0,
+                    rolePoints: 0,
+                    setPlayPoints: 0,
+                    function: null,
+                    role: null
+                };
+            }),
+            trainer: { heatPoints: 0, setPlayPoints: 0 },
+            setPlayResults: params.setPlayList.flatMap(setPlay => {
+                if (
+                    (setPlay.type === SetPlayEnumType.Awatar ||
+                        setPlay.type === SetPlayEnumType.BrudnaPala) &&
+                    setPlay.adminData?.isDisabled
+                ) {
+                    return [];
+                }
+                return [
+                    {
+                        selectedSetPlayId: setPlay.selectedSetPlayId,
+                        setPlayId: setPlay.setPlayId,
+                        name: setPlay.name,
+                        type: setPlay.type,
+                        recipients: []
+                    }
+                ];
+            }),
+            floorAdjustment: 0
+        }
+    };
 }
 
 function getReplacementPlayer(params: ReplacementPlayerParamsType) {
@@ -212,15 +257,17 @@ function generateStartingLineupMatrix(
             player: structuredClone(player),
             nominalPlayerId: player.playerId,
             isReserve: false,
-            replacementNames: [] as string[]
+            replacementNames: [] as string[],
+            replacementSteps: []
         };
     });
     for (const setPlay of params.teamData.setPlayList) {
         if (setPlay.type === SetPlayEnumType.Awatar) {
-            const slot = slots.find(
+            const index = slots.findIndex(
                 slot =>
                     slot.nominalPlayerId === setPlay.userData.replacedPlayerId
             );
+            const slot = slots[index];
             if (!slot) {
                 throw new Error(
                     `Selected player is not in starting lineup: ${setPlay.userData.replacedPlayerId}`
@@ -238,12 +285,25 @@ function generateStartingLineupMatrix(
                 teamData: params.teamData,
                 playerId: setPlay.userData.playerId
             });
-            slot.player = calculateAwatar({
+            const replacement = calculateAwatar({
                 player: slot.player,
                 playerId: player.playerId,
                 isJunior: player.isJunior,
                 scores: setPlay.adminData
             });
+            const heatKey = CALCULATION_HEAT_KEYS[index];
+            slot.replacementSteps.push({
+                selectedSetPlayId: setPlay.selectedSetPlayId,
+                previousPlayerId: slot.player.playerId,
+                replacementPlayerId: replacement.playerId,
+                basePointsDifference:
+                    getPlayerTotal({ player: replacement }) -
+                    getPlayerTotal({ player: slot.player }),
+                trainerHeatPointsDifference:
+                    (replacement[heatKey].value ?? 0) -
+                    (slot.player[heatKey].value ?? 0)
+            });
+            slot.player = replacement;
             slot.isMatchDraw = setPlay.adminData.isMatchDraw;
             slot.replacementNames.push(SET_PLAY_SHORT_LABELS[setPlay.type]);
         }
@@ -339,6 +399,22 @@ function selectReserveLineup(
                         replacementNames: [
                             ...slot.replacementNames,
                             SET_PLAY_SHORT_LABELS[reserve.type]
+                        ],
+                        replacementSteps: [
+                            ...slot.replacementSteps,
+                            {
+                                selectedSetPlayId: reserve.selectedSetPlayId,
+                                previousPlayerId: slot.player.playerId,
+                                replacementPlayerId: player.playerId,
+                                basePointsDifference:
+                                    getPlayerTotal({ player }) -
+                                    getPlayerTotal({ player: slot.player }),
+                                trainerHeatPointsDifference:
+                                    (player[CALCULATION_HEAT_KEYS[index]]
+                                        .value ?? 0) -
+                                    (slot.player[CALCULATION_HEAT_KEYS[index]]
+                                        .value ?? 0)
+                            }
                         ]
                     };
                     if (!updated.some(slot => slot.player.isJunior)) {
@@ -412,22 +488,56 @@ function calculateTeamScore(
     team.players.forEach((player, index) => {
         const slot = params.slots[index];
         const actualPlayer = slot.player;
+        const playerDetails = team.calculationDetails.players[index];
+        playerDetails.playerId = actualPlayer.playerId;
+        playerDetails.actualStartCount = getActualHeats({
+            player: actualPlayer
+        }).length;
+        playerDetails.basePoints = getPlayerTotal({ player: actualPlayer });
+        for (const step of slot.replacementSteps) {
+            const setPlayResult = getSetPlayResult({
+                setPlayResults: team.calculationDetails.setPlayResults,
+                selectedSetPlayId: step.selectedSetPlayId
+            });
+            setPlayResult.recipients.push(
+                {
+                    recipientType: 'player',
+                    playerId: step.replacementPlayerId,
+                    nominalPlayerId: slot.nominalPlayerId,
+                    calculatedPoints: step.basePointsDifference,
+                    creditedPoints: step.basePointsDifference,
+                    setPlayContributionType: 'replacementDifference'
+                },
+                {
+                    recipientType: 'trainer',
+                    calculatedPoints: step.trainerHeatPointsDifference,
+                    creditedPoints: step.trainerHeatPointsDifference,
+                    setPlayContributionType: 'trainerHeatDifference'
+                }
+            );
+        }
         const modifiers: ScoreModifierType[] = [];
         const effectivePlayer = effectivePlayers[index];
         if (index === 0) {
+            playerDetails.function = 'Lider';
             modifiers.push({
+                kind: 'function',
                 name: 'Lider',
                 points: calculateLider({ player: effectivePlayer }),
                 countsTowardsLimit: true
             });
         } else if (index === 1) {
+            playerDetails.function = 'Joker';
             modifiers.push({
+                kind: 'function',
                 name: 'Joker',
                 points: calculateJoker({ player: actualPlayer }),
                 countsTowardsLimit: true
             });
         } else if (index === 2 && params.includeCompetitiveAwards) {
+            playerDetails.function = 'Kapitan';
             modifiers.push({
+                kind: 'function',
                 name: 'Kapitan',
                 points: calculateKapitan({
                     player: effectivePlayer,
@@ -437,7 +547,9 @@ function calculateTeamScore(
             });
         }
         if (!slot.isReserve && player.playerId === roles.pn.playerId) {
+            playerDetails.role = roles.pn.isDisabled ? null : 'PN';
             modifiers.push({
+                kind: 'role',
                 name: roles.pn.isDisabled ? 'PN (pominięty)' : 'PN',
                 points: calculatePrimusNominatus({
                     player: actualPlayer,
@@ -447,14 +559,18 @@ function calculateTeamScore(
             });
         }
         if (!slot.isReserve && player.playerId === roles.kb) {
+            playerDetails.role = 'KB';
             modifiers.push({
+                kind: 'role',
                 name: 'KB',
                 points: calculateKrolBonusow({ player: actualPlayer }),
                 countsTowardsLimit: true
             });
         }
         if (!slot.isReserve && player.playerId === roles.p) {
+            playerDetails.role = 'P';
             modifiers.push({
+                kind: 'role',
                 name: 'P',
                 points: calculatePrzelozony({ player: actualPlayer }),
                 countsTowardsLimit: true
@@ -465,6 +581,7 @@ function calculateTeamScore(
                 getPlayerTotal({ player: actualPlayer }) -
                 getPlayerTotal({ player });
             modifiers.push({
+                kind: 'replacement',
                 name: slot.replacementNames.join('/'),
                 points: difference,
                 countsTowardsLimit: false
@@ -475,6 +592,8 @@ function calculateTeamScore(
                 case SetPlayEnumType.GwarancjaStartow:
                     if (setPlay.userData.playerId === player.playerId) {
                         modifiers.push({
+                            kind: 'setPlay',
+                            selectedSetPlayId: setPlay.selectedSetPlayId,
                             name: SET_PLAY_SHORT_LABELS[setPlay.type],
                             points: slot.isReserve
                                 ? 0
@@ -488,6 +607,8 @@ function calculateTeamScore(
                 case SetPlayEnumType.Remis:
                     if (slot.isReserve) {
                         modifiers.push({
+                            kind: 'setPlay',
+                            selectedSetPlayId: setPlay.selectedSetPlayId,
                             name: SET_PLAY_SHORT_LABELS[setPlay.type],
                             points: 0,
                             countsTowardsLimit: true
@@ -507,6 +628,8 @@ function calculateTeamScore(
                         );
                     }
                     modifiers.push({
+                        kind: 'setPlay',
+                        selectedSetPlayId: setPlay.selectedSetPlayId,
                         name: SET_PLAY_SHORT_LABELS[setPlay.type],
                         points: calculateRemis({
                             setPlay,
@@ -519,6 +642,8 @@ function calculateTeamScore(
                 case SetPlayEnumType.MortalKombatCombo:
                     if (index === 0) {
                         modifiers.push({
+                            kind: 'setPlay',
+                            selectedSetPlayId: setPlay.selectedSetPlayId,
                             name: SET_PLAY_SHORT_LABELS[setPlay.type],
                             points: slot.isReserve
                                 ? 0
@@ -535,6 +660,8 @@ function calculateTeamScore(
                 case SetPlayEnumType.Ncd6:
                     if (setPlay.userData.playerId === player.playerId) {
                         modifiers.push({
+                            kind: 'setPlay',
+                            selectedSetPlayId: setPlay.selectedSetPlayId,
                             name: SET_PLAY_SHORT_LABELS[setPlay.type],
                             points: slot.isReserve
                                 ? 0
@@ -598,6 +725,8 @@ function calculateTeamScore(
                             }
                         }
                         modifiers.push({
+                            kind: 'setPlay',
+                            selectedSetPlayId: setPlay.selectedSetPlayId,
                             name: SET_PLAY_SHORT_LABELS[setPlay.type],
                             points,
                             countsTowardsLimit: true
@@ -607,6 +736,8 @@ function calculateTeamScore(
                 case SetPlayEnumType.RyszardKowalski:
                     if (setPlay.userData.playerId === player.playerId) {
                         modifiers.push({
+                            kind: 'setPlay',
+                            selectedSetPlayId: setPlay.selectedSetPlayId,
                             name: SET_PLAY_SHORT_LABELS[setPlay.type],
                             points: slot.isReserve
                                 ? 0
@@ -619,6 +750,8 @@ function calculateTeamScore(
                     break;
                 case SetPlayEnumType.Taktyczna:
                     modifiers.push({
+                        kind: 'setPlay',
+                        selectedSetPlayId: setPlay.selectedSetPlayId,
                         name: SET_PLAY_SHORT_LABELS[setPlay.type],
                         points: slot.isReserve
                             ? 0
@@ -632,6 +765,7 @@ function calculateTeamScore(
                         setPlay.adminData.isDisabled
                     ) {
                         modifiers.push({
+                            kind: 'replacement',
                             name: `${SET_PLAY_SHORT_LABELS[setPlay.type]}${DISABLED_SET_PLAY_COMMENT_SUFFIX}`,
                             points: 0,
                             countsTowardsLimit: false
@@ -650,6 +784,7 @@ function calculateTeamScore(
             }
         }
         let allowance = MAX_PLAYER_MODIFIER_POINTS;
+        let isTrainerHeatDifferenceRecorded = false;
         const comments: string[] = [];
         for (const modifier of modifiers) {
             const credited = modifier.countsTowardsLimit
@@ -659,6 +794,50 @@ function calculateTeamScore(
                 allowance -= credited;
             }
             player.setPlay += credited;
+            switch (modifier.kind) {
+                case 'function':
+                    playerDetails.functionPoints += credited;
+                    break;
+                case 'role':
+                    playerDetails.rolePoints += credited;
+                    break;
+                case 'setPlay': {
+                    playerDetails.setPlayPoints += credited;
+                    const setPlayResult = getSetPlayResult({
+                        setPlayResults: team.calculationDetails.setPlayResults,
+                        selectedSetPlayId: modifier.selectedSetPlayId
+                    });
+                    setPlayResult.recipients.push({
+                        recipientType: 'player',
+                        playerId: actualPlayer.playerId,
+                        nominalPlayerId: slot.nominalPlayerId,
+                        calculatedPoints: modifier.points,
+                        creditedPoints: credited,
+                        setPlayContributionType: 'award'
+                    });
+                    if (
+                        setPlayResult.type ===
+                            SetPlayEnumType.GwarancjaStartow &&
+                        index === FIFTH_PLAYER_INDEX &&
+                        !slot.isReserve &&
+                        !isTrainerHeatDifferenceRecorded
+                    ) {
+                        const difference =
+                            (effectivePlayer.heatFive.value ?? 0) -
+                            (actualPlayer.heatFive.value ?? 0);
+                        setPlayResult.recipients.push({
+                            recipientType: 'trainer',
+                            calculatedPoints: difference,
+                            creditedPoints: difference,
+                            setPlayContributionType: 'trainerHeatDifference'
+                        });
+                        isTrainerHeatDifferenceRecorded = true;
+                    }
+                    break;
+                }
+                case 'replacement':
+                    break;
+            }
             const points =
                 credited === modifier.points
                     ? `${modifier.name === slot.replacementNames.join('/') && credited > 0 ? '+' : ''}${credited}`
@@ -742,12 +921,28 @@ function calculateTeamScore(
         const isDisabled =
             setPlay.type === SetPlayEnumType.BrudnaPala &&
             setPlay.adminData?.isDisabled;
+        if (!isDisabled) {
+            const setPlayResult = getSetPlayResult({
+                setPlayResults: team.calculationDetails.setPlayResults,
+                selectedSetPlayId: setPlay.selectedSetPlayId
+            });
+            setPlayResult.recipients.push({
+                recipientType: 'trainer',
+                calculatedPoints: points,
+                creditedPoints: points,
+                setPlayContributionType: 'award'
+            });
+        }
         trainerComments.push(
             `${SET_PLAY_SHORT_LABELS[setPlay.type]} ${points}${isDisabled ? DISABLED_SET_PLAY_COMMENT_SUFFIX : ''}`
         );
     }
 
     team.trainer.comment = trainerComments.join(', ');
+    team.calculationDetails.trainer = {
+        heatPoints: getTrainerHeatTotal({ trainer: team.trainer }),
+        setPlayPoints: team.trainer.setPlay
+    };
 
     return team;
 }
@@ -820,12 +1015,44 @@ export function calculateMatchScores(
                 scoreDifference
             });
             entry.team.trainer.setPlay += points;
+            const setPlayResult = getSetPlayResult({
+                setPlayResults: entry.team.calculationDetails.setPlayResults,
+                selectedSetPlayId: setPlay.selectedSetPlayId
+            });
+            setPlayResult.recipients.push({
+                recipientType: 'trainer',
+                calculatedPoints: points,
+                creditedPoints: points,
+                setPlayContributionType: 'award'
+            });
             entry.team.trainer.comment = [
                 entry.team.trainer.comment,
                 `${SET_PLAY_SHORT_LABELS[setPlay.type]} ${points}`
             ]
                 .filter(Boolean)
                 .join(', ');
+        }
+        const details = entry.team.calculationDetails;
+        details.trainer = {
+            heatPoints: getTrainerHeatTotal({ trainer: entry.team.trainer }),
+            setPlayPoints: entry.team.trainer.setPlay
+        };
+        const signedTotal =
+            details.players.reduce((total, player) => {
+                return (
+                    total +
+                    player.basePoints +
+                    player.functionPoints +
+                    player.rolePoints +
+                    player.setPlayPoints
+                );
+            }, 0) +
+            details.trainer.heatPoints +
+            details.trainer.setPlayPoints;
+        details.floorAdjustment = Math.max(0, -signedTotal);
+        // Internal consistency guard; valid inputs cannot trigger it unless accounting regresses.
+        if (signedTotal !== getTeamTotal(entry.team)) {
+            throw new Error('Calculation details do not match the team score');
         }
     }
     return {

@@ -520,6 +520,68 @@ describe('calculateMatchScores', () => {
         });
         expect(result.teamOneScore).toBe(72);
         expect(result.teamTwoScore).toBe(66);
+        expect(result.teamOne).toHaveProperty('calculationDetails', {
+            players: [
+                {
+                    playerId: 'leader',
+                    nominalPlayerId: 'leader',
+                    actualStartCount: 4,
+                    basePoints: 12,
+                    functionPoints: 2,
+                    rolePoints: 3,
+                    setPlayPoints: 0,
+                    function: 'Lider',
+                    role: 'PN'
+                },
+                {
+                    playerId: 'joker',
+                    nominalPlayerId: 'joker',
+                    actualStartCount: 3,
+                    basePoints: 5,
+                    functionPoints: 2,
+                    rolePoints: 2,
+                    setPlayPoints: 0,
+                    function: 'Joker',
+                    role: 'KB'
+                },
+                {
+                    playerId: 'captain',
+                    nominalPlayerId: 'captain',
+                    actualStartCount: 3,
+                    basePoints: 8,
+                    functionPoints: 4,
+                    rolePoints: 2,
+                    setPlayPoints: 0,
+                    function: 'Kapitan',
+                    role: 'P'
+                },
+                {
+                    playerId: 'four',
+                    nominalPlayerId: 'four',
+                    actualStartCount: 4,
+                    basePoints: 8,
+                    functionPoints: 0,
+                    rolePoints: 0,
+                    setPlayPoints: 0,
+                    function: null,
+                    role: null
+                },
+                {
+                    playerId: 'five',
+                    nominalPlayerId: 'five',
+                    actualStartCount: 5,
+                    basePoints: 10,
+                    functionPoints: 0,
+                    rolePoints: 0,
+                    setPlayPoints: 0,
+                    function: null,
+                    role: null
+                }
+            ],
+            trainer: { heatPoints: 14, setPlayPoints: 0 },
+            setPlayResults: [],
+            floorAdjustment: 0
+        });
         expect({ teamOne, teamTwo }).toEqual(before);
         expect(
             calculateMatchScores({
@@ -576,6 +638,16 @@ describe('calculateMatchScores', () => {
             'Lider 2, PN 0 (pominięty)'
         );
         expect(result.teamOne.players[2].comment).toBe('Kapitan 0, P 3');
+        expect(result.teamOne.calculationDetails.players[0]).toMatchObject({
+            role: null,
+            rolePoints: 0
+        });
+        expect(result.teamOne.calculationDetails.players[2]).toMatchObject({
+            function: 'Kapitan',
+            functionPoints: 0,
+            role: 'P',
+            rolePoints: 3
+        });
         expect(result.teamTwo.players[2].comment).toBe('Kapitan 0, P 2');
         teamOne.startingLineup.roles.pn.isDisabled = false;
         expect(
@@ -632,6 +704,22 @@ describe('calculateMatchScores', () => {
         });
         expect(result.teamOneScore).toBe(0);
         expect(result.teamTwoScore).toBe(0);
+        expect(result.teamOne.calculationDetails).toMatchObject({
+            trainer: { heatPoints: 0, setPlayPoints: 0 },
+            setPlayResults: [],
+            floorAdjustment: 0
+        });
+        expect(
+            result.teamOne.calculationDetails.players.map(player => {
+                return [player.actualStartCount, player.basePoints];
+            })
+        ).toEqual([
+            [0, 0],
+            [0, 0],
+            [0, 0],
+            [0, 0],
+            [0, 0]
+        ]);
     });
 
     test.each([
@@ -731,6 +819,18 @@ describe('calculateMatchScores', () => {
         expect(result.teamOne.players[2].comment).toBe(
             'Kapitan 4, PN 3, Remis 3/6 (limit 10), NCD6 6'
         );
+        expect(
+            result.teamOne.calculationDetails.setPlayResults[0]
+        ).toMatchObject({
+            selectedSetPlayId: 'remis',
+            recipients: [
+                { playerId: 'leader', calculatedPoints: 0, creditedPoints: 0 },
+                { playerId: 'joker', calculatedPoints: 0, creditedPoints: 0 },
+                { playerId: 'captain', calculatedPoints: 6, creditedPoints: 3 },
+                { playerId: 'four', calculatedPoints: 0, creditedPoints: 0 },
+                { playerId: 'five', calculatedPoints: 0, creditedPoints: 0 }
+            ]
+        });
     });
     test('Should calculate 17 points for a KB rider with two actual bonuses and two GS copies', () => {
         const teamOne = createTeam();
@@ -764,6 +864,71 @@ describe('calculateMatchScores', () => {
         ).toBe(17);
         expect(result.teamOne.trainer.heatFive).toBe(3);
         expect(teamOne).toEqual(before);
+    });
+
+    test('Should attribute the trainer heat-five difference once when two GS selections target the fifth rider', () => {
+        const teamOne = createTeam();
+        teamOne.players[4] = { ...createPlayer([3, 3, 3]), playerId: 'five' };
+        teamOne.setPlayList = ['gs-one', 'gs-two'].map(selectedSetPlayId => {
+            return {
+                selectedSetPlayId,
+                setPlayId: 'gs',
+                name: 'GS',
+                type: SetPlayEnumType.GwarancjaStartow,
+                userData: { playerId: 'five' }
+            };
+        });
+        const result = calculateMatchScores({
+            roundNumber: 2,
+            teamOne,
+            teamTwo: createTeam('opponent-')
+        });
+        expect(result.teamOne.calculationDetails.setPlayResults).toEqual([
+            {
+                selectedSetPlayId: 'gs-one',
+                setPlayId: 'gs',
+                name: 'GS',
+                type: SetPlayEnumType.GwarancjaStartow,
+                recipients: [
+                    {
+                        recipientType: 'player',
+                        playerId: 'five',
+                        nominalPlayerId: 'five',
+                        calculatedPoints: 6,
+                        creditedPoints: 6,
+                        setPlayContributionType: 'award'
+                    },
+                    {
+                        recipientType: 'trainer',
+                        calculatedPoints: 3,
+                        creditedPoints: 3,
+                        setPlayContributionType: 'trainerHeatDifference'
+                    }
+                ]
+            },
+            {
+                selectedSetPlayId: 'gs-two',
+                setPlayId: 'gs',
+                name: 'GS',
+                type: SetPlayEnumType.GwarancjaStartow,
+                recipients: [
+                    {
+                        recipientType: 'player',
+                        playerId: 'five',
+                        nominalPlayerId: 'five',
+                        calculatedPoints: 6,
+                        creditedPoints: 4,
+                        setPlayContributionType: 'award'
+                    }
+                ]
+            }
+        ]);
+        expect(result.teamOne.trainer.heatFive).toBe(3);
+        expect(result.teamOne.calculationDetails.trainer).toEqual({
+            heatPoints: 13,
+            setPlayPoints: 0
+        });
+        expect(result.teamOneScore).toBe(76);
     });
 
     test('Should keep GS virtual starts separate while applying their allowed function and trainer effects', () => {
@@ -800,6 +965,62 @@ describe('calculateMatchScores', () => {
         expect(result.teamOne.players[0].heatFour.value).toBeNull();
         expect(result.teamOne.players[4].setPlay).toBe(6);
         expect(result.teamOne.trainer.heatFive).toBe(2);
+        expect(result.teamOne.calculationDetails.players[0]).toEqual({
+            playerId: 'leader',
+            nominalPlayerId: 'leader',
+            actualStartCount: 3,
+            basePoints: 9,
+            functionPoints: 5,
+            rolePoints: 1,
+            setPlayPoints: 4,
+            function: 'Lider',
+            role: 'KB'
+        });
+        expect(result.teamOne.calculationDetails.players[4]).toMatchObject({
+            actualStartCount: 2,
+            basePoints: 4,
+            setPlayPoints: 6
+        });
+        expect(result.teamOne.calculationDetails.setPlayResults).toEqual([
+            {
+                selectedSetPlayId: 'gs1',
+                setPlayId: 'gs',
+                name: 'GS',
+                type: SetPlayEnumType.GwarancjaStartow,
+                recipients: [
+                    {
+                        recipientType: 'player',
+                        playerId: 'leader',
+                        nominalPlayerId: 'leader',
+                        calculatedPoints: 6,
+                        creditedPoints: 4,
+                        setPlayContributionType: 'award'
+                    }
+                ]
+            },
+            {
+                selectedSetPlayId: 'gs2',
+                setPlayId: 'gs',
+                name: 'GS',
+                type: SetPlayEnumType.GwarancjaStartow,
+                recipients: [
+                    {
+                        recipientType: 'player',
+                        playerId: 'five',
+                        nominalPlayerId: 'five',
+                        calculatedPoints: 6,
+                        creditedPoints: 6,
+                        setPlayContributionType: 'award'
+                    },
+                    {
+                        recipientType: 'trainer',
+                        calculatedPoints: 2,
+                        creditedPoints: 2,
+                        setPlayContributionType: 'trainerHeatDifference'
+                    }
+                ]
+            }
+        ]);
         const jokerGs = createTeam();
         jokerGs.players[1] = { ...createPlayer([3]), playerId: 'joker' };
         jokerGs.setPlayList = [
@@ -867,6 +1088,41 @@ describe('calculateMatchScores', () => {
             'Lider 5, PN 0 (pominięty), MKC 4, MKC 1/4 (limit 10)'
         );
         expect(result.teamOne.players[0].setPlay).toBe(10);
+        expect(
+            result.teamOne.calculationDetails.setPlayResults.map(setPlay => {
+                return {
+                    id: setPlay.selectedSetPlayId,
+                    recipients: setPlay.recipients
+                };
+            })
+        ).toEqual([
+            {
+                id: 'mkc',
+                recipients: [
+                    {
+                        recipientType: 'player',
+                        playerId: 'leader',
+                        nominalPlayerId: 'leader',
+                        calculatedPoints: 4,
+                        creditedPoints: 4,
+                        setPlayContributionType: 'award'
+                    }
+                ]
+            },
+            {
+                id: 'mkc2',
+                recipients: [
+                    {
+                        recipientType: 'player',
+                        playerId: 'leader',
+                        nominalPlayerId: 'leader',
+                        calculatedPoints: 4,
+                        creditedPoints: 1,
+                        setPlayContributionType: 'award'
+                    }
+                ]
+            }
+        ]);
         expect(result.teamOne.players[0].comment!.length).toBeLessThanOrEqual(
             255
         );
@@ -900,6 +1156,28 @@ describe('calculateMatchScores', () => {
             'Lider 0, PN 0, NCD6 -2'
         );
         expect(result.teamOneScore).toBe(0);
+        expect(result.teamOne.calculationDetails.floorAdjustment).toBe(2);
+        expect(result.teamOne.calculationDetails.players[0]).toMatchObject({
+            actualStartCount: 0,
+            basePoints: 0,
+            function: 'Lider',
+            role: 'PN',
+            functionPoints: 0,
+            rolePoints: 0,
+            setPlayPoints: -2
+        });
+        expect(
+            result.teamOne.calculationDetails.setPlayResults[0].recipients
+        ).toEqual([
+            {
+                recipientType: 'player',
+                playerId: 'leader',
+                nominalPlayerId: 'leader',
+                calculatedPoints: -2,
+                creditedPoints: -2,
+                setPlayContributionType: 'award'
+            }
+        ]);
         const positiveTeam = createTeam();
         positiveTeam.setPlayList = teamOne.setPlayList;
         const opponent = createTeam();
@@ -1191,6 +1469,31 @@ describe('calculateMatchScores', () => {
             'Kapitan 4, P 2, Awatar -3, GS 4/6 (limit 10)'
         );
         expect(result.teamOne.players[2].setPlay).toBe(7);
+        expect(result.teamOne.calculationDetails.players[2]).toEqual({
+            playerId: 'avatar',
+            nominalPlayerId: 'captain',
+            actualStartCount: 2,
+            basePoints: 5,
+            functionPoints: 4,
+            rolePoints: 2,
+            setPlayPoints: 4,
+            function: 'Kapitan',
+            role: 'P'
+        });
+        expect(
+            result.teamOne.calculationDetails.setPlayResults.find(setPlay => {
+                return setPlay.selectedSetPlayId === 'gs';
+            })?.recipients
+        ).toEqual([
+            {
+                recipientType: 'player',
+                playerId: 'avatar',
+                nominalPlayerId: 'captain',
+                calculatedPoints: 6,
+                creditedPoints: 4,
+                setPlayContributionType: 'award'
+            }
+        ]);
         expect(teamOne).toEqual(before);
         const avatar = teamOne.setPlayList[0];
         if (avatar.type !== SetPlayEnumType.Awatar) {
@@ -1211,6 +1514,14 @@ describe('calculateMatchScores', () => {
         expect(disabled.teamOne.players[2].comment).toBe(
             'Kapitan 4, P 2, Awatar 0 (pominięta), GS 4'
         );
+        expect(disabled.teamOne.calculationDetails.players[2].playerId).toBe(
+            'captain'
+        );
+        expect(
+            disabled.teamOne.calculationDetails.setPlayResults.map(
+                setPlay => setPlay.selectedSetPlayId
+            )
+        ).toEqual(['gs']);
         expect(
             calculateMatchScores({
                 roundNumber: 2,
@@ -1734,6 +2045,210 @@ describe('calculateMatchScores', () => {
         expect(result.teamOneScore).toBe(88);
     });
 
+    test('Should attribute each replacement once and count only the final reserve appearance', () => {
+        const teamOne = createTeam();
+        teamOne.players = teamOne.players.map(player => {
+            return {
+                ...createPlayer([3, 3, 3, 3, 3]),
+                playerId: player.playerId
+            };
+        });
+        teamOne.players[4] = {
+            ...createPlayer([]),
+            playerId: 'five',
+            isJunior: true
+        };
+        teamOne.startingLineup.roles.pn.playerId = 'five';
+        teamOne.replacementPlayers = [
+            { playerId: 'avatar', isJunior: true },
+            { playerId: 'reserve', isJunior: true }
+        ];
+        teamOne.setPlayList = [
+            {
+                selectedSetPlayId: 'a',
+                setPlayId: 'a',
+                name: 'Awatar',
+                type: SetPlayEnumType.Awatar,
+                userData: { playerId: 'avatar', replacedPlayerId: 'five' },
+                adminData: {
+                    ...createReplacementScores([2, 2, 2, 0, 2]),
+                    isDisabled: false
+                }
+            },
+            {
+                selectedSetPlayId: 'r',
+                setPlayId: 'r',
+                name: 'Rezerwa',
+                type: SetPlayEnumType.Rezerwa,
+                userData: { playerId: 'reserve' },
+                adminData: createPlayer([2, 2, 2, 1, 3])
+            }
+        ];
+        const input = {
+            roundNumber: 2,
+            teamOne,
+            teamTwo: createTeam('opponent-')
+        };
+        const before = structuredClone(input);
+        const result = calculateMatchScores(input);
+        expect(result.teamOne.calculationDetails.players[4]).toEqual({
+            playerId: 'reserve',
+            nominalPlayerId: 'five',
+            actualStartCount: 5,
+            basePoints: 10,
+            functionPoints: 0,
+            rolePoints: 0,
+            setPlayPoints: 0,
+            function: null,
+            role: null
+        });
+        expect(result.teamOne.calculationDetails.setPlayResults).toEqual([
+            {
+                selectedSetPlayId: 'a',
+                setPlayId: 'a',
+                name: 'Awatar',
+                type: SetPlayEnumType.Awatar,
+                recipients: [
+                    {
+                        recipientType: 'player',
+                        playerId: 'avatar',
+                        nominalPlayerId: 'five',
+                        calculatedPoints: 8,
+                        creditedPoints: 8,
+                        setPlayContributionType: 'replacementDifference'
+                    },
+                    {
+                        recipientType: 'trainer',
+                        calculatedPoints: 2,
+                        creditedPoints: 2,
+                        setPlayContributionType: 'trainerHeatDifference'
+                    }
+                ]
+            },
+            {
+                selectedSetPlayId: 'r',
+                setPlayId: 'r',
+                name: 'Rezerwa',
+                type: SetPlayEnumType.Rezerwa,
+                recipients: [
+                    {
+                        recipientType: 'player',
+                        playerId: 'reserve',
+                        nominalPlayerId: 'five',
+                        calculatedPoints: 2,
+                        creditedPoints: 2,
+                        setPlayContributionType: 'replacementDifference'
+                    },
+                    {
+                        recipientType: 'trainer',
+                        calculatedPoints: 1,
+                        creditedPoints: 1,
+                        setPlayContributionType: 'trainerHeatDifference'
+                    }
+                ]
+            }
+        ]);
+        expect(result.teamOne.calculationDetails.trainer).toEqual({
+            heatPoints: 15,
+            setPlayPoints: 0
+        });
+        expect(result.teamOneScore).toBe(103);
+        expect(input).toEqual(before);
+        expect(calculateMatchScores(input)).toEqual(result);
+    });
+
+    test('Should use heat two for Awatar and reserve trainer differences and remove KB from the reserve', () => {
+        const teamOne = createTeam();
+        teamOne.players = teamOne.players.map(player => {
+            return {
+                ...createPlayer([3, 3, 3, 3, 3]),
+                playerId: player.playerId
+            };
+        });
+        teamOne.players[1] = {
+            ...createPlayer([]),
+            playerId: 'joker',
+            isJunior: true
+        };
+        teamOne.replacementPlayers = [
+            { playerId: 'avatar', isJunior: true },
+            { playerId: 'reserve', isJunior: true }
+        ];
+        const reserveScores = createPlayer([2, 3, 2, 1, 2]);
+        reserveScores.heatTwo.bonus = true;
+        teamOne.setPlayList = [
+            {
+                selectedSetPlayId: 'a',
+                setPlayId: 'a',
+                name: 'Awatar',
+                type: SetPlayEnumType.Awatar,
+                userData: { playerId: 'avatar', replacedPlayerId: 'joker' },
+                adminData: {
+                    ...createReplacementScores([2, 1, 2, 0, 3]),
+                    isDisabled: false
+                }
+            },
+            {
+                selectedSetPlayId: 'r',
+                setPlayId: 'r',
+                name: 'Rezerwa',
+                type: SetPlayEnumType.Rezerwa,
+                userData: { playerId: 'reserve' },
+                adminData: reserveScores
+            }
+        ];
+        const result = calculateMatchScores({
+            roundNumber: 2,
+            teamOne,
+            teamTwo: createTeam('opponent-')
+        });
+        expect(result.teamOne.calculationDetails.players[1]).toEqual({
+            playerId: 'reserve',
+            nominalPlayerId: 'joker',
+            actualStartCount: 5,
+            basePoints: 10,
+            functionPoints: 4,
+            rolePoints: 0,
+            setPlayPoints: 0,
+            function: 'Joker',
+            role: null
+        });
+        expect(
+            result.teamOne.calculationDetails.setPlayResults.map(setPlay => {
+                return {
+                    selectedSetPlayId: setPlay.selectedSetPlayId,
+                    trainerContributions: setPlay.recipients.filter(recipient => {
+                        return recipient.recipientType === 'trainer';
+                    })
+                };
+            })
+        ).toEqual([
+            {
+                selectedSetPlayId: 'a',
+                trainerContributions: [
+                    {
+                        recipientType: 'trainer',
+                        calculatedPoints: 1,
+                        creditedPoints: 1,
+                        setPlayContributionType: 'trainerHeatDifference'
+                    }
+                ]
+            },
+            {
+                selectedSetPlayId: 'r',
+                trainerContributions: [
+                    {
+                        recipientType: 'trainer',
+                        calculatedPoints: 2,
+                        creditedPoints: 2,
+                        setPlayContributionType: 'trainerHeatDifference'
+                    }
+                ]
+            }
+        ]);
+        expect(result.teamOne.trainer.heatTwo).toBe(3);
+    });
+
     test('Should apply one nominal adjustment when a reserve replaces Awatar and exclude inherited plays and virtual GS starts', () => {
         const teamOne = createTeam();
         teamOne.players = teamOne.players.map(player => {
@@ -1815,6 +2330,20 @@ describe('calculateMatchScores', () => {
         expect(result.teamOne.players[4].setPlay).toBe(13);
         expect(result.teamOne.players[4].heatOne.value).toBe(0);
         expect(result.teamOne.trainer.heatFive).toBe(0);
+        expect(
+            result.teamOne.calculationDetails.setPlayResults.find(setPlay => {
+                return setPlay.selectedSetPlayId === 'gs';
+            })?.recipients
+        ).toEqual([
+            {
+                recipientType: 'player',
+                playerId: 'reserve',
+                nominalPlayerId: 'five',
+                calculatedPoints: 0,
+                creditedPoints: 0,
+                setPlayContributionType: 'award'
+            }
+        ]);
         expect(input).toEqual(before);
         expect(calculateMatchScores(input)).toEqual(result);
     });
@@ -1915,6 +2444,74 @@ describe('calculateMatchScores', () => {
         const before = structuredClone(input);
         const result = calculateMatchScores(input);
         expect(result.teamOne.trainer.setPlay).toBe(17);
+        expect(result.teamOne.calculationDetails.trainer).toEqual({
+            heatPoints: 14,
+            setPlayPoints: 17
+        });
+        expect(
+            result.teamOne.calculationDetails.setPlayResults.map(setPlay => {
+                return {
+                    id: setPlay.selectedSetPlayId,
+                    recipients: setPlay.recipients
+                };
+            })
+        ).toEqual([
+            {
+                id: 'm',
+                recipients: [
+                    {
+                        recipientType: 'trainer',
+                        calculatedPoints: 4,
+                        creditedPoints: 4,
+                        setPlayContributionType: 'award'
+                    }
+                ]
+            },
+            {
+                id: 'b',
+                recipients: [
+                    {
+                        recipientType: 'trainer',
+                        calculatedPoints: 1,
+                        creditedPoints: 1,
+                        setPlayContributionType: 'award'
+                    }
+                ]
+            },
+            {
+                id: 't',
+                recipients: [
+                    {
+                        recipientType: 'trainer',
+                        calculatedPoints: 4,
+                        creditedPoints: 4,
+                        setPlayContributionType: 'award'
+                    }
+                ]
+            },
+            {
+                id: 'p',
+                recipients: [
+                    {
+                        recipientType: 'trainer',
+                        calculatedPoints: 4,
+                        creditedPoints: 4,
+                        setPlayContributionType: 'award'
+                    }
+                ]
+            },
+            {
+                id: 'pc',
+                recipients: [
+                    {
+                        recipientType: 'trainer',
+                        calculatedPoints: 4,
+                        creditedPoints: 4,
+                        setPlayContributionType: 'award'
+                    }
+                ]
+            }
+        ]);
         expect(result.teamOne.trainer.comment).toBe(
             'Muchomor 4, Brudna Pała 1, Typer 4, Paulo Sousa 4, Pijany Cieślak 4'
         );
@@ -1947,6 +2544,40 @@ describe('calculateMatchScores', () => {
         const repeated = calculateMatchScores(input);
         expect(repeated.teamOne.trainer.comment).toBe('KFN 5, KFN 5');
         expect(repeated.teamTwo.trainer.comment).toBe('KFN 5');
+        expect(repeated.teamOne.calculationDetails.trainer.setPlayPoints).toBe(
+            10
+        );
+        expect(
+            repeated.teamOne.calculationDetails.setPlayResults.map(setPlay => {
+                return {
+                    id: setPlay.selectedSetPlayId,
+                    recipients: setPlay.recipients
+                };
+            })
+        ).toEqual([
+            {
+                id: 'k',
+                recipients: [
+                    {
+                        recipientType: 'trainer',
+                        calculatedPoints: 5,
+                        creditedPoints: 5,
+                        setPlayContributionType: 'award'
+                    }
+                ]
+            },
+            {
+                id: 'k2',
+                recipients: [
+                    {
+                        recipientType: 'trainer',
+                        calculatedPoints: 5,
+                        creditedPoints: 5,
+                        setPlayContributionType: 'award'
+                    }
+                ]
+            }
+        ]);
     });
 
     test('Should award no KFN points when the match ends in a draw', () => {
@@ -2055,6 +2686,24 @@ describe('calculateMatchScores', () => {
             'Rezerwa 0, Brudna Pała 6, Brudna Pała 0 (pominięta), Pijany Cieślak 4, Typer 4, KFN 0'
         );
         expect(result.teamOne.trainer.setPlay).toBe(14);
+        expect(
+            result.teamOne.calculationDetails.setPlayResults.map(
+                setPlay => setPlay.selectedSetPlayId
+            )
+        ).toEqual(['r', 'b', 'pc', 't', 'k']);
+        expect(
+            result.teamOne.calculationDetails.setPlayResults[0].recipients
+        ).toEqual([]);
+        expect(
+            result.teamOne.calculationDetails.setPlayResults[4].recipients
+        ).toEqual([
+            {
+                recipientType: 'trainer',
+                calculatedPoints: 0,
+                creditedPoints: 0,
+                setPlayContributionType: 'award'
+            }
+        ]);
         for (const [results, expected] of [
             [{ a: false, b: false, c: false, d: false }, 0],
             [{ a: true, b: false, c: false, d: false }, 0],
