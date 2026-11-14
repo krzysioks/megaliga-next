@@ -5,7 +5,14 @@ import mongoose from 'mongoose';
 import { DBClient } from '@/db/db-client';
 import StartingLineupPlayoffModel from '@/db/models/games/starting-lineup-playoff';
 import PlayersModel from '@/db/models/players';
+import SeasonOpsModel from '@/db/models/season-ops';
 import UserModel, { UserType } from '@/db/models/user';
+
+async function getCalculationFlags() {
+    return SeasonOpsModel.findOne({ isCurrentSeason: true })
+        .select('isScoreCalculatded isScoreCalculatdedPlayoff -_id')
+        .lean();
+}
 
 const createUserData = (overrides: Partial<UserType> = {}) => ({
     username: 'user-one',
@@ -72,6 +79,7 @@ beforeAll(async () => {
 
 // before any test clear collections
 beforeEach(async () => {
+    await SeasonOpsModel.deleteMany();
     await StartingLineupPlayoffModel.deleteMany();
     await UserModel.deleteMany();
     await PlayersModel.deleteMany();
@@ -79,6 +87,7 @@ beforeEach(async () => {
 
 // close connection to server so that test suite will close
 afterAll(async () => {
+    await SeasonOpsModel.deleteMany();
     await StartingLineupPlayoffModel.deleteMany();
     await UserModel.deleteMany();
     await PlayersModel.deleteMany();
@@ -268,7 +277,11 @@ describe('Test StartingLineupPlayoffModel methods and static functions', () => {
         test('Should reject assigning one playoff rider to multiple roles without changing the starting lineup', async () => {
             const user = await UserModel.create(createUserData());
             const data = createPositions();
-            await StartingLineupPlayoffModel.setPlayersPosition(data, user._id.toString(), 1);
+            await StartingLineupPlayoffModel.create({
+                ...data,
+                userId: user._id,
+                roundNumber: 1
+            });
             const lineup =
                 await StartingLineupPlayoffModel.getUserStartingLineupByRound(
                     user._id.toString(),
@@ -337,7 +350,11 @@ describe('Test StartingLineupPlayoffModel methods and static functions', () => {
             const user = await UserModel.create(createUserData());
             const userId = user._id.toString();
             const data = createPositions();
-            await StartingLineupPlayoffModel.setPlayersPosition(data, userId, 1);
+            await StartingLineupPlayoffModel.setPlayersPosition(
+                data,
+                userId,
+                1
+            );
             const lineup =
                 await StartingLineupPlayoffModel.getUserStartingLineupByRound(
                     userId,
@@ -409,7 +426,9 @@ describe('Test StartingLineupPlayoffModel methods and static functions', () => {
             expect(refreshed?.playerFive?.toString()).toBe(
                 updatedPositions.playerFive
             );
-            expect(refreshed?.toObject({ flattenObjectIds: true }).roles).toEqual({
+            expect(
+                refreshed?.toObject({ flattenObjectIds: true }).roles
+            ).toEqual({
                 ...updatedPositions.roles,
                 pn: {
                     playerId: updatedPositions.roles.pn.playerId,
@@ -437,13 +456,8 @@ describe('Test StartingLineupPlayoffModel methods and static functions', () => {
         test('Should throw for a nonexistent playoff PN user', async () => {
             const userId = new mongoose.Types.ObjectId().toString();
             await expect(
-                StartingLineupPlayoffModel.getPrimusNominatusForAdmin(
-                    1,
-                    userId
-                )
-            ).rejects.toThrow(
-                `Invalid userId: ${userId}`
-            );
+                StartingLineupPlayoffModel.getPrimusNominatusForAdmin(1, userId)
+            ).rejects.toThrow(`Invalid userId: ${userId}`);
         });
 
         test('Should return null when the playoff starting lineup does not exist', async () => {
@@ -485,6 +499,43 @@ describe('Test StartingLineupPlayoffModel methods and static functions', () => {
     });
 
     describe('savePrimusNominatusForAdmin', () => {
+        beforeEach(async () => {
+            await SeasonOpsModel.create({
+                name: '2026',
+                isCurrentSeason: true,
+                numberOfGroups: 2,
+                isScoreCalculatded: { 1: true, 2: true },
+                isScoreCalculatdedPlayoff: { 1: true, 2: true }
+            });
+        });
+
+        test('Should preserve PN when invalidation fails', async () => {
+            const user = await UserModel.create(createUserData());
+            const positions = createPositions();
+            await StartingLineupPlayoffModel.create({
+                ...positions,
+                userId: user._id,
+                roundNumber: 1
+            });
+            await SeasonOpsModel.deleteMany();
+            await expect(
+                StartingLineupPlayoffModel.savePrimusNominatusForAdmin(
+                    1,
+                    user._id.toString(),
+                    true
+                )
+            ).rejects.toThrow('Current season not found');
+            expect(
+                await StartingLineupPlayoffModel.getPrimusNominatusForAdmin(
+                    1,
+                    user._id.toString()
+                )
+            ).toEqual({
+                playerId: positions.roles.pn.playerId,
+                isDisabled: false
+            });
+        });
+
         test.each([0, 5])(
             'Should throw for playoff PN save round %i outside 1 - 4',
             async roundNumber => {
@@ -508,9 +559,11 @@ describe('Test StartingLineupPlayoffModel methods and static functions', () => {
                     userId,
                     true
                 )
-            ).rejects.toThrow(
-                `Invalid userId: ${userId}`
-            );
+            ).rejects.toThrow(`Invalid userId: ${userId}`);
+            expect(await getCalculationFlags()).toMatchObject({
+                isScoreCalculatded: { 1: true, 2: true },
+                isScoreCalculatdedPlayoff: { 1: true, 2: true }
+            });
         });
 
         test('Should throw when saving playoff PN without a starting lineup', async () => {
@@ -521,16 +574,22 @@ describe('Test StartingLineupPlayoffModel methods and static functions', () => {
                     user._id.toString(),
                     true
                 )
-            ).rejects.toThrow(
-                'No starting lineup for user and round'
-            );
+            ).rejects.toThrow('No starting lineup for user and round');
+            expect(await getCalculationFlags()).toMatchObject({
+                isScoreCalculatded: { 1: true, 2: true },
+                isScoreCalculatdedPlayoff: { 1: true, 2: true }
+            });
         });
 
         test('Should reject a nonboolean playoff PN flag without changing the saved value', async () => {
             const user = await UserModel.create(createUserData());
             const userId = user._id.toString();
             const data = createPositions();
-            await StartingLineupPlayoffModel.setPlayersPosition(data, userId, 1);
+            await StartingLineupPlayoffModel.create({
+                ...data,
+                userId,
+                roundNumber: 1
+            });
 
             await expect(
                 StartingLineupPlayoffModel.savePrimusNominatusForAdmin(
@@ -546,6 +605,10 @@ describe('Test StartingLineupPlayoffModel methods and static functions', () => {
                     userId
                 )
             ).toEqual({ playerId: data.roles.pn.playerId, isDisabled: false });
+            expect(await getCalculationFlags()).toMatchObject({
+                isScoreCalculatded: { 1: true, 2: true },
+                isScoreCalculatdedPlayoff: { 1: true, 2: true }
+            });
         });
 
         test('Should disable and reenable PN only for the requested playoff user and round', async () => {
@@ -559,11 +622,27 @@ describe('Test StartingLineupPlayoffModel methods and static functions', () => {
             const userId = user._id.toString();
             const otherUserId = otherUser._id.toString();
             const data = createPositions();
-            await StartingLineupPlayoffModel.setPlayersPosition(data, otherUserId, 1);
-            await StartingLineupPlayoffModel.setPlayersPosition(data, userId, 4);
-            await StartingLineupPlayoffModel.setPlayersPosition(data, userId, 1);
+            await StartingLineupPlayoffModel.setPlayersPosition(
+                data,
+                otherUserId,
+                1
+            );
+            await StartingLineupPlayoffModel.setPlayersPosition(
+                data,
+                userId,
+                4
+            );
+            await StartingLineupPlayoffModel.setPlayersPosition(
+                data,
+                userId,
+                1
+            );
 
-            await StartingLineupPlayoffModel.savePrimusNominatusForAdmin(1, userId, true);
+            await StartingLineupPlayoffModel.savePrimusNominatusForAdmin(
+                1,
+                userId,
+                true
+            );
 
             expect(
                 await StartingLineupPlayoffModel.getPrimusNominatusForAdmin(
@@ -607,7 +686,11 @@ describe('Test StartingLineupPlayoffModel methods and static functions', () => {
                 }
             });
 
-            await StartingLineupPlayoffModel.savePrimusNominatusForAdmin(1, userId, false);
+            await StartingLineupPlayoffModel.savePrimusNominatusForAdmin(
+                1,
+                userId,
+                false
+            );
 
             expect(
                 await StartingLineupPlayoffModel.getPrimusNominatusForAdmin(
@@ -617,6 +700,25 @@ describe('Test StartingLineupPlayoffModel methods and static functions', () => {
             ).toEqual({
                 playerId: data.roles.pn.playerId,
                 isDisabled: false
+            });
+        });
+
+        test('Should invalidate only the starting lineup round and stage when disabling PN', async () => {
+            const user = await UserModel.create(createUserData());
+            await StartingLineupPlayoffModel.create({
+                ...createPositions(),
+                userId: user._id,
+                roundNumber: 2
+            });
+            await StartingLineupPlayoffModel.savePrimusNominatusForAdmin(
+                2,
+                user._id.toString(),
+                true
+            );
+
+            expect(await getCalculationFlags()).toMatchObject({
+                isScoreCalculatded: { 1: true, 2: true },
+                isScoreCalculatdedPlayoff: { 1: true, 2: false }
             });
         });
     });

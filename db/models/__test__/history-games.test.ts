@@ -5,8 +5,8 @@ import ScheduleModel from '@/db/models/games/schedule';
 import SchedulePlayoffModel from '@/db/models/games/schedule-playoff';
 import ScoreDetailsModel from '@/db/models/games/score-details';
 import ScoreDetailsPlayoffModel from '@/db/models/games/score-details-playoff';
-import SetPlayPlayoffDataModel from '@/db/models/games/set-play-playoff-data';
 import SetPlaysDataModel from '@/db/models/games/set-plays-data';
+import SetPlayPlayoffDataModel from '@/db/models/games/set-plays-data-playoff';
 import StartingLineupModel from '@/db/models/games/starting-lineup';
 import StartingLineupPlayoffModel from '@/db/models/games/starting-lineup-playoff';
 import HistoryGamesModel, {
@@ -762,6 +762,9 @@ describe('Test HistoryGamesModel methods and static functions', () => {
         });
 
         test('Should archive playoff games with scalar heats, signed modifiers, and numeric trainer scores, preserving the archived description after a live edit', async () => {
+            await SeasonOpsModel.create(
+                createSeasonData('2026', { isCurrentSeason: true })
+            );
             const [userOne, userTwo, userThree] = await UserModel.create([
                 createUserData(0, {
                     teamName: 'Team Alpha',

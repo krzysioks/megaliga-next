@@ -12,6 +12,7 @@ import { MIN_PLAYOFF_ROUND, MAX_PLAYOFF_ROUND } from '@/db/db.constants';
 import { normalizeSetPlayData } from '@/db/db.utils';
 import StartingLineupPlayoffModel from '@/db/models/games/starting-lineup-playoff';
 import { objectIdSchema, SetPlayEnumType } from '@/db/models/schema.types';
+import SeasonOpsModel from '@/db/models/season-ops';
 import { setPlayPayloadListZodSchema } from '@/db/models/set-play-payload.schema';
 import UserModel from '@/db/models/user';
 import { validateSetPlayConstraints } from '@/db/models/validation.utils';
@@ -82,8 +83,11 @@ interface SetPlayPlayoffDataMethodsType {
     saveSelectedSetPlay: () => Promise<SetPlayPlayoffDataSelectionReturnType[]>;
 }
 
-interface SetPlayPlayoffDataModelType
-    extends Model<SetPlayPlayoffDataType, '', SetPlayPlayoffDataMethodsType> {
+interface SetPlayPlayoffDataModelType extends Model<
+    SetPlayPlayoffDataType,
+    '',
+    SetPlayPlayoffDataMethodsType
+> {
     getSetPlayListByStartingLineupId: (
         startingLineupId: string
     ) => Promise<SetPlayPlayoffDataListByStartingLineupIdReturnType>;
@@ -609,6 +613,10 @@ setPlayPlayoffDataSchema.static(
                 }
             }
 
+            if (!setPlayData.some(item => item.adminData !== undefined)) {
+                return;
+            }
+
             document.set(
                 'setPlayList',
                 selectedSetPlays.map(setPlay => {
@@ -623,7 +631,12 @@ setPlayPlayoffDataSchema.static(
                     return { ...setPlay, adminData: item.adminData };
                 })
             );
-            await document.save();
+            await document.validate();
+            await SeasonOpsModel.invalidateScoreCalculationByRound(
+                round,
+                'playoff'
+            );
+            await document.save({ validateBeforeSave: false });
         } catch (error) {
             console.error('Error saving admin set plays:', error);
             throw error;

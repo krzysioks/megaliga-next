@@ -14,6 +14,7 @@ import {
     playerRolesZodSchema,
     roundNumberSchema
 } from '@/db/models/schema.types';
+import SeasonOpsModel from '@/db/models/season-ops';
 import UserModel from '@/db/models/user';
 
 //StartingLineup is representation of megaliga_starting_lineup of old megaliga database. Will be used for displaying selected starting lineup for given match. Used in dashboard in form to select lineup before match. Also will be used in ScoreDetails model to populate setplays
@@ -190,7 +191,12 @@ startingLineupSchema.static(
                 'roles.pn.isDisabled',
                 validatedIsDisabled
             );
-            await startingLineupDocument.save();
+            await startingLineupDocument.validate();
+            await SeasonOpsModel.invalidateScoreCalculationByRound(
+                startingLineupDocument.roundNumber,
+                'regularSeason'
+            );
+            await startingLineupDocument.save({ validateBeforeSave: false });
         } catch (error) {
             console.error('Error saving Primus Nominatus admin data:', error);
             throw error;

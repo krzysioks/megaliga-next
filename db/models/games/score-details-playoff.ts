@@ -28,7 +28,7 @@ import { areRoundScoresComplete, getSetPlaysDetails } from '@/db/db.utils';
 import SchedulePlayoffModel, {
     SchedulePlayoffType
 } from '@/db/models/games/schedule-playoff';
-import SetPlayPlayoffDataModel from '@/db/models/games/set-play-playoff-data';
+import SetPlayPlayoffDataModel from '@/db/models/games/set-plays-data-playoff';
 import {
     StartingLineupPlayoffPlayersByRoundReturnType,
     StartingLineupPlayoffType
@@ -40,6 +40,7 @@ import {
     playerScoresZodSchema,
     playerSchema,
     trainerSchema,
+    teamCalculationDetailsZodSchema,
     objectIdSchema,
     roundNumberSchema,
     teamSchema,
@@ -854,6 +855,10 @@ scoreDetailsPlayoffSchema.static(
                     );
                 }
 
+                await SeasonOpsModel.invalidateScoreCalculationByRound(
+                    roundNumber,
+                    'playoff'
+                );
                 await this.updateOne(
                     { scheduleId: schedule.scheduleId, roundNumber },
                     {
@@ -1091,6 +1096,9 @@ scoreDetailsPlayoffSchema.static(
                 for (const team of [result.teamOne, result.teamTwo]) {
                     playerSchema.array().parse(team.players);
                     trainerSchema.parse(team.trainer);
+                    teamCalculationDetailsZodSchema.parse(
+                        team.calculationDetails
+                    );
                 }
                 calculations.push({ document, result });
             }
@@ -1108,8 +1116,12 @@ scoreDetailsPlayoffSchema.static(
                 document.set({
                     'teamOne.players': result.teamOne.players,
                     'teamOne.trainer': result.teamOne.trainer,
+                    'teamOne.calculationDetails':
+                        result.teamOne.calculationDetails,
                     'teamTwo.players': result.teamTwo.players,
-                    'teamTwo.trainer': result.teamTwo.trainer
+                    'teamTwo.trainer': result.teamTwo.trainer,
+                    'teamTwo.calculationDetails':
+                        result.teamTwo.calculationDetails
                 });
                 await document.save();
                 await SchedulePlayoffModel.updateOne(
@@ -1122,12 +1134,8 @@ scoreDetailsPlayoffSchema.static(
                     }
                 );
             }
-            await currentSeason.updateSeason({
-                isScoreCalculatdedPlayoff: {
-                    ...currentSeason.isScoreCalculatdedPlayoff,
-                    [roundNumber]: true
-                }
-            });
+            currentSeason.set(`isScoreCalculatdedPlayoff.${roundNumber}`, true);
+            await currentSeason.save();
         } catch (error) {
             console.error('Error calculating playoff round scores:', error);
             throw error;

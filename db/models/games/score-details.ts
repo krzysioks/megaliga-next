@@ -41,6 +41,7 @@ import {
     playerSchema,
     teamSchema,
     trainerSchema,
+    teamCalculationDetailsZodSchema,
     objectIdSchema,
     roundNumberSchema,
     SetPlayEnumType
@@ -836,6 +837,10 @@ scoreDetailsSchema.static(
                     );
                 }
 
+                await SeasonOpsModel.invalidateScoreCalculationByRound(
+                    roundNumber,
+                    'regularSeason'
+                );
                 await this.updateOne(
                     { scheduleId: schedule.scheduleId, roundNumber },
                     {
@@ -1067,6 +1072,9 @@ scoreDetailsSchema.static(
                 for (const team of [result.teamOne, result.teamTwo]) {
                     playerSchema.array().parse(team.players);
                     trainerSchema.parse(team.trainer);
+                    teamCalculationDetailsZodSchema.parse(
+                        team.calculationDetails
+                    );
                 }
                 calculations.push({ document, result });
             }
@@ -1084,8 +1092,12 @@ scoreDetailsSchema.static(
                 document.set({
                     'teamOne.players': result.teamOne.players,
                     'teamOne.trainer': result.teamOne.trainer,
+                    'teamOne.calculationDetails':
+                        result.teamOne.calculationDetails,
                     'teamTwo.players': result.teamTwo.players,
-                    'teamTwo.trainer': result.teamTwo.trainer
+                    'teamTwo.trainer': result.teamTwo.trainer,
+                    'teamTwo.calculationDetails':
+                        result.teamTwo.calculationDetails
                 });
                 await document.save();
                 await ScheduleModel.updateOne(
@@ -1098,12 +1110,8 @@ scoreDetailsSchema.static(
                     }
                 );
             }
-            await currentSeason.updateSeason({
-                isScoreCalculatded: {
-                    ...currentSeason.isScoreCalculatded,
-                    [roundNumber]: true
-                }
-            });
+            currentSeason.set(`isScoreCalculatded.${roundNumber}`, true);
+            await currentSeason.save();
         } catch (error) {
             console.error('Error calculating round scores:', error);
             throw error;

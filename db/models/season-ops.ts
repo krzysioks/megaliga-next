@@ -2,6 +2,12 @@ import { model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
 import {
+    MIN_REGULAR_SEASON_ROUND,
+    MAX_REGULAR_SEASON_ROUND,
+    MIN_PLAYOFF_ROUND,
+    MAX_PLAYOFF_ROUND
+} from '@/db/db.constants';
+import {
     booleanDefaultFalseSchema,
     stageEnumSchema
 } from '@/db/models/schema.types';
@@ -63,6 +69,10 @@ interface SeasonOpsModelType extends Model<
         roundNumber: number,
         stage: z.infer<typeof stageEnumSchema>
     ) => Promise<boolean>;
+    invalidateScoreCalculationByRound: (
+        roundNumber: number,
+        stage: z.infer<typeof stageEnumSchema>
+    ) => Promise<void>;
 }
 
 const seasonOpsSchema = new Schema<
@@ -236,6 +246,51 @@ seasonOpsSchema.static(
             ];
         } catch (error) {
             console.error('Error fetching score calculation status:', error);
+            throw error;
+        }
+    }
+);
+
+seasonOpsSchema.static(
+    'invalidateScoreCalculationByRound',
+    async function invalidateScoreCalculationByRound(
+        roundNumber: number,
+        stage: z.infer<typeof stageEnumSchema>
+    ) {
+        try {
+            if (stage !== 'regularSeason' && stage !== 'playoff') {
+                throw new Error(`Invalid stage: ${stage}`);
+            }
+            const minimum =
+                stage === 'regularSeason'
+                    ? MIN_REGULAR_SEASON_ROUND
+                    : MIN_PLAYOFF_ROUND;
+            const maximum =
+                stage === 'regularSeason'
+                    ? MAX_REGULAR_SEASON_ROUND
+                    : MAX_PLAYOFF_ROUND;
+            if (roundNumber < minimum || roundNumber > maximum) {
+                throw new Error(
+                    `Invalid roundNumber: ${roundNumber}. Must be between ${minimum} and ${maximum}`
+                );
+            }
+            const document = await this.findOne({
+                isCurrentSeason: true
+            }).exec();
+            if (!document) {
+                throw new Error('Current season not found');
+            }
+            const field =
+                stage === 'regularSeason'
+                    ? 'isScoreCalculatded'
+                    : 'isScoreCalculatdedPlayoff';
+            document.set(`${field}.${roundNumber}`, false);
+            await document.save();
+        } catch (error) {
+            console.error(
+                'Error invalidating score calculation status:',
+                error
+            );
             throw error;
         }
     }

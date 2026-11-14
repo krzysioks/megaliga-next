@@ -15,6 +15,7 @@ import {
 import { normalizeSetPlayData } from '@/db/db.utils';
 import StartingLineupModel from '@/db/models/games/starting-lineup';
 import { objectIdSchema, SetPlayEnumType } from '@/db/models/schema.types';
+import SeasonOpsModel from '@/db/models/season-ops';
 import { setPlayPayloadListZodSchema } from '@/db/models/set-play-payload.schema';
 import UserModel from '@/db/models/user';
 import { validateSetPlayConstraints } from '@/db/models/validation.utils';
@@ -616,19 +617,30 @@ setPlaysDataSchema.static(
                 }
             }
 
+            if (!setPlayData.some(item => item.adminData !== undefined)) {
+                return;
+            }
+
             document.set(
                 'setPlayList',
                 selectedSetPlays.map(setPlay => {
-                    const item = setPlayData.find(
-                        item => item.selectedSetPlayId === setPlay._id.toString()
-                    );
+                    const item = setPlayData.find(item => {
+                        return (
+                            item.selectedSetPlayId === setPlay._id.toString()
+                        );
+                    });
                     if (!item || item.adminData === undefined) {
                         return setPlay;
                     }
                     return { ...setPlay, adminData: item.adminData };
                 })
             );
-            await document.save();
+            await document.validate();
+            await SeasonOpsModel.invalidateScoreCalculationByRound(
+                round,
+                'regularSeason'
+            );
+            await document.save({ validateBeforeSave: false });
         } catch (error) {
             console.error('Error saving admin set plays:', error);
             throw error;

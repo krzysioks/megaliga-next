@@ -16,7 +16,10 @@ import ScoreDetailsModel, {
 import SetPlaysDataModel from '@/db/models/games/set-plays-data';
 import StartingLineupModel from '@/db/models/games/starting-lineup';
 import PlayersModel from '@/db/models/players';
-import { playerScoresZodSchema, SetPlayEnumType } from '@/db/models/schema.types';
+import {
+    playerScoresZodSchema,
+    SetPlayEnumType
+} from '@/db/models/schema.types';
 import SeasonOpsModel from '@/db/models/season-ops';
 import SetPlaysModel from '@/db/models/set-plays';
 import UserModel, { UserType } from '@/db/models/user';
@@ -147,7 +150,10 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 playerFour: players[3]._id.toString(),
                 playerFive: players[4]._id.toString(),
                 roles: {
-                    pn: { playerId: players[0]._id.toString(), isDisabled: false },
+                    pn: {
+                        playerId: players[0]._id.toString(),
+                        isDisabled: false
+                    },
                     kb: players[1]._id.toString(),
                     p: players[2]._id.toString()
                 }
@@ -162,7 +168,10 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 playerFour: players[8]._id.toString(),
                 playerFive: players[9]._id.toString(),
                 roles: {
-                    pn: { playerId: players[5]._id.toString(), isDisabled: false },
+                    pn: {
+                        playerId: players[5]._id.toString(),
+                        isDisabled: false
+                    },
                     kb: players[6]._id.toString(),
                     p: players[7]._id.toString()
                 }
@@ -200,9 +209,11 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                             setPlayId: ncd._id,
                             userData: { playerId: players[2]._id.toString() },
                             adminData: {
-                                playerIdList: players.slice(5, 9).map(player => {
-                                    return player._id.toString();
-                                })
+                                playerIdList: players
+                                    .slice(5, 9)
+                                    .map(player => {
+                                        return player._id.toString();
+                                    })
                             }
                         },
                         {
@@ -308,7 +319,10 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             expect(result.teamTwo.teamName).toBe(userTwo.teamName);
             expect(result.teamOne).toMatchObject({
                 roles: {
-                    pn: { playerId: players[0]._id.toString(), isDisabled: false },
+                    pn: {
+                        playerId: players[0]._id.toString(),
+                        isDisabled: false
+                    },
                     kb: players[1]._id.toString(),
                     p: players[2]._id.toString()
                 },
@@ -444,7 +458,11 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 playerThree: playerIds[2],
                 playerFour: playerIds[3],
                 playerFive: playerIds[4],
-                roles: { pn: { playerId: playerIds[0], isDisabled: false }, kb: playerIds[1], p: playerIds[2] }
+                roles: {
+                    pn: { playerId: playerIds[0], isDisabled: false },
+                    kb: playerIds[1],
+                    p: playerIds[2]
+                }
             });
             const schedule = await ScheduleModel.create({
                 userOneId: userOne._id,
@@ -475,7 +493,11 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 setPlayDescriptions: ''
             });
             expect(result.teamTwo).toMatchObject({
-                roles: { pn: { playerId: playerIds[0], isDisabled: false }, kb: playerIds[1], p: playerIds[2] },
+                roles: {
+                    pn: { playerId: playerIds[0], isDisabled: false },
+                    kb: playerIds[1],
+                    p: playerIds[2]
+                },
                 setPlayPlayers: expect.arrayContaining([
                     {
                         playerId: playerIds[0],
@@ -490,7 +512,8 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                         extraligaPlayerName: 'Player Three'
                     }
                 ]),
-                setPlayDescriptions: 'PN - Player One, KB - Player Two, P - Player Three'
+                setPlayDescriptions:
+                    'PN - Player One, KB - Player Two, P - Player Three'
             });
         });
     });
@@ -528,7 +551,10 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 playerFour: players[3]._id.toString(),
                 playerFive: players[4]._id.toString(),
                 roles: {
-                    pn: { playerId: players[0]._id.toString(), isDisabled: false },
+                    pn: {
+                        playerId: players[0]._id.toString(),
+                        isDisabled: false
+                    },
                     kb: players[1]._id.toString(),
                     p: players[2]._id.toString()
                 }
@@ -543,7 +569,10 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 playerFour: players[8]._id.toString(),
                 playerFive: players[9]._id.toString(),
                 roles: {
-                    pn: { playerId: players[5]._id.toString(), isDisabled: false },
+                    pn: {
+                        playerId: players[5]._id.toString(),
+                        isDisabled: false
+                    },
                     kb: players[6]._id.toString(),
                     p: players[7]._id.toString()
                 }
@@ -586,9 +615,11 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                             setPlayId: ncd._id,
                             userData: { playerId: players[6]._id.toString() },
                             adminData: {
-                                playerIdList: players.slice(0, 4).map(player => {
-                                    return player._id.toString();
-                                })
+                                playerIdList: players
+                                    .slice(0, 4)
+                                    .map(player => {
+                                        return player._id.toString();
+                                    })
                             }
                         },
                         {
@@ -722,7 +753,11 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 playerThree: playerIds[2],
                 playerFour: playerIds[3],
                 playerFive: playerIds[4],
-                roles: { pn: { playerId: playerIds[0], isDisabled: false }, kb: playerIds[1], p: playerIds[2] }
+                roles: {
+                    pn: { playerId: playerIds[0], isDisabled: false },
+                    kb: playerIds[1],
+                    p: playerIds[2]
+                }
             });
             const schedule = await ScheduleModel.create({
                 userOneId: userOne._id,
@@ -740,7 +775,8 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 }
             });
 
-            const [result] = await ScoreDetailsModel.getScoreDetailsForHistory();
+            const [result] =
+                await ScoreDetailsModel.getScoreDetailsForHistory();
             expect(result.teamOne.setPlays).toBe('');
             expect(result.teamTwo.setPlays).toBe(
                 'PN - Player One, KB - Player Two, P - Player Three'
@@ -873,7 +909,9 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             const playerScoreDetails: PlayerScoresType =
                 result.playerScoreDetails;
 
-            expect(playerScoreDetails.heatOne).toEqual(playerHeat(3, true, true));
+            expect(playerScoreDetails.heatOne).toEqual(
+                playerHeat(3, true, true)
+            );
             expect(playerScoreDetails.heatTwo).toEqual(playerHeat(0));
             expect(
                 (playerScoreDetails as Record<string, unknown>).setPlay
@@ -913,6 +951,68 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
     });
 
     describe('savePlayerScoreDetails', () => {
+        beforeEach(async () => {
+            await SeasonOpsModel.create({
+                name: '2026',
+                isCurrentSeason: true,
+                numberOfGroups: 1,
+                isScoreCalculatded: { 1: true, 2: true },
+                isScoreCalculatdedPlayoff: { 1: true }
+            });
+        });
+
+        test('Should reject a heat correction without changing saved scores when invalidation fails', async () => {
+            const [userOne, userTwo] = await UserModel.create([
+                createUserData(81),
+                createUserData(82)
+            ]);
+            const player = await PlayersModel.create({
+                extraligaPlayerName: 'Unchanged rider'
+            });
+            const schedule = await ScheduleModel.create({
+                userOneId: userOne._id,
+                userTwoId: userTwo._id,
+                roundNumber: 1
+            });
+            const document = await ScoreDetailsModel.create({
+                scheduleId: schedule._id,
+                roundNumber: 1,
+                teamOne: {
+                    userId: userOne._id,
+                    players: [
+                        {
+                            playerId: player._id,
+                            ...playerScoresZodSchema.parse({
+                                heatOne: { value: 1 }
+                            })
+                        }
+                    ]
+                },
+                teamTwo: { userId: userTwo._id }
+            });
+            const before = await ScoreDetailsModel.findById(
+                document._id
+            ).lean();
+            await SeasonOpsModel.deleteMany();
+            await expect(
+                ScoreDetailsModel.savePlayerScoreDetails(
+                    {
+                        userId: [userOne._id.toString()],
+                        startingLineupId: [
+                            new mongoose.Types.ObjectId().toString()
+                        ],
+                        playerId: player._id.toString(),
+                        playerName: player.extraligaPlayerName
+                    },
+                    1,
+                    { heatOne: { value: 3 } }
+                )
+            ).rejects.toThrow('Current season not found');
+            expect(
+                await ScoreDetailsModel.findById(document._id).lean()
+            ).toEqual(before);
+        });
+
         test('Should throw error if schedule does not exist for given userId and roundNumber', async () => {
             const userOne = await new UserModel(createUserData(50)).save();
             const [player] = await PlayersModel.create([
@@ -935,7 +1035,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             );
         });
 
-        test('Should preserve both teams calculation details while saving player scores', async () => {
+        test('Should mark the regular-season round for recalculation after an admin heat correction without deleting either team’s previous calculation details', async () => {
             const userOne = await UserModel.create(createUserData(71));
             const userTwo = await UserModel.create(createUserData(72));
             const player = await PlayersModel.create({
@@ -1036,6 +1136,24 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 'calculationDetails',
                 calculationDetails
             );
+            expect(
+                await SeasonOpsModel.getScoreCalculationStatusByRound(
+                    1,
+                    'regularSeason'
+                )
+            ).toBe(false);
+            expect(
+                await SeasonOpsModel.getScoreCalculationStatusByRound(
+                    2,
+                    'regularSeason'
+                )
+            ).toBe(true);
+            expect(
+                await SeasonOpsModel.getScoreCalculationStatusByRound(
+                    1,
+                    'playoff'
+                )
+            ).toBe(true);
         });
 
         test('Should save heat values and flags with null defaults and no calculation details', async () => {
@@ -1374,6 +1492,110 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             return { users, players, lineups, schedules, documents };
         };
 
+        test('Should preserve another round invalidation made during score calculation', async () => {
+            await createRound();
+            await SeasonOpsModel.create({
+                name: '2026',
+                isCurrentSeason: true,
+                numberOfGroups: 1,
+                isScoreCalculatded: { 3: true },
+                isScoreCalculatdedPlayoff: { 1: true }
+            });
+            const seasonQuery = SeasonOpsModel.findOne({
+                isCurrentSeason: true
+            });
+            // Interleave the correction after the calculator has read the old flags.
+            seasonQuery.post(async () => {
+                await SeasonOpsModel.invalidateScoreCalculationByRound(
+                    3,
+                    'regularSeason'
+                );
+            });
+            const lookup = jest
+                .spyOn(SeasonOpsModel, 'findOne')
+                .mockReturnValueOnce(seasonQuery);
+            try {
+                await ScoreDetailsModel.calculateScoresByRound(2);
+                expect(
+                    await SeasonOpsModel.getScoreCalculationStatusByRound(
+                        2,
+                        'regularSeason'
+                    )
+                ).toBe(true);
+                expect(
+                    await SeasonOpsModel.getScoreCalculationStatusByRound(
+                        3,
+                        'regularSeason'
+                    )
+                ).toBe(false);
+                expect(
+                    await SeasonOpsModel.getScoreCalculationStatusByRound(
+                        1,
+                        'playoff'
+                    )
+                ).toBe(true);
+            } finally {
+                lookup.mockRestore();
+            }
+        });
+
+        test('Should keep previous calculation details unpublished when recalculation fails after a heat correction', async () => {
+            const fixture = await createRound();
+            await SeasonOpsModel.create({
+                name: '2026',
+                isCurrentSeason: true,
+                numberOfGroups: 1
+            });
+            await ScoreDetailsModel.calculateScoresByRound(2);
+            const documents = await ScoreDetailsModel.find({
+                roundNumber: 2
+            }).exec();
+            const first = documents[0];
+            const last = documents[documents.length - 1];
+            const firstPlayerId =
+                first.teamOne.players![0].playerId!.toString();
+            await ScoreDetailsModel.savePlayerScoreDetails(
+                {
+                    userId: [first.teamOne.userId!.toString()],
+                    startingLineupId: [
+                        first.teamOne.startingLineupId!.toString()
+                    ],
+                    playerId: firstPlayerId,
+                    playerName: fixture.players.find(
+                        player => player._id.toString() === firstPlayerId
+                    )!.extraligaPlayerName
+                },
+                2,
+                { heatOne: { value: 3 } }
+            );
+            const before = await ScoreDetailsModel.find({
+                roundNumber: 2
+            }).lean();
+            const schedulesBefore = await ScheduleModel.find({
+                roundNumber: 2
+            }).lean();
+            await StartingLineupModel.deleteOne({
+                _id: last.teamOne.startingLineupId
+            });
+            await expect(
+                ScoreDetailsModel.calculateScoresByRound(2)
+            ).rejects.toThrow(
+                `Invalid starting lineup for user: ${last.teamOne.userId}`
+            );
+            expect(
+                await ScoreDetailsModel.find({ roundNumber: 2 }).lean()
+            ).toEqual(before);
+            expect(await ScheduleModel.find({ roundNumber: 2 }).lean()).toEqual(
+                schedulesBefore
+            );
+            expect(
+                await SeasonOpsModel.getScoreCalculationStatusByRound(
+                    2,
+                    'regularSeason'
+                )
+            ).toBe(false);
+        });
+
         test('Should reject a round outside the regular season', async () => {
             await expect(
                 ScoreDetailsModel.calculateScoresByRound(15)
@@ -1626,7 +1848,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             ).toBe(4);
         });
 
-        test('Should recalculate scores after a heat correction without changing other rounds', async () => {
+        test('Should replace both teams calculation details after a heat correction without changing other rounds', async () => {
             const fixture = await createRound();
             await ScoreDetailsModel.updateOne(
                 { _id: fixture.documents[5]._id },
@@ -1637,7 +1859,9 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                     }
                 }
             );
-            expect(await ScoreDetailsModel.isScoreCalculationsEnabled(2)).toBe(true);
+            expect(await ScoreDetailsModel.isScoreCalculationsEnabled(2)).toBe(
+                true
+            );
             const otherRound = await createRound(3);
             const season = await SeasonOpsModel.create({
                 name: '2026',
@@ -1671,6 +1895,55 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             let saved = await ScoreDetailsModel.findById(
                 fixture.documents[0]._id
             );
+            const firstDetails = saved?.toObject({ flattenObjectIds: true });
+            expect(firstDetails?.teamOne.calculationDetails).toMatchObject({
+                players: [
+                    {
+                        playerId: fixture.players[0]._id.toString(),
+                        nominalPlayerId: fixture.players[0]._id.toString(),
+                        actualStartCount: 1,
+                        basePoints: 0,
+                        functionPoints: 0,
+                        rolePoints: 0,
+                        setPlayPoints: -2,
+                        function: 'Lider',
+                        role: 'PN'
+                    },
+                    ...fixture.players.slice(1, 5).map(player => {
+                        return {
+                            playerId: player._id.toString(),
+                            basePoints: 0
+                        };
+                    })
+                ],
+                trainer: { heatPoints: 0, setPlayPoints: 0 },
+                floorAdjustment: 2,
+                setPlayResults: [
+                    {
+                        setPlayId: ncd._id.toString(),
+                        type: SetPlayEnumType.Ncd6,
+                        recipients: [
+                            {
+                                recipientType: 'player',
+                                playerId: fixture.players[0]._id.toString(),
+                                nominalPlayerId:
+                                    fixture.players[0]._id.toString(),
+                                calculatedPoints: -2,
+                                creditedPoints: -2,
+                                setPlayContributionType: 'award'
+                            }
+                        ]
+                    }
+                ]
+            });
+            expect(firstDetails?.teamTwo.calculationDetails).toMatchObject({
+                players: fixture.players.slice(5).map(player => {
+                    return { playerId: player._id.toString(), basePoints: 0 };
+                }),
+                trainer: { heatPoints: 0, setPlayPoints: 0 },
+                setPlayResults: [],
+                floorAdjustment: 0
+            });
             expect(saved?.teamOne.players?.[0].setPlay).toBe(-2);
             expect(saved?.teamOne.players?.[0].comment).toBe(
                 'Lider 0, PN 0, NCD6 -2'
@@ -1696,12 +1969,53 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                     2
                 )
             ).toEqual(before);
-            await ScoreDetailsModel.updateOne(
-                { _id: fixture.documents[0]._id },
-                { 'teamOne.players.0.heatOne': playerHeat(3, true, true) }
+            const repeated = await ScoreDetailsModel.findById(
+                fixture.documents[0]._id
             );
+            expect(
+                repeated?.toObject({ flattenObjectIds: true }).teamOne
+                    .calculationDetails
+            ).toEqual(firstDetails?.teamOne.calculationDetails);
+            expect(
+                repeated?.toObject({ flattenObjectIds: true }).teamTwo
+                    .calculationDetails
+            ).toEqual(firstDetails?.teamTwo.calculationDetails);
+            await ScoreDetailsModel.savePlayerScoreDetails(
+                {
+                    userId: [fixture.users[0]._id.toString()],
+                    startingLineupId: [fixture.lineups[0]._id.toString()],
+                    playerId: fixture.players[0]._id.toString(),
+                    playerName: fixture.players[0].extraligaPlayerName
+                },
+                2,
+                { heatOne: playerHeat(3, true, true) }
+            );
+            expect(
+                await SeasonOpsModel.getScoreCalculationStatusByRound(
+                    2,
+                    'regularSeason'
+                )
+            ).toBe(false);
             await ScoreDetailsModel.calculateScoresByRound(2);
             saved = await ScoreDetailsModel.findById(fixture.documents[0]._id);
+            expect(
+                saved?.toObject({ flattenObjectIds: true }).teamOne
+                    .calculationDetails
+            ).toMatchObject({
+                players: [
+                    { basePoints: 3, rolePoints: 3, setPlayPoints: -2 },
+                    ...fixture.players.slice(1, 5).map(player => {
+                        return {
+                            playerId: player._id.toString(),
+                            basePoints: 0
+                        };
+                    })
+                ],
+                setPlayResults:
+                    firstDetails?.teamOne.calculationDetails?.setPlayResults,
+                trainer: { heatPoints: 3, setPlayPoints: 0 },
+                floorAdjustment: 0
+            });
             expect(saved?.teamOne.players?.[0].setPlay).toBe(1);
             expect(saved?.teamOne.players?.[0].comment).toBe(
                 'Lider 0, PN 3, NCD6 -2'
@@ -1788,7 +2102,8 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 createCompleteScoreDetails(2)
             ];
             const incompletePlayer = createCompletePlayer();
-            delete (incompletePlayer.heatSeven as Record<string, unknown>).value;
+            delete (incompletePlayer.heatSeven as Record<string, unknown>)
+                .value;
             scoreDetailsData[5]!.teamTwo.players = [
                 incompletePlayer,
                 ...createCompletePlayers().slice(1)
@@ -1836,7 +2151,8 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 ...playerScoresZodSchema.parse({})
             };
             scoreDetailsData[5]!.teamTwo.players[0]!.heatSix = playerHeat(0);
-            scoreDetailsData[5]!.teamTwo.players[0]!.heatSeven = playerHeat(null);
+            scoreDetailsData[5]!.teamTwo.players[0]!.heatSeven =
+                playerHeat(null);
 
             await ScoreDetailsModel.create(scoreDetailsData);
 

@@ -7,8 +7,8 @@ import {
     MIN_REGULAR_SEASON_ROUND,
     MAX_REGULAR_SEASON_ROUND
 } from '@/db/db.constants';
-import SetPlayPlayoffDataModel from '@/db/models/games/set-play-playoff-data';
 import SetPlaysDataModel from '@/db/models/games/set-plays-data';
+import SetPlayPlayoffDataModel from '@/db/models/games/set-plays-data-playoff';
 import StartingLineupModel from '@/db/models/games/starting-lineup';
 import StartingLineupPlayoffModel from '@/db/models/games/starting-lineup-playoff';
 import {

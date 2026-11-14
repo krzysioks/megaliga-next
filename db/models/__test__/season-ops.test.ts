@@ -215,6 +215,104 @@ describe('Test SeasonOpsModel methods and static functions', () => {
         });
     });
 
+    describe('invalidateScoreCalculationByRound', () => {
+        test.each([
+            ['regularSeason', 0, 14],
+            ['regularSeason', 15, 14],
+            ['playoff', 0, 4],
+            ['playoff', 5, 4]
+        ] as const)(
+            'Should reject %s round %i outside its range',
+            async (stage, round, maximum) => {
+                await expect(
+                    SeasonOpsModel.invalidateScoreCalculationByRound(
+                        round,
+                        stage
+                    )
+                ).rejects.toThrow(
+                    `Invalid roundNumber: ${round}. Must be between 1 and ${maximum}`
+                );
+            }
+        );
+
+        test('Should reject an unsupported stage', async () => {
+            await expect(
+                SeasonOpsModel.invalidateScoreCalculationByRound(
+                    1,
+                    'playIn' as never
+                )
+            ).rejects.toThrow('Invalid stage: playIn');
+        });
+
+        test('Should throw when the current season is missing', async () => {
+            await expect(
+                SeasonOpsModel.invalidateScoreCalculationByRound(
+                    1,
+                    'regularSeason'
+                )
+            ).rejects.toThrow('Current season not found');
+        });
+
+        test.each(['regularSeason', 'playoff'] as const)(
+            'Should invalidate only the requested %s round in the current season',
+            async stage => {
+                const flags = {
+                    'isScoreCalculatded.1': true,
+                    'isScoreCalculatded.2': true,
+                    'isScoreCalculatdedPlayoff.1': true,
+                    'isScoreCalculatdedPlayoff.2': true
+                };
+                const history = await SeasonOpsModel.create(
+                    createSeasonData('2024')
+                );
+                const current = await SeasonOpsModel.create(
+                    createSeasonData('2025', { isCurrentSeason: true })
+                );
+                history.set(flags);
+                current.set(flags);
+                await history.save();
+                await current.save();
+
+                await SeasonOpsModel.invalidateScoreCalculationByRound(
+                    1,
+                    stage
+                );
+
+                expect(
+                    await SeasonOpsModel.getScoreCalculationStatusByRound(
+                        1,
+                        stage
+                    )
+                ).toBe(false);
+                expect(
+                    await SeasonOpsModel.getScoreCalculationStatusByRound(
+                        2,
+                        stage
+                    )
+                ).toBe(true);
+                const otherStage =
+                    stage === 'regularSeason' ? 'playoff' : 'regularSeason';
+                expect(
+                    await SeasonOpsModel.getScoreCalculationStatusByRound(
+                        1,
+                        otherStage
+                    )
+                ).toBe(true);
+                expect(
+                    await SeasonOpsModel.getScoreCalculationStatusByRound(
+                        2,
+                        otherStage
+                    )
+                ).toBe(true);
+                const savedHistory = await SeasonOpsModel.findById(
+                    history._id
+                ).exec();
+                expect(savedHistory?.isScoreCalculatded[1]).toBe(true);
+                expect(savedHistory?.isScoreCalculatdedPlayoff[1]).toBe(true);
+            }
+        );
+    });
+
     describe('getScoreCalculationStatusByRound', () => {
         test('Should throw error if roundNumber not in range 1 - 14 for regularSeason stage', async () => {
             await expect(

@@ -5,13 +5,20 @@ import { ZodError } from 'zod';
 
 import { DBClient } from '@/db/db-client';
 import { CALCULATION_HEAT_KEYS } from '@/db/db.constants';
-import SetPlayPlayoffDataModel from '@/db/models/games/set-play-playoff-data';
 import SetPlaysDataModel from '@/db/models/games/set-plays-data';
+import SetPlayPlayoffDataModel from '@/db/models/games/set-plays-data-playoff';
 import StartingLineupModel from '@/db/models/games/starting-lineup';
 import StartingLineupPlayoffModel from '@/db/models/games/starting-lineup-playoff';
 import { SetPlayEnumType } from '@/db/models/schema.types';
+import SeasonOpsModel from '@/db/models/season-ops';
 import SetPlaysModel from '@/db/models/set-plays';
 import UserModel from '@/db/models/user';
+
+async function getCalculationFlags() {
+    return SeasonOpsModel.findOne({ isCurrentSeason: true })
+        .select('isScoreCalculatded isScoreCalculatdedPlayoff -_id')
+        .lean();
+}
 
 let userId: string;
 let startingLineupId: string;
@@ -24,6 +31,7 @@ async function clearFixtures() {
     await StartingLineupModel.deleteMany();
     await SetPlayPlayoffDataModel.deleteMany();
     await StartingLineupPlayoffModel.deleteMany();
+    await SeasonOpsModel.deleteMany();
     await SetPlaysModel.deleteMany();
     await UserModel.deleteMany();
 }
@@ -489,9 +497,10 @@ describe('getSetPlayListByStartingLineupId', () => {
     test('Should return selected set plays for given startingLineupId', async () => {
         const selected = await savePrediction();
         const adminData = { playerIdList: playerIds.slice(0, 4) };
-        await SetPlayPlayoffDataModel.saveAdminSetPlay('1', userId, [
-            { ...selected[0], adminData }
-        ]);
+        await SetPlayPlayoffDataModel.updateOne(
+            { startingLineupId },
+            { $set: { 'setPlayList.0.adminData': adminData } }
+        );
         expect(
             await SetPlayPlayoffDataModel.getSetPlayListByStartingLineupId(
                 startingLineupId
@@ -528,12 +537,16 @@ describe('getSetPlaysForUser', () => {
             selectedData(SetPlayEnumType.Remis),
             SetPlayEnumType.Remis
         );
-        await SetPlayPlayoffDataModel.saveAdminSetPlay('1', userId, [
+        await SetPlayPlayoffDataModel.updateOne(
+            { startingLineupId },
             {
-                ...selected[0],
-                adminData: { playerIdList: playerIds.slice(0, 4) }
+                $set: {
+                    'setPlayList.0.adminData': {
+                        playerIdList: playerIds.slice(0, 4)
+                    }
+                }
             }
-        ]);
+        );
         const result =
             await SetPlayPlayoffDataModel.getSetPlaysForUser(startingLineupId);
         expect(result).toEqual([
@@ -632,6 +645,46 @@ describe('getSetPlaysForAdmin', () => {
 });
 
 describe('saveAdminSetPlay', () => {
+    beforeEach(async () => {
+        await SeasonOpsModel.create({
+            name: '2026',
+            isCurrentSeason: true,
+            numberOfGroups: 2,
+            isScoreCalculatded: { 1: true, 2: true },
+            isScoreCalculatdedPlayoff: { 1: true, 2: true }
+        });
+    });
+
+    test('Should preserve selected set play admin inputs when invalidation fails', async () => {
+        await SetPlayPlayoffDataModel.create({
+            startingLineupId,
+            setPlayList: [
+                {
+                    setPlayId,
+                    userData: { playerId: playerIds[0] }
+                }
+            ]
+        });
+        const before =
+            await SetPlayPlayoffDataModel.getSetPlayListByStartingLineupId(
+                startingLineupId
+            );
+        await SeasonOpsModel.deleteMany();
+        await expect(
+            SetPlayPlayoffDataModel.saveAdminSetPlay('1', userId, [
+                {
+                    ...before.setPlayList[0],
+                    adminData: { playerIdList: playerIds.slice(0, 4) }
+                }
+            ])
+        ).rejects.toThrow('Current season not found');
+        expect(
+            await SetPlayPlayoffDataModel.getSetPlayListByStartingLineupId(
+                startingLineupId
+            )
+        ).toEqual(before);
+    });
+
     test.each(['0', '5', '1.5'])(
         'Should throw for invalid round %s',
         async round => {
@@ -671,7 +724,15 @@ describe('saveAdminSetPlay', () => {
     });
 
     test('Should reject an unknown selected item ID without changing saved data', async () => {
-        const selected = await savePrediction();
+        await SetPlayPlayoffDataModel.create({
+            startingLineupId,
+            setPlayList: [selectedData()]
+        });
+        const { setPlayList: selected } =
+            await SetPlayPlayoffDataModel.getSetPlayListByStartingLineupId(
+                startingLineupId
+            );
+        const seasonBefore = await getCalculationFlags();
         await expect(
             SetPlayPlayoffDataModel.saveAdminSetPlay('1', userId, [
                 {
@@ -686,15 +747,19 @@ describe('saveAdminSetPlay', () => {
                 startingLineupId
             )
         ).toEqual({ setPlayList: selected });
+        expect(await getCalculationFlags()).toEqual(seasonBefore);
     });
 
     test('Should reject invalid admin data without saving any submitted update', async () => {
-        await savePrediction();
-        const selected = await SetPlayPlayoffDataModel.saveSetPlay(
+        await SetPlayPlayoffDataModel.create({
             startingLineupId,
-            selectedData(SetPlayEnumType.Ncd6),
-            SetPlayEnumType.Ncd6
-        );
+            setPlayList: [selectedData(), selectedData(SetPlayEnumType.Ncd6)]
+        });
+        const { setPlayList: selected } =
+            await SetPlayPlayoffDataModel.getSetPlayListByStartingLineupId(
+                startingLineupId
+            );
+        const seasonBefore = await getCalculationFlags();
         await expect(
             SetPlayPlayoffDataModel.saveAdminSetPlay('1', userId, [
                 {
@@ -712,6 +777,7 @@ describe('saveAdminSetPlay', () => {
                 startingLineupId
             )
         ).toEqual({ setPlayList: selected });
+        expect(await getCalculationFlags()).toEqual(seasonBefore);
     });
 
     test('Should accept an empty submission without changing selected set plays', async () => {
@@ -826,6 +892,28 @@ describe('saveAdminSetPlay', () => {
             ).toEqual(regularBefore);
         }
     );
+
+    test('Should invalidate only the corrected round and stage when saving selected set play admin inputs', async () => {
+        await StartingLineupPlayoffModel.updateOne(
+            { _id: startingLineupId },
+            { roundNumber: 2 }
+        );
+        const document = await SetPlayPlayoffDataModel.create({
+            startingLineupId,
+            setPlayList: [selectedData()]
+        });
+        await SetPlayPlayoffDataModel.saveAdminSetPlay('2', userId, [
+            {
+                ...selectedData(),
+                selectedSetPlayId: document.setPlayList[0]._id.toString(),
+                adminData: { playerIdList: playerIds.slice(0, 4) }
+            }
+        ]);
+        expect(await getCalculationFlags()).toMatchObject({
+            isScoreCalculatded: { 1: true, 2: true },
+            isScoreCalculatdedPlayoff: { 1: true, 2: false }
+        });
+    });
 
     test('Should save complete admin form data and retain Awatar average, draw and disable flags', async () => {
         const definitions = [
@@ -1008,4 +1096,58 @@ describe('saveAdminSetPlay', () => {
             });
         }
     );
+
+    test('Should preserve BrudnaPala defaults and complete rounds for empty or omitted admin inputs', async () => {
+        await SetPlayPlayoffDataModel.create({
+            startingLineupId,
+            setPlayList: [
+                {
+                    setPlayId: setPlayIds.get(SetPlayEnumType.BrudnaPala)!,
+                    userData: { leaderIdList: playerIds.slice(0, 4) }
+                }
+            ]
+        });
+        const before =
+            await SetPlayPlayoffDataModel.getSetPlayListByStartingLineupId(
+                startingLineupId
+            );
+        expect(before).toMatchObject({
+            setPlayList: [
+                {
+                    adminData: {
+                        isDisabled: false,
+                        playerResults: Object.fromEntries(
+                            playerIds.slice(0, 4).map(playerId => {
+                                return [playerId, false];
+                            })
+                        )
+                    }
+                }
+            ]
+        });
+        const omittedAdminData = {
+            setPlayId: before.setPlayList[0].setPlayId,
+            selectedSetPlayId: before.setPlayList[0].selectedSetPlayId
+        };
+        const seasonBefore = await getCalculationFlags();
+        await SetPlayPlayoffDataModel.saveAdminSetPlay('1', userId, []);
+        await SetPlayPlayoffDataModel.saveAdminSetPlay('1', userId, [
+            omittedAdminData
+        ]);
+        expect(await getCalculationFlags()).toEqual(seasonBefore);
+        await SeasonOpsModel.deleteMany();
+        await expect(
+            SetPlayPlayoffDataModel.saveAdminSetPlay('1', userId, [])
+        ).resolves.toBeUndefined();
+        await expect(
+            SetPlayPlayoffDataModel.saveAdminSetPlay('1', userId, [
+                omittedAdminData
+            ])
+        ).resolves.toBeUndefined();
+        expect(
+            await SetPlayPlayoffDataModel.getSetPlayListByStartingLineupId(
+                startingLineupId
+            )
+        ).toEqual(before);
+    });
 });
