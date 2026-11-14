@@ -137,6 +137,8 @@ export type ScoreDetailsReturnType = {
 };
 
 type ScoreDetailsForHistoryTeamReturnType = {
+    userId: string;
+    calculationDetails: TeamCalculationDetailsType;
     players: HistoryPlayerType[];
     trainer: ScoreDetailsType['teamOne']['trainer'];
     setPlays: string;
@@ -271,7 +273,10 @@ const scoreDetailsSchema = new Schema<ScoreDetailsType, ScoreDetailsModelType>({
             setPlay: { type: Number },
             comment: { type: String }
         },
-        startingLineupId: { type: Schema.Types.ObjectId, ref: 'StartingLineup' },
+        startingLineupId: {
+            type: Schema.Types.ObjectId,
+            ref: 'StartingLineup'
+        },
         calculationDetails: {
             type: new Schema<TeamCalculationDetailsType>(
                 {
@@ -430,7 +435,10 @@ const scoreDetailsSchema = new Schema<ScoreDetailsType, ScoreDetailsModelType>({
             setPlay: { type: Number },
             comment: { type: String }
         },
-        startingLineupId: { type: Schema.Types.ObjectId, ref: 'StartingLineup' },
+        startingLineupId: {
+            type: Schema.Types.ObjectId,
+            ref: 'StartingLineup'
+        },
         calculationDetails: {
             type: new Schema<TeamCalculationDetailsType>(
                 {
@@ -635,8 +643,19 @@ scoreDetailsSchema.static(
     'getScoreDetailsForHistory',
     async function getScoreDetailsForHistory() {
         try {
+            const season = await SeasonOpsModel.findOne({
+                isCurrentSeason: true
+            }).exec();
+
+            if (!season) {
+                throw new Error('Current season not found');
+            }
+
+            const calculatedRounds = Object.entries(season.isScoreCalculatded)
+                .filter(([, isCalculated]) => isCalculated)
+                .map(([round]) => Number(round));
             const documents: PopulatedScoreDetailsForHistoryFindType[] =
-                await this.find()
+                await this.find({ roundNumber: { $in: calculatedRounds } })
                     .populate<PopulatedScoreDetailsForHistoryFindType>({
                         path: 'teamOne.startingLineupId teamTwo.startingLineupId',
                         select: 'roles'
@@ -662,6 +681,10 @@ scoreDetailsSchema.static(
                 });
 
                 return {
+                    userId: objectIdSchema.unwrap().parse(team.userId),
+                    calculationDetails: teamCalculationDetailsZodSchema.parse(
+                        team.calculationDetails
+                    ),
                     players: (team.players ?? []).map(player => {
                         return historyPlayerSchema.parse({
                             playerId: player.playerId?.toString(),
@@ -685,13 +708,25 @@ scoreDetailsSchema.static(
 
             return await Promise.all(
                 documents.map(async document => {
+                    const scoreDetails =
+                        document.toObject<PopulatedScoreDetailsForHistoryType>({
+                            flattenObjectIds: true
+                        });
+                    if (
+                        !scoreDetails.teamOne.calculationDetails ||
+                        !scoreDetails.teamTwo.calculationDetails
+                    ) {
+                        throw new Error(
+                            `Calculation details missing for score details: ${document._id}`
+                        );
+                    }
                     const [teamOne, teamTwo] = await Promise.all([
-                        mapTeam(document.teamOne),
-                        mapTeam(document.teamTwo)
+                        mapTeam(scoreDetails.teamOne),
+                        mapTeam(scoreDetails.teamTwo)
                     ]);
 
                     return {
-                        scheduleId: document.scheduleId,
+                        scheduleId: scoreDetails.scheduleId,
                         teamOne,
                         teamTwo
                     };

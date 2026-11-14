@@ -566,9 +566,12 @@ describe('updateSetPlay', () => {
                     : { playerIdList: opponentPlayerIds.slice(0, 4) };
             const document = await SetPlaysDataModel.findOne({
                 startingLineupId
-            })
-                .orFail()
-                .exec();
+            }).exec();
+            if (!document) {
+                throw new Error(
+                    `Selected set plays not found for startingLineupId: ${startingLineupId}`
+                );
+            }
             document.set('setPlayList.0.adminData', adminData);
             await document.save();
             const before = await getStoredSetPlays(startingLineupId);

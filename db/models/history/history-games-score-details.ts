@@ -16,7 +16,8 @@ import {
     SetPlayEnumType,
     historyPlayerSchema,
     historyTeamSchema,
-    trainerSchema
+    trainerSchema,
+    teamCalculationDetailsZodSchema
 } from '@/db/models/schema.types';
 
 //HistoryGames collection represent in each document game played in megaliga
@@ -71,6 +72,8 @@ type PopulatedHistoryGamesScoreDetailsType = Omit<
 
 type HistoryScoreDetailsTeamReturnType = {
     teamName: HistoryTeamType['name'];
+    userId: HistoryGamesScoreDetailsType['teamOne']['userId'];
+    calculationDetails: HistoryGamesScoreDetailsType['teamOne']['calculationDetails'];
     players: HistoryScoreDetailsTeamPlayerReturnType[];
     score: HistoryGamesScoreDetailsType['teamOne']['score'];
     trainer: PopulatedHistoryGamesScoreDetailsType['teamOne']['trainer'];
@@ -380,18 +383,17 @@ historyGamesScoreDetails.static(
                 throw new Error(`Invalid id: ${id}`);
             }
 
-            const scoreDetailsDocument = (await this.findById(id)
-                .populate({ path: 'teamOne.teamId', select: 'name' })
-                .populate({ path: 'teamTwo.teamId', select: 'name' })
-                .populate({
-                    path: 'teamOne.players.playerId',
-                    select: 'extraligaPlayerName'
-                })
-                .populate({
-                    path: 'teamTwo.players.playerId',
-                    select: 'extraligaPlayerName'
-                })
-                .exec()) as PopulatedFindType | null;
+            const scoreDetailsDocument: PopulatedFindType | null =
+                await this.findById(id)
+                    .populate<PopulatedFindType>({
+                        path: 'teamOne.teamId teamTwo.teamId',
+                        select: 'name'
+                    })
+                    .populate<PopulatedFindType>({
+                        path: 'teamOne.players.playerId teamTwo.players.playerId',
+                        select: 'extraligaPlayerName'
+                    })
+                    .exec();
 
             if (!scoreDetailsDocument) {
                 throw new Error(`Score details not found for id: ${id}`);
@@ -402,6 +404,12 @@ historyGamesScoreDetails.static(
             ): HistoryScoreDetailsTeamReturnType => {
                 return {
                     teamName: team?.teamId.name ?? '',
+                    userId: team.userId?.toString(),
+                    calculationDetails: team.calculationDetails
+                        ? teamCalculationDetailsZodSchema.parse(
+                              team.calculationDetails
+                          )
+                        : undefined,
                     score: team.score,
                     players: (team.players ?? []).map(player => {
                         return {
@@ -419,9 +427,15 @@ historyGamesScoreDetails.static(
                 };
             };
 
+            const scoreDetails =
+                scoreDetailsDocument.toObject<PopulatedHistoryGamesScoreDetailsType>(
+                    {
+                        flattenObjectIds: true
+                    }
+                );
             return {
-                teamOne: mapTeam(scoreDetailsDocument.teamOne),
-                teamTwo: mapTeam(scoreDetailsDocument.teamTwo)
+                teamOne: mapTeam(scoreDetails.teamOne),
+                teamTwo: mapTeam(scoreDetails.teamTwo)
             };
         } catch (error) {
             console.error('Error fetching history score details by id:', error);

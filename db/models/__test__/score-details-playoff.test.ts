@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 
 import { DBClient } from '@/db/db-client';
 import { STARTING_LINEUP_PLAYER_COUNT } from '@/db/db.constants';
+import { createCalculationDetails } from '@/db/models/__test__/fixtures/calculation-details';
 import ScheduleModel from '@/db/models/games/schedule';
 import SchedulePlayoffModel from '@/db/models/games/schedule-playoff';
 import ScoreDetailsModel from '@/db/models/games/score-details';
@@ -665,6 +666,58 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
     });
 
     describe('getScoreDetailsForHistory', () => {
+        beforeEach(async () => {
+            await SeasonOpsModel.create({
+                name: '2026',
+                isCurrentSeason: true,
+                numberOfGroups: 1,
+                isScoreCalculatdedPlayoff: { 1: true, 3: true },
+                isScoreCalculatded: { 1: false }
+            });
+        });
+
+        test('Should throw when the current season is missing', async () => {
+            await SeasonOpsModel.deleteMany();
+            await expect(
+                ScoreDetailsPlayoffModel.getScoreDetailsForHistory()
+            ).rejects.toThrow('Current season not found');
+        });
+
+        test.each(['missing', 'invalid'])(
+            'Should reject %s calculation details for a completed match',
+            async kind => {
+                const document = await ScoreDetailsPlayoffModel.create({
+                    roundNumber: 1,
+                    teamOne: {
+                        userId: new mongoose.Types.ObjectId(),
+                        calculationDetails: createCalculationDetails()
+                    },
+                    teamTwo: {
+                        userId: new mongoose.Types.ObjectId(),
+                        calculationDetails: createCalculationDetails()
+                    }
+                });
+                await ScoreDetailsPlayoffModel.updateOne(
+                    { _id: document._id },
+                    {
+                        $unset: {
+                            [kind === 'missing'
+                                ? 'teamTwo.calculationDetails'
+                                : 'teamTwo.calculationDetails.trainer.heatPoints']:
+                                ''
+                        }
+                    }
+                );
+                await expect(
+                    ScoreDetailsPlayoffModel.getScoreDetailsForHistory()
+                ).rejects.toThrow(
+                    kind === 'missing'
+                        ? `Calculation details missing for score details: ${document._id}`
+                        : 'Required'
+                );
+            }
+        );
+
         test('Should throw error when there is no playoff score details data', async () => {
             await expect(
                 ScoreDetailsPlayoffModel.getScoreDetailsForHistory()
@@ -733,6 +786,7 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
                 scheduleId: schedule._id.toString(),
                 roundNumber: 1,
                 teamOne: {
+                    calculationDetails: createCalculationDetails(),
                     userId: userOne._id.toString(),
                     players: [
                         {
@@ -754,6 +808,7 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
                     startingLineupId: startingLineupOne._id.toString()
                 },
                 teamTwo: {
+                    calculationDetails: createCalculationDetails(),
                     userId: userTwo._id.toString(),
                     players: [
                         {
@@ -831,8 +886,12 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
             ]);
             await ScoreDetailsPlayoffModel.create({
                 roundNumber: 1,
-                teamOne: { userId: userOne._id },
+                teamOne: {
+                    calculationDetails: createCalculationDetails(),
+                    userId: userOne._id
+                },
                 teamTwo: {
+                    calculationDetails: createCalculationDetails(),
                     userId: userTwo._id,
                     startingLineupId: new mongoose.Types.ObjectId()
                 }
@@ -841,6 +900,52 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
                 await ScoreDetailsPlayoffModel.getScoreDetailsForHistory();
             expect(result.teamOne.setPlays).toBe('');
             expect(result.teamTwo.setPlays).toBe('');
+        });
+
+        test('Should export only calculated rounds with both teams user IDs and stored calculation details', async () => {
+            const userOneId = new mongoose.Types.ObjectId().toString();
+            const userTwoId = new mongoose.Types.ObjectId().toString();
+            const teamOneDetails = createCalculationDetails();
+            const teamTwoDetails = createCalculationDetails();
+            teamTwoDetails.trainer.setPlayPoints = 0;
+            const document = await ScoreDetailsPlayoffModel.create({
+                scheduleId: new mongoose.Types.ObjectId(),
+                roundNumber: 1,
+                teamOne: {
+                    userId: userOneId,
+                    calculationDetails: teamOneDetails
+                },
+                teamTwo: {
+                    userId: userTwoId,
+                    calculationDetails: teamTwoDetails
+                }
+            });
+            await ScoreDetailsPlayoffModel.create({
+                scheduleId: new mongoose.Types.ObjectId(),
+                roundNumber: 2,
+                teamOne: {
+                    calculationDetails: createCalculationDetails(),
+                    userId: userOneId
+                },
+                teamTwo: {
+                    calculationDetails: createCalculationDetails(),
+                    userId: userTwoId
+                }
+            });
+            const result =
+                await ScoreDetailsPlayoffModel.getScoreDetailsForHistory();
+            expect(result).toHaveLength(1);
+            expect(result[0]).toMatchObject({
+                scheduleId: document.scheduleId?.toString(),
+                teamOne: {
+                    userId: userOneId,
+                    calculationDetails: teamOneDetails
+                },
+                teamTwo: {
+                    userId: userTwoId,
+                    calculationDetails: teamTwoDetails
+                }
+            });
         });
     });
 
@@ -1027,10 +1132,11 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
                 bonus: false,
                 isNominated: false
             });
-            const stored = await ScoreDetailsPlayoffModel.findById(document._id)
-                .orFail()
-                .exec();
-            expect(stored.teamOne.players?.[0].heatOne.value).toBeUndefined();
+            const stored = await ScoreDetailsPlayoffModel.findById(
+                document._id
+            ).exec();
+            expect(stored).not.toBeNull();
+            expect(stored?.teamOne.players?.[0].heatOne.value).toBeUndefined();
         });
 
         test('Should return empty heat inputs without saving score details when the player has no scores', async () => {

@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 
 import { DBClient } from '@/db/db-client';
+import { createCalculationDetails } from '@/db/models/__test__/fixtures/calculation-details';
 import ScheduleModel from '@/db/models/games/schedule';
 import SchedulePlayoffModel from '@/db/models/games/schedule-playoff';
 import ScoreDetailsModel from '@/db/models/games/score-details';
@@ -275,9 +276,102 @@ describe('Test HistoryGamesModel methods and static functions', () => {
     });
 
     describe('saveScheduleToHistory', () => {
-        test('Should throw error if await ScheduleModel.getScheduleForHistory() will not return data', async () => {
-            const seasonId = new mongoose.Types.ObjectId().toString();
+        let seasonId: string;
+        beforeEach(async () => {
+            const season = await SeasonOpsModel.create({
+                name: '2026',
+                isCurrentSeason: true,
+                numberOfGroups: 1,
+                isScoreCalculatded: { 1: true, 2: true, 3: true, 4: true },
+                isScoreCalculatdedPlayoff: { 1: true }
+            });
+            seasonId = season._id.toString();
+        });
 
+        test('Should throw when the requested season does not exist', async () => {
+            const [userOne, userTwo] = await UserModel.create([
+                createUserData(83),
+                createUserData(84)
+            ]);
+            await ScheduleModel.create({
+                userOneId: userOne._id,
+                userTwoId: userTwo._id,
+                roundNumber: 1
+            });
+            const missingSeasonId = new mongoose.Types.ObjectId().toString();
+            await expect(
+                HistoryGamesModel.saveScheduleToHistory(missingSeasonId)
+            ).rejects.toThrow(`Season not found for id: ${missingSeasonId}`);
+        });
+
+        test.each(['missing score details', 'missing calculation details'])(
+            'Should reject a completed match with %s before archiving any matches',
+            async kind => {
+                const [userOne, userTwo] = await UserModel.create([
+                    createUserData(81),
+                    createUserData(82)
+                ]);
+                await HistoryTeamModel.create([
+                    createHistoryTeamData(seasonId, {
+                        name: userOne.teamName,
+                        coachName: userOne.coachName
+                    }),
+                    createHistoryTeamData(seasonId, {
+                        name: userTwo.teamName,
+                        coachName: userTwo.coachName
+                    })
+                ]);
+                const schedules = await ScheduleModel.create(
+                    [
+                        {
+                            userOneId: userOne._id,
+                            userTwoId: userTwo._id,
+                            roundNumber: 1
+                        },
+                        {
+                            userOneId: userOne._id,
+                            userTwoId: userTwo._id,
+                            roundNumber: 2
+                        }
+                    ],
+                    { ordered: true }
+                );
+                await ScoreDetailsModel.create({
+                    scheduleId: schedules[0]._id,
+                    roundNumber: 1,
+                    teamOne: {
+                        userId: userOne._id,
+                        calculationDetails: createCalculationDetails()
+                    },
+                    teamTwo: {
+                        userId: userTwo._id,
+                        calculationDetails: createCalculationDetails()
+                    }
+                });
+                const incompleteDetails =
+                    kind === 'missing calculation details'
+                        ? await ScoreDetailsModel.create({
+                              scheduleId: schedules[1]._id,
+                              roundNumber: 2,
+                              teamOne: { userId: userOne._id },
+                              teamTwo: { userId: userTwo._id }
+                          })
+                        : null;
+                await expect(
+                    HistoryGamesModel.saveScheduleToHistory(seasonId)
+                ).rejects.toThrow(
+                    incompleteDetails
+                        ? `Calculation details missing for score details: ${incompleteDetails._id}`
+                        : `Score details missing for schedule: ${schedules[1]._id}`
+                );
+                expect(await HistoryGamesModel.countDocuments()).toBe(0);
+                expect(
+                    await HistoryGamesScoreDetailsModel.countDocuments()
+                ).toBe(0);
+            }
+        );
+
+        test('Should throw error if await ScheduleModel.getScheduleForHistory() will not return data', async () => {
             await expect(
                 HistoryGamesModel.saveScheduleToHistory(seasonId)
             ).rejects.toThrow('Schedule not found');
@@ -305,11 +399,15 @@ describe('Test HistoryGamesModel methods and static functions', () => {
             await ScoreDetailsModel.create({
                 scheduleId: schedule._id.toString(),
                 roundNumber: 1,
-                teamOne: { userId: userOne._id.toString() },
-                teamTwo: { userId: userTwo._id.toString() }
+                teamOne: {
+                    calculationDetails: createCalculationDetails(),
+                    userId: userOne._id.toString()
+                },
+                teamTwo: {
+                    calculationDetails: createCalculationDetails(),
+                    userId: userTwo._id.toString()
+                }
             });
-
-            const seasonId = new mongoose.Types.ObjectId().toString();
 
             // no matching HistoryTeam document created for this user's teamName/coachName
             await expect(
@@ -319,7 +417,7 @@ describe('Test HistoryGamesModel methods and static functions', () => {
             );
         });
 
-        test('Should properly create a document with history games data with correct type and values', async () => {
+        test('Should archive regular-season matches with user IDs, calculation details and scalar scores preserved after live edits', async () => {
             const ligueGroup = await new LigueGroupsModel({
                 groupName: 'dolce'
             }).save();
@@ -380,7 +478,10 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                         playerFour: players[3]._id.toString(),
                         playerFive: players[4]._id.toString(),
                         roles: {
-                            pn: { playerId: players[0]._id.toString(), isDisabled: false },
+                            pn: {
+                                playerId: players[0]._id.toString(),
+                                isDisabled: false
+                            },
                             kb: players[1]._id.toString(),
                             p: players[2]._id.toString()
                         }
@@ -394,7 +495,10 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                         playerFour: players[3]._id.toString(),
                         playerFive: players[4]._id.toString(),
                         roles: {
-                            pn: { playerId: players[0]._id.toString(), isDisabled: false },
+                            pn: {
+                                playerId: players[0]._id.toString(),
+                                isDisabled: false
+                            },
                             kb: players[1]._id.toString(),
                             p: players[2]._id.toString()
                         }
@@ -411,7 +515,10 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                         playerFour: players[3]._id.toString(),
                         playerFive: players[4]._id.toString(),
                         roles: {
-                            pn: { playerId: players[0]._id.toString(), isDisabled: false },
+                            pn: {
+                                playerId: players[0]._id.toString(),
+                                isDisabled: false
+                            },
                             kb: players[1]._id.toString(),
                             p: players[2]._id.toString()
                         }
@@ -425,7 +532,10 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                         playerFour: players[3]._id.toString(),
                         playerFive: players[4]._id.toString(),
                         roles: {
-                            pn: { playerId: players[0]._id.toString(), isDisabled: false },
+                            pn: {
+                                playerId: players[0]._id.toString(),
+                                isDisabled: false
+                            },
                             kb: players[1]._id.toString(),
                             p: players[2]._id.toString()
                         }
@@ -473,11 +583,17 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                 }
             ]);
 
+            const firstMatchTeamOneDetails = createCalculationDetails();
+            const firstMatchTeamTwoDetails = createCalculationDetails();
+            const secondMatchTeamOneDetails = createCalculationDetails();
+            const secondMatchTeamTwoDetails = createCalculationDetails();
+
             await ScoreDetailsModel.create([
                 {
                     scheduleId: scheduleOne._id.toString(),
                     roundNumber: 1,
                     teamOne: {
+                        calculationDetails: firstMatchTeamOneDetails,
                         userId: userOne._id.toString(),
                         startingLineupId: startingLineupOne._id.toString(),
                         players: [
@@ -509,6 +625,7 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                         }
                     },
                     teamTwo: {
+                        calculationDetails: firstMatchTeamTwoDetails,
                         userId: userTwo._id.toString(),
                         startingLineupId: startingLineupTwo._id.toString(),
                         players: [
@@ -534,10 +651,12 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                     scheduleId: scheduleTwo._id.toString(),
                     roundNumber: 2,
                     teamOne: {
+                        calculationDetails: secondMatchTeamOneDetails,
                         userId: userThree._id.toString(),
                         startingLineupId: startingLineupThree._id.toString()
                     },
                     teamTwo: {
+                        calculationDetails: secondMatchTeamTwoDetails,
                         userId: userOne._id.toString(),
                         startingLineupId: startingLineupFour._id.toString()
                     }
@@ -568,8 +687,18 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                 )
             ]);
 
-            const seasonId = new mongoose.Types.ObjectId().toString();
-
+            await SeasonOpsModel.updateOne(
+                { _id: seasonId },
+                {
+                    $set: { 'isScoreCalculatded.3': false }
+                }
+            );
+            await ScheduleModel.create({
+                userOneId: userOne._id,
+                userTwoId: userTwo._id,
+                roundNumber: 3,
+                ligueGroupsId: ligueGroup._id
+            });
             const savedDocumentId =
                 await HistoryGamesModel.saveScheduleToHistory(seasonId);
 
@@ -662,8 +791,12 @@ describe('Test HistoryGamesModel methods and static functions', () => {
             ).toBe(players[0]._id.toString());
             expect(firstScoreDetails?.teamOne.players?.[0].heatOne).toBe(3);
             expect(firstScoreDetails?.teamOne.players?.[0].heatTwo).toBe(0);
-            expect(firstScoreDetails?.teamOne.players?.[0].heatThree).toBeNull();
-            expect(firstScoreDetails?.teamOne.players?.[0].heatSeven).toBeNull();
+            expect(
+                firstScoreDetails?.teamOne.players?.[0].heatThree
+            ).toBeNull();
+            expect(
+                firstScoreDetails?.teamOne.players?.[0].heatSeven
+            ).toBeNull();
             expect(firstScoreDetails?.teamOne.players?.[0]).not.toHaveProperty(
                 'heatOne.bonus'
             );
@@ -687,6 +820,26 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                 await HistoryGamesScoreDetailsModel.getHistoryScoreDetailsById(
                     firstGame!.scoreDetails!.toString()
                 );
+            expect(historyScoreDetails.teamOne).toMatchObject({
+                userId: userOne._id.toString(),
+                calculationDetails: firstMatchTeamOneDetails
+            });
+            expect(historyScoreDetails.teamTwo).toMatchObject({
+                userId: userTwo._id.toString(),
+                calculationDetails: firstMatchTeamTwoDetails
+            });
+            const secondMatch =
+                await HistoryGamesScoreDetailsModel.getHistoryScoreDetailsById(
+                    secondGame!.scoreDetails!.toString()
+                );
+            expect(secondMatch.teamOne).toMatchObject({
+                userId: userThree._id.toString(),
+                calculationDetails: secondMatchTeamOneDetails
+            });
+            expect(secondMatch.teamTwo).toMatchObject({
+                userId: userOne._id.toString(),
+                calculationDetails: secondMatchTeamTwoDetails
+            });
             expect(historyScoreDetails.teamOne.players[0]).toEqual({
                 extraligaPlayerName: 'Player One',
                 heatOne: 3,
@@ -705,10 +858,25 @@ describe('Test HistoryGamesModel methods and static functions', () => {
             );
             await SetPlaysDataModel.deleteMany();
 
+            await ScoreDetailsModel.updateOne(
+                { scheduleId: scheduleOne._id },
+                {
+                    $set: {
+                        'teamOne.calculationDetails.trainer.setPlayPoints': 99,
+                        'teamTwo.calculationDetails.players.0.basePoints': 99
+                    }
+                }
+            );
             const archivedScoreDetails =
                 await HistoryGamesScoreDetailsModel.getHistoryScoreDetailsById(
                     firstGame!.scoreDetails!.toString()
                 );
+            expect(archivedScoreDetails.teamOne.calculationDetails).toEqual(
+                firstMatchTeamOneDetails
+            );
+            expect(archivedScoreDetails.teamTwo.calculationDetails).toEqual(
+                firstMatchTeamTwoDetails
+            );
             expect(archivedScoreDetails.teamOne.setPlays).toEqual(
                 firstScoreDetails?.teamOne.setPlays
             );
@@ -719,9 +887,116 @@ describe('Test HistoryGamesModel methods and static functions', () => {
     });
 
     describe('saveSchedulePlayoffToHistory', () => {
-        test('Should throw when the playoff schedule does not exist', async () => {
-            const seasonId = new mongoose.Types.ObjectId().toString();
+        let seasonId: string;
+        beforeEach(async () => {
+            const season = await SeasonOpsModel.create({
+                name: '2026',
+                isCurrentSeason: true,
+                numberOfGroups: 1,
+                isScoreCalculatdedPlayoff: {
+                    1: true,
+                    2: true,
+                    3: true,
+                    4: true
+                },
+                isScoreCalculatded: { 1: true }
+            });
+            seasonId = season._id.toString();
+        });
 
+        test('Should throw when the requested season does not exist', async () => {
+            const [userOne, userTwo] = await UserModel.create([
+                createUserData(83),
+                createUserData(84)
+            ]);
+            await SchedulePlayoffModel.create({
+                userOneId: userOne._id,
+                userTwoId: userTwo._id,
+                roundNumber: 1,
+                userOneSeed: 1,
+                userTwoSeed: 4,
+                stage: 'semifinal'
+            });
+            const missingSeasonId = new mongoose.Types.ObjectId().toString();
+            await expect(
+                HistoryGamesModel.saveSchedulePlayoffToHistory(missingSeasonId)
+            ).rejects.toThrow(`Season not found for id: ${missingSeasonId}`);
+        });
+
+        test.each(['missing score details', 'missing calculation details'])(
+            'Should reject a completed match with %s before archiving any matches',
+            async kind => {
+                const [userOne, userTwo] = await UserModel.create([
+                    createUserData(81),
+                    createUserData(82)
+                ]);
+                await HistoryTeamModel.create([
+                    createHistoryTeamData(seasonId, {
+                        name: userOne.teamName,
+                        coachName: userOne.coachName
+                    }),
+                    createHistoryTeamData(seasonId, {
+                        name: userTwo.teamName,
+                        coachName: userTwo.coachName
+                    })
+                ]);
+                const schedules = await SchedulePlayoffModel.create(
+                    [
+                        {
+                            userOneId: userOne._id,
+                            userTwoId: userTwo._id,
+                            roundNumber: 1,
+                            userOneSeed: 1,
+                            userTwoSeed: 4,
+                            stage: 'semifinal'
+                        },
+                        {
+                            userOneId: userOne._id,
+                            userTwoId: userTwo._id,
+                            roundNumber: 2,
+                            userOneSeed: 1,
+                            userTwoSeed: 4,
+                            stage: 'semifinal'
+                        }
+                    ],
+                    { ordered: true }
+                );
+                await ScoreDetailsPlayoffModel.create({
+                    scheduleId: schedules[0]._id,
+                    roundNumber: 1,
+                    teamOne: {
+                        userId: userOne._id,
+                        calculationDetails: createCalculationDetails()
+                    },
+                    teamTwo: {
+                        userId: userTwo._id,
+                        calculationDetails: createCalculationDetails()
+                    }
+                });
+                const incompleteDetails =
+                    kind === 'missing calculation details'
+                        ? await ScoreDetailsPlayoffModel.create({
+                              scheduleId: schedules[1]._id,
+                              roundNumber: 2,
+                              teamOne: { userId: userOne._id },
+                              teamTwo: { userId: userTwo._id }
+                          })
+                        : null;
+                await expect(
+                    HistoryGamesModel.saveSchedulePlayoffToHistory(seasonId)
+                ).rejects.toThrow(
+                    incompleteDetails
+                        ? `Calculation details missing for score details: ${incompleteDetails._id}`
+                        : `Score details missing for schedule: ${schedules[1]._id}`
+                );
+                expect(await HistoryGamesModel.countDocuments()).toBe(0);
+                expect(
+                    await HistoryGamesScoreDetailsModel.countDocuments()
+                ).toBe(0);
+            }
+        );
+
+        test('Should throw when the playoff schedule does not exist', async () => {
             await expect(
                 HistoryGamesModel.saveSchedulePlayoffToHistory(seasonId)
             ).rejects.toThrow('Schedule not found');
@@ -747,11 +1022,15 @@ describe('Test HistoryGamesModel methods and static functions', () => {
             await ScoreDetailsPlayoffModel.create({
                 scheduleId: schedule._id.toString(),
                 roundNumber: 1,
-                teamOne: { userId: userOne._id.toString() },
-                teamTwo: { userId: userTwo._id.toString() }
+                teamOne: {
+                    calculationDetails: createCalculationDetails(),
+                    userId: userOne._id.toString()
+                },
+                teamTwo: {
+                    calculationDetails: createCalculationDetails(),
+                    userId: userTwo._id.toString()
+                }
             });
-
-            const seasonId = new mongoose.Types.ObjectId().toString();
 
             // no matching HistoryTeam document created for this user's teamName/coachName
             await expect(
@@ -761,10 +1040,7 @@ describe('Test HistoryGamesModel methods and static functions', () => {
             );
         });
 
-        test('Should archive playoff games with scalar heats, signed modifiers, and numeric trainer scores, preserving the archived description after a live edit', async () => {
-            await SeasonOpsModel.create(
-                createSeasonData('2026', { isCurrentSeason: true })
-            );
+        test('Should archive playoff matches with user IDs, calculation details and scalar scores preserved after live edits', async () => {
             const [userOne, userTwo, userThree] = await UserModel.create([
                 createUserData(0, {
                     teamName: 'Team Alpha',
@@ -875,14 +1151,19 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                     }
                 ]);
 
-            const [guarantee, reserve, prediction] = await SetPlaysModel.create([
-                {
-                    name: 'Gwarancja Startów',
-                    type: SetPlayEnumType.GwarancjaStartow
-                },
-                { name: 'Rezerwa Giełda', type: SetPlayEnumType.RezerwaGielda },
-                { name: 'NCD6', type: SetPlayEnumType.Ncd6 }
-            ]);
+            const [guarantee, reserve, prediction] = await SetPlaysModel.create(
+                [
+                    {
+                        name: 'Gwarancja Startów',
+                        type: SetPlayEnumType.GwarancjaStartow
+                    },
+                    {
+                        name: 'Rezerwa Giełda',
+                        type: SetPlayEnumType.RezerwaGielda
+                    },
+                    { name: 'NCD6', type: SetPlayEnumType.Ncd6 }
+                ]
+            );
             const selectedSetPlays = await SetPlayPlayoffDataModel.create({
                 startingLineupId: startingLineupOne._id,
                 setPlayList: [
@@ -910,11 +1191,17 @@ describe('Test HistoryGamesModel methods and static functions', () => {
             const archivedDescription =
                 'PN - Player One, KB - Player Two, P - Player Three, GS: Player One, Rezerwa Giełda: Player Five, NCD6: Player Two';
 
+            const firstMatchTeamOneDetails = createCalculationDetails();
+            const firstMatchTeamTwoDetails = createCalculationDetails();
+            const secondMatchTeamOneDetails = createCalculationDetails();
+            const secondMatchTeamTwoDetails = createCalculationDetails();
+
             await ScoreDetailsPlayoffModel.create([
                 {
                     scheduleId: scheduleOne._id.toString(),
                     roundNumber: 3,
                     teamOne: {
+                        calculationDetails: firstMatchTeamOneDetails,
                         userId: userOne._id.toString(),
                         startingLineupId: startingLineupOne._id.toString(),
                         players: [
@@ -946,6 +1233,7 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                         }
                     },
                     teamTwo: {
+                        calculationDetails: firstMatchTeamTwoDetails,
                         userId: userTwo._id.toString(),
                         startingLineupId: startingLineupTwo._id.toString(),
                         players: [
@@ -971,10 +1259,12 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                     scheduleId: scheduleTwo._id.toString(),
                     roundNumber: 4,
                     teamOne: {
+                        calculationDetails: secondMatchTeamOneDetails,
                         userId: userThree._id.toString(),
                         startingLineupId: startingLineupThree._id.toString()
                     },
                     teamTwo: {
+                        calculationDetails: secondMatchTeamTwoDetails,
                         userId: userOne._id.toString(),
                         startingLineupId: startingLineupFour._id.toString()
                     }
@@ -1005,8 +1295,45 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                 )
             ]);
 
-            const seasonId = new mongoose.Types.ObjectId().toString();
-
+            await SeasonOpsModel.updateOne(
+                { _id: seasonId },
+                {
+                    $set: { 'isScoreCalculatdedPlayoff.2': false }
+                }
+            );
+            await SchedulePlayoffModel.create({
+                userOneId: userOne._id,
+                userTwoId: userTwo._id,
+                roundNumber: 2,
+                userOneSeed: 1,
+                userTwoSeed: 4,
+                stage: 'semifinal'
+            });
+            await SeasonOpsModel.updateOne(
+                { _id: seasonId },
+                {
+                    $set: { 'isScoreCalculatded.3': true }
+                }
+            );
+            const regularSchedule = await ScheduleModel.create({
+                userOneId: userOne._id,
+                userTwoId: userTwo._id,
+                roundNumber: 3
+            });
+            const regularDetails = createCalculationDetails();
+            regularDetails.trainer.setPlayPoints = 99;
+            await ScoreDetailsModel.create({
+                scheduleId: regularSchedule._id,
+                roundNumber: 3,
+                teamOne: {
+                    userId: userOne._id,
+                    calculationDetails: regularDetails
+                },
+                teamTwo: {
+                    userId: userTwo._id,
+                    calculationDetails: createCalculationDetails()
+                }
+            });
             const savedDocumentId =
                 await HistoryGamesModel.saveSchedulePlayoffToHistory(seasonId);
 
@@ -1053,7 +1380,9 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                     .lean()
                     .exec();
 
-            expect(firstScoreDetails?.teamOne.setPlays).toBe(archivedDescription);
+            expect(firstScoreDetails?.teamOne.setPlays).toBe(
+                archivedDescription
+            );
             expect(firstScoreDetails?.teamTwo.setPlays).toBe(rolesDescription);
 
             expect(firstScoreDetails?.teamOne.score).toBe(44);
@@ -1082,7 +1411,9 @@ describe('Test HistoryGamesModel methods and static functions', () => {
             ).toBe(players[0]._id.toString());
             expect(firstScoreDetails?.teamOne.players?.[0].heatOne).toBe(3);
             expect(firstScoreDetails?.teamOne.players?.[0].heatTwo).toBe(0);
-            expect(firstScoreDetails?.teamOne.players?.[0].heatThree).toBeNull();
+            expect(
+                firstScoreDetails?.teamOne.players?.[0].heatThree
+            ).toBeNull();
             expect(firstScoreDetails?.teamOne.players?.[0].setPlay).toBe(-2);
             expect(firstScoreDetails?.teamOne.players?.[0]).not.toHaveProperty(
                 'heatOne.bonus'
@@ -1107,6 +1438,26 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                 await HistoryGamesScoreDetailsModel.getHistoryScoreDetailsById(
                     firstGame!.scoreDetails!.toString()
                 );
+            expect(archived.teamOne).toMatchObject({
+                userId: userOne._id.toString(),
+                calculationDetails: firstMatchTeamOneDetails
+            });
+            expect(archived.teamTwo).toMatchObject({
+                userId: userTwo._id.toString(),
+                calculationDetails: firstMatchTeamTwoDetails
+            });
+            const secondMatch =
+                await HistoryGamesScoreDetailsModel.getHistoryScoreDetailsById(
+                    secondGame!.scoreDetails!.toString()
+                );
+            expect(secondMatch.teamOne).toMatchObject({
+                userId: userThree._id.toString(),
+                calculationDetails: secondMatchTeamOneDetails
+            });
+            expect(secondMatch.teamTwo).toMatchObject({
+                userId: userOne._id.toString(),
+                calculationDetails: secondMatchTeamTwoDetails
+            });
             expect(archived.teamOne.players[0]).toEqual({
                 extraligaPlayerName: 'Player One',
                 heatOne: 3,
@@ -1133,10 +1484,25 @@ describe('Test HistoryGamesModel methods and static functions', () => {
                     userData: { playerId: players[1]._id.toString() }
                 }
             );
+            await ScoreDetailsPlayoffModel.updateOne(
+                { scheduleId: scheduleOne._id },
+                {
+                    $set: {
+                        'teamOne.calculationDetails.trainer.setPlayPoints': 99,
+                        'teamTwo.calculationDetails.players.0.basePoints': 99
+                    }
+                }
+            );
             const savedSnapshot =
                 await HistoryGamesScoreDetailsModel.getHistoryScoreDetailsById(
                     firstGame!.scoreDetails!.toString()
                 );
+            expect(savedSnapshot.teamOne.calculationDetails).toEqual(
+                firstMatchTeamOneDetails
+            );
+            expect(savedSnapshot.teamTwo.calculationDetails).toEqual(
+                firstMatchTeamTwoDetails
+            );
             expect(savedSnapshot.teamOne.setPlays).toBe(archivedDescription);
         });
     });

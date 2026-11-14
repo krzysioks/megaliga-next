@@ -111,11 +111,15 @@ async function savePrediction() {
 }
 
 async function createRegularLineup() {
-    const playoffLineup = await StartingLineupPlayoffModel.findById(
-        startingLineupId
-    )
-        .orFail()
-        .exec();
+    const playoffLineup =
+        await StartingLineupPlayoffModel.findById(startingLineupId).exec();
+
+    if (!playoffLineup) {
+        throw new Error(
+            `Starting lineup not found for id: ${startingLineupId}`
+        );
+    }
+
     return StartingLineupModel.create({
         ...playoffLineup.toObject(),
         _id: new mongoose.Types.ObjectId()
@@ -322,9 +326,14 @@ describe('saveSelectedSetPlay', () => {
         const before = await savePrediction();
         const document = await SetPlayPlayoffDataModel.findOne({
             startingLineupId
-        })
-            .orFail()
-            .exec();
+        }).exec();
+
+        if (!document) {
+            throw new Error(
+                `Selected set plays not found for startingLineupId: ${startingLineupId}`
+            );
+        }
+
         document.set('setPlayList', [
             ...document.setPlayList,
             {
@@ -795,11 +804,17 @@ describe('saveAdminSetPlay', () => {
     test.each([1, 4])(
         'Should save only the requested playoff user and round %i and preserve regular-season admin data',
         async round => {
-            const originalLineup = await StartingLineupPlayoffModel.findById(
-                startingLineupId
-            )
-                .orFail()
-                .exec();
+            const originalLineup =
+                await StartingLineupPlayoffModel.findById(
+                    startingLineupId
+                ).exec();
+
+            if (!originalLineup) {
+                throw new Error(
+                    `Starting lineup not found for id: ${startingLineupId}`
+                );
+            }
+
             const fields = originalLineup.toObject();
             await StartingLineupPlayoffModel.deleteOne({
                 _id: startingLineupId

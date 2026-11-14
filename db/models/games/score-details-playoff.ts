@@ -133,6 +133,8 @@ export type ScoreDetailsPlayoffReturnType = {
 };
 
 type ScoreDetailsPlayoffForHistoryTeamReturnType = {
+    userId: string;
+    calculationDetails: TeamCalculationDetailsType;
     players: HistoryPlayerType[];
     trainer: ScoreDetailsPlayoffType['teamOne']['trainer'];
     setPlays: string;
@@ -651,8 +653,21 @@ scoreDetailsPlayoffSchema.static(
     'getScoreDetailsForHistory',
     async function getScoreDetailsForHistory() {
         try {
+            const season = await SeasonOpsModel.findOne({
+                isCurrentSeason: true
+            }).exec();
+
+            if (!season) {
+                throw new Error('Current season not found');
+            }
+
+            const calculatedRounds = Object.entries(
+                season.isScoreCalculatdedPlayoff
+            )
+                .filter(([, isCalculated]) => isCalculated)
+                .map(([round]) => Number(round));
             const documents: PopulatedScoreDetailsPlayoffForHistoryFindType[] =
-                await this.find()
+                await this.find({ roundNumber: { $in: calculatedRounds } })
                     .populate<PopulatedScoreDetailsPlayoffForHistoryFindType>({
                         path: 'teamOne.startingLineupId teamTwo.startingLineupId',
                         select: 'roles'
@@ -677,6 +692,10 @@ scoreDetailsPlayoffSchema.static(
                 });
 
                 return {
+                    userId: objectIdSchema.unwrap().parse(team.userId),
+                    calculationDetails: teamCalculationDetailsZodSchema.parse(
+                        team.calculationDetails
+                    ),
                     players: (team.players ?? []).map(player => {
                         return historyPlayerSchema.parse({
                             playerId: player.playerId?.toString(),
@@ -700,13 +719,27 @@ scoreDetailsPlayoffSchema.static(
 
             return await Promise.all(
                 documents.map(async document => {
+                    const scoreDetails =
+                        document.toObject<PopulatedScoreDetailsPlayoffForHistoryType>(
+                            {
+                                flattenObjectIds: true
+                            }
+                        );
+                    if (
+                        !scoreDetails.teamOne.calculationDetails ||
+                        !scoreDetails.teamTwo.calculationDetails
+                    ) {
+                        throw new Error(
+                            `Calculation details missing for score details: ${document._id}`
+                        );
+                    }
                     const [teamOne, teamTwo] = await Promise.all([
-                        mapTeam(document.teamOne),
-                        mapTeam(document.teamTwo)
+                        mapTeam(scoreDetails.teamOne),
+                        mapTeam(scoreDetails.teamTwo)
                     ]);
 
                     return {
-                        scheduleId: document.scheduleId,
+                        scheduleId: scoreDetails.scheduleId,
                         teamOne,
                         teamTwo
                     };
@@ -1001,9 +1034,11 @@ scoreDetailsPlayoffSchema.static(
                             return [key, startingLineup[key]?.toString()];
                         })
                     );
-                    const positionIds = STARTING_LINEUP_POSITION_KEYS.map(key => {
-                        return startingLineup[key]?.toString();
-                    });
+                    const positionIds = STARTING_LINEUP_POSITION_KEYS.map(
+                        key => {
+                            return startingLineup[key]?.toString();
+                        }
+                    );
                     const playerScores = team.players!;
                     if (
                         new Set(positionIds).size !==

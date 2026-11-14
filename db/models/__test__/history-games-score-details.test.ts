@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 
 import { DBClient } from '@/db/db-client';
 import { STARTING_LINEUP_PLAYER_COUNT } from '@/db/db.constants';
+import { createCalculationDetails } from '@/db/models/__test__/fixtures/calculation-details';
 import HistoryGamesScoreDetailsModel, {
     HistoryGamesScoreDetailsByIdReturnType,
     HistoryGamesScoreDetailsInputType,
@@ -176,14 +177,15 @@ describe('Test HistoryGamesScoreDetailsModel methods and static functions', () =
     });
 
     describe('saveScoreDetailToHistory', () => {
-        test('Should preserve both teams calculation details and user identities without adding result IDs', async () => {
+        test('Should save and return both teams calculation details and user identities without adding result IDs', async () => {
             const playerIds = Array.from(
                 { length: STARTING_LINEUP_PLAYER_COUNT + 1 },
                 () => {
                     return new mongoose.Types.ObjectId().toString();
                 }
             );
-            const userId = new mongoose.Types.ObjectId().toString();
+            const userOneId = new mongoose.Types.ObjectId().toString();
+            const userTwoId = new mongoose.Types.ObjectId().toString();
             const setPlayId = new mongoose.Types.ObjectId().toString();
             const calculationDetails: TeamCalculationDetailsType = {
                 players: playerIds
@@ -227,9 +229,13 @@ describe('Test HistoryGamesScoreDetailsModel methods and static functions', () =
                 }),
                 floorAdjustment: 4
             };
+            const historyTeam = await HistoryTeamModel.create(
+                createHistoryTeamData(new mongoose.Types.ObjectId().toString())
+            );
+            const teamTwoDetails = createCalculationDetails();
             const team = {
-                teamId: new mongoose.Types.ObjectId().toString(),
-                userId,
+                teamId: historyTeam._id.toString(),
+                userId: userOneId,
                 score: 0,
                 calculationDetails
             };
@@ -237,7 +243,11 @@ describe('Test HistoryGamesScoreDetailsModel methods and static functions', () =
                 await HistoryGamesScoreDetailsModel.saveScoreDetailToHistory(
                     historyGamesScoreDetailsZodSchema.parse({
                         teamOne: team,
-                        teamTwo: team
+                        teamTwo: {
+                            ...team,
+                            userId: userTwoId,
+                            calculationDetails: teamTwoDetails
+                        }
                     })
                 );
             const savedDocument =
@@ -246,16 +256,28 @@ describe('Test HistoryGamesScoreDetailsModel methods and static functions', () =
                 flattenObjectIds: true
             });
 
-            expect(savedTeams?.teamOne).toMatchObject({ userId });
-            expect(savedTeams?.teamTwo).toMatchObject({ userId });
+            expect(savedTeams?.teamOne).toMatchObject({ userId: userOneId });
+            expect(savedTeams?.teamTwo).toMatchObject({ userId: userTwoId });
             expect(savedTeams?.teamOne).toHaveProperty(
                 'calculationDetails',
                 calculationDetails
             );
             expect(savedTeams?.teamTwo).toHaveProperty(
                 'calculationDetails',
-                calculationDetails
+                teamTwoDetails
             );
+            const result =
+                await HistoryGamesScoreDetailsModel.getHistoryScoreDetailsById(
+                    savedId
+                );
+            expect(result.teamOne).toMatchObject({
+                userId: userOneId,
+                calculationDetails
+            });
+            expect(result.teamTwo).toMatchObject({
+                userId: userTwoId,
+                calculationDetails: teamTwoDetails
+            });
         });
 
         test('Should save history score details without calculation details or user IDs and return its ID', async () => {

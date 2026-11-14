@@ -200,12 +200,38 @@ historyGamesSchema.static(
     'saveScheduleToHistory',
     async function saveScheduleToHistory(seasonId: string) {
         try {
-            const scheduleData = await ScheduleModel.getScheduleForHistory();
+            const allSchedules = await ScheduleModel.getScheduleForHistory();
+            const season = await SeasonOpsModel.findById(seasonId).exec();
+            if (!season) {
+                throw new Error(`Season not found for id: ${seasonId}`);
+            }
+            const scheduleData = allSchedules.filter(schedule => {
+                return season.isScoreCalculatded[
+                    schedule.roundNumber as keyof typeof season.isScoreCalculatded
+                ];
+            });
             const scoreDetailsData =
                 await ScoreDetailsModel.getScoreDetailsForHistory();
 
+            const archiveData = scheduleData.map(schedule => {
+                const matchingScoreDetails = scoreDetailsData.find(
+                    scoreDetails => {
+                        return (
+                            scoreDetails.scheduleId?.toString() ===
+                            schedule.id.toString()
+                        );
+                    }
+                );
+                if (!matchingScoreDetails) {
+                    throw new Error(
+                        `Score details missing for schedule: ${schedule.id}`
+                    );
+                }
+                return { schedule, matchingScoreDetails };
+            });
+
             let games: HistoryGamesType['games'] = [];
-            for (const schedule of scheduleData) {
+            for (const { schedule, matchingScoreDetails } of archiveData) {
                 const teamOneId =
                     await HistoryTeamModel.getHistoryTeamIdByNameAndCoachName(
                         schedule.userOne.teamName,
@@ -217,39 +243,33 @@ historyGamesSchema.static(
                         schedule.userTwo.coachName
                     );
 
-                const matchingScoreDetails = scoreDetailsData.find(
-                    scoreDetails => {
-                        return (
-                            scoreDetails.scheduleId?.toString() ===
-                            schedule.id.toString()
-                        );
+                const scoreDetail: HistoryGamesScoreDetailsType = {
+                    teamOne: {
+                        userId: matchingScoreDetails.teamOne.userId,
+                        calculationDetails:
+                            matchingScoreDetails.teamOne.calculationDetails,
+                        players: matchingScoreDetails.teamOne.players,
+                        trainer: matchingScoreDetails.teamOne.trainer,
+                        setPlays: matchingScoreDetails.teamOne.setPlays,
+                        teamId: teamOneId,
+                        score: schedule.userOneScore ?? 0
+                    },
+                    teamTwo: {
+                        userId: matchingScoreDetails.teamTwo.userId,
+                        calculationDetails:
+                            matchingScoreDetails.teamTwo.calculationDetails,
+                        players: matchingScoreDetails.teamTwo.players,
+                        trainer: matchingScoreDetails.teamTwo.trainer,
+                        setPlays: matchingScoreDetails.teamTwo.setPlays,
+                        teamId: teamTwoId,
+                        score: schedule.userTwoScore ?? 0
                     }
-                );
+                };
 
-                let scoreDetailsId: string | undefined;
-                if (matchingScoreDetails) {
-                    const scoreDetail: HistoryGamesScoreDetailsType = {
-                        teamOne: {
-                            players: matchingScoreDetails.teamOne.players,
-                            trainer: matchingScoreDetails.teamOne.trainer,
-                            setPlays: matchingScoreDetails.teamOne.setPlays,
-                            teamId: teamOneId,
-                            score: schedule.userOneScore ?? 0
-                        },
-                        teamTwo: {
-                            players: matchingScoreDetails.teamTwo.players,
-                            trainer: matchingScoreDetails.teamTwo.trainer,
-                            setPlays: matchingScoreDetails.teamTwo.setPlays,
-                            teamId: teamTwoId,
-                            score: schedule.userTwoScore ?? 0
-                        }
-                    };
-
-                    scoreDetailsId =
-                        await HistoryGamesScoreDetailsModel.saveScoreDetailToHistory(
-                            scoreDetail
-                        );
-                }
+                const scoreDetailsId =
+                    await HistoryGamesScoreDetailsModel.saveScoreDetailToHistory(
+                        scoreDetail
+                    );
 
                 games = [
                     ...games,
@@ -286,13 +306,39 @@ historyGamesSchema.static(
     'saveSchedulePlayoffToHistory',
     async function saveSchedulePlayoffToHistory(seasonId: string) {
         try {
-            const scheduleData =
+            const allSchedules =
                 await SchedulePlayoffModel.getScheduleForHistory();
+            const season = await SeasonOpsModel.findById(seasonId).exec();
+            if (!season) {
+                throw new Error(`Season not found for id: ${seasonId}`);
+            }
+            const scheduleData = allSchedules.filter(schedule => {
+                return season.isScoreCalculatdedPlayoff[
+                    schedule.roundNumber as keyof typeof season.isScoreCalculatdedPlayoff
+                ];
+            });
             const scoreDetailsData =
                 await ScoreDetailsPlayoffModel.getScoreDetailsForHistory();
 
+            const archiveData = scheduleData.map(schedule => {
+                const matchingScoreDetails = scoreDetailsData.find(
+                    scoreDetails => {
+                        return (
+                            scoreDetails.scheduleId?.toString() ===
+                            schedule.id.toString()
+                        );
+                    }
+                );
+                if (!matchingScoreDetails) {
+                    throw new Error(
+                        `Score details missing for schedule: ${schedule.id}`
+                    );
+                }
+                return { schedule, matchingScoreDetails };
+            });
+
             let games: HistoryGamesType['games'] = [];
-            for (const schedule of scheduleData) {
+            for (const { schedule, matchingScoreDetails } of archiveData) {
                 const teamOneId =
                     await HistoryTeamModel.getHistoryTeamIdByNameAndCoachName(
                         schedule.userOne.teamName,
@@ -304,39 +350,33 @@ historyGamesSchema.static(
                         schedule.userTwo.coachName
                     );
 
-                const matchingScoreDetails = scoreDetailsData.find(
-                    scoreDetails => {
-                        return (
-                            scoreDetails.scheduleId?.toString() ===
-                            schedule.id.toString()
-                        );
+                const scoreDetail: HistoryGamesScoreDetailsType = {
+                    teamOne: {
+                        userId: matchingScoreDetails.teamOne.userId,
+                        calculationDetails:
+                            matchingScoreDetails.teamOne.calculationDetails,
+                        players: matchingScoreDetails.teamOne.players,
+                        trainer: matchingScoreDetails.teamOne.trainer,
+                        setPlays: matchingScoreDetails.teamOne.setPlays ?? '',
+                        teamId: teamOneId,
+                        score: schedule.userOneScore ?? 0
+                    },
+                    teamTwo: {
+                        userId: matchingScoreDetails.teamTwo.userId,
+                        calculationDetails:
+                            matchingScoreDetails.teamTwo.calculationDetails,
+                        players: matchingScoreDetails.teamTwo.players,
+                        trainer: matchingScoreDetails.teamTwo.trainer,
+                        setPlays: matchingScoreDetails.teamTwo.setPlays ?? '',
+                        teamId: teamTwoId,
+                        score: schedule.userTwoScore ?? 0
                     }
-                );
+                };
 
-                let scoreDetailsId: string | undefined;
-                if (matchingScoreDetails) {
-                    const scoreDetail: HistoryGamesScoreDetailsType = {
-                        teamOne: {
-                            players: matchingScoreDetails.teamOne.players,
-                            trainer: matchingScoreDetails.teamOne.trainer,
-                            setPlays: matchingScoreDetails.teamOne.setPlays ?? '',
-                            teamId: teamOneId,
-                            score: schedule.userOneScore ?? 0
-                        },
-                        teamTwo: {
-                            players: matchingScoreDetails.teamTwo.players,
-                            trainer: matchingScoreDetails.teamTwo.trainer,
-                            setPlays: matchingScoreDetails.teamTwo.setPlays ?? '',
-                            teamId: teamTwoId,
-                            score: schedule.userTwoScore ?? 0
-                        }
-                    };
-
-                    scoreDetailsId =
-                        await HistoryGamesScoreDetailsModel.saveScoreDetailToHistory(
-                            scoreDetail
-                        );
-                }
+                const scoreDetailsId =
+                    await HistoryGamesScoreDetailsModel.saveScoreDetailToHistory(
+                        scoreDetail
+                    );
 
                 games = [
                     ...games,
