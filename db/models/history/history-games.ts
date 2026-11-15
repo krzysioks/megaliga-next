@@ -1,4 +1,9 @@
-import { HydratedDocument, model, Model, Schema } from 'mongoose';
+import type {
+    GetMatchDataStatisticsParamsType,
+    MatchDataStatisticsType
+} from '@/db/statistics.types';
+
+import { HydratedDocument, model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
 
 import ScheduleModel from '@/db/models/games/schedule';
@@ -14,9 +19,11 @@ import HistoryTeamModel, {
 import {
     roundNumberSchema,
     objectIdSchema,
-    stageEnumSchema
+    stageEnumSchema,
+    teamCalculationDetailsZodSchema
 } from '@/db/models/schema.types';
 import SeasonOpsModel from '@/db/models/season-ops';
+import { validateStatisticsRoundRangeAndStage } from '@/db/statistics.utils';
 
 //HistoryGames collection represent in each document all games played in given season of megaliga
 // We will identify all games for given team in given season by finding all documents by season, teamId and stage in historyGames collection
@@ -74,9 +81,36 @@ type PopulatedHistoryGamesType = Omit<HistoryGamesType, 'games'> & {
     })[];
 };
 
+type PopulatedHistoryGamesStatisticsScoreDetailsType = Pick<
+    HistoryGamesScoreDetailsType,
+    'teamOne' | 'teamTwo'
+> & { _id: Types.ObjectId };
+type PopulatedHistoryGamesStatisticsTeamType = Omit<
+    HistoryGamesType['games'][number]['teamOne'],
+    'teamId'
+> & {
+    teamId: Pick<HistoryTeamType, 'name' | 'coachName'> | null;
+};
+type PopulatedHistoryGamesStatisticsGameType = Omit<
+    HistoryGamesType['games'][number],
+    'teamOne' | 'teamTwo' | 'scoreDetails'
+> & {
+    teamOne: PopulatedHistoryGamesStatisticsTeamType;
+    teamTwo: PopulatedHistoryGamesStatisticsTeamType;
+    scoreDetails: PopulatedHistoryGamesStatisticsScoreDetailsType | null;
+};
+type PopulatedHistoryGamesStatisticsType = Omit<HistoryGamesType, 'games'> & {
+    games: PopulatedHistoryGamesStatisticsGameType[];
+};
+type PopulatedHistoryGamesStatisticsFindType =
+    HydratedDocument<PopulatedHistoryGamesStatisticsType>;
+
 export type PopulatedFindType = HydratedDocument<PopulatedHistoryGamesType>;
 
 interface HistoryGamesModelType extends Model<HistoryGamesType> {
+    getMatchDataStatistics: (
+        params: GetMatchDataStatisticsParamsType
+    ) => Promise<MatchDataStatisticsType[]>;
     getUserSeasonGamesByStage: (
         seasonId: string,
         userId: string,
@@ -189,6 +223,121 @@ historyGamesSchema.static(
         } catch (error) {
             console.error(
                 `Error fetching user season games by stage for seasonId: ${seasonId}, userId: ${userId}, stage: ${stage}`,
+                error
+            );
+            throw error;
+        }
+    }
+);
+
+historyGamesSchema.static(
+    'getMatchDataStatistics',
+    async function getMatchDataStatistics(
+        params: GetMatchDataStatisticsParamsType
+    ): Promise<MatchDataStatisticsType[]> {
+        try {
+            const range = validateStatisticsRoundRangeAndStage(params);
+            const season = await SeasonOpsModel.findById(params.seasonId)
+                .select('_id')
+                .exec();
+            if (!season) {
+                throw new Error(`Invalid seasonId: ${params.seasonId}`);
+            }
+            const documents: PopulatedHistoryGamesStatisticsFindType[] =
+                await this.find({
+                    season: params.seasonId,
+                    games: {
+                        $elemMatch: {
+                            stage: params.stage,
+                            roundNumber: {
+                                $gte: range.roundFrom,
+                                $lte: range.roundTo
+                            }
+                        }
+                    }
+                })
+                    .populate<PopulatedHistoryGamesStatisticsFindType>({
+                        path: 'games.teamOne.teamId games.teamTwo.teamId',
+                        select: 'name coachName'
+                    })
+                    .populate<PopulatedHistoryGamesStatisticsFindType>({
+                        path: 'games.scoreDetails',
+                        select: 'teamOne.userId teamOne.calculationDetails teamTwo.userId teamTwo.calculationDetails'
+                    })
+                    .exec();
+            const matches: MatchDataStatisticsType[] = [];
+            for (const document of documents) {
+                const history =
+                    document.toObject<PopulatedHistoryGamesStatisticsType>({
+                        flattenObjectIds: true
+                    });
+                for (const game of history.games) {
+                    if (
+                        game.stage !== params.stage ||
+                        game.roundNumber < range.roundFrom ||
+                        game.roundNumber > range.roundTo
+                    ) {
+                        continue;
+                    }
+                    const details = game.scoreDetails;
+                    if (
+                        !details ||
+                        !details.teamOne?.userId ||
+                        !details.teamTwo?.userId
+                    ) {
+                        throw new Error(
+                            `Archived statistics unavailable for seasonId: ${params.seasonId}`
+                        );
+                    }
+                    if (
+                        params.userId &&
+                        details.teamOne.userId.toString() !== params.userId &&
+                        details.teamTwo.userId.toString() !== params.userId
+                    ) {
+                        continue;
+                    }
+                    if (
+                        !details.teamOne.calculationDetails ||
+                        !details.teamTwo.calculationDetails
+                    ) {
+                        throw new Error(
+                            `Archived statistics unavailable for seasonId: ${params.seasonId}`
+                        );
+                    }
+                    matches.push({
+                        matchId: details._id.toString(),
+                        seasonId: params.seasonId,
+                        stage: params.stage,
+                        roundNumber: game.roundNumber,
+                        teamOne: {
+                            userId: objectIdSchema
+                                .unwrap()
+                                .parse(details.teamOne.userId),
+                            teamName: game.teamOne.teamId?.name ?? '',
+                            coachName: game.teamOne.teamId?.coachName ?? '',
+                            calculationDetails:
+                                teamCalculationDetailsZodSchema.parse(
+                                    details.teamOne.calculationDetails
+                                )
+                        },
+                        teamTwo: {
+                            userId: objectIdSchema
+                                .unwrap()
+                                .parse(details.teamTwo.userId),
+                            teamName: game.teamTwo.teamId?.name ?? '',
+                            coachName: game.teamTwo.teamId?.coachName ?? '',
+                            calculationDetails:
+                                teamCalculationDetailsZodSchema.parse(
+                                    details.teamTwo.calculationDetails
+                                )
+                        }
+                    });
+                }
+            }
+            return matches;
+        } catch (error) {
+            console.error(
+                'Error fetching archived statistics match data:',
                 error
             );
             throw error;

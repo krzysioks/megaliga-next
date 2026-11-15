@@ -8,6 +8,11 @@ import type {
     PlayerScoresInputType,
     TeamCalculationDetailsType
 } from '@/db/models/schema.types';
+import type {
+    GetMatchDataStatisticsParamsType,
+    MatchDataStatisticsType,
+    MatchTeamStatisticsType
+} from '@/db/statistics.types';
 
 import { HydratedDocument, model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
@@ -50,6 +55,7 @@ import SeasonOpsModel from '@/db/models/season-ops';
 import { setPlayPayloadZodSchema } from '@/db/models/set-play-payload.schema';
 import UserModel, { UserType } from '@/db/models/user';
 import { calculateMatchScores } from '@/db/score-calculation.utils';
+import { validateStatisticsRoundRangeAndStage } from '@/db/statistics.utils';
 
 //ScoreDetailsPLayoff is representation of megaliga_scores_playoff of old megaliga database. Will be used for displaying detailed scores of given match in plaoffs.
 
@@ -67,6 +73,24 @@ export type ScoreDetailsPlayoffType = z.infer<
 export type ScoreDetailsPlayoffInputType = z.input<
     typeof scoreDetailsPlayoffZodSchema
 >;
+
+type PopulatedScoreDetailsPlayoffStatisticsUserType = Pick<
+    UserType,
+    'teamName' | 'coachName'
+> & { _id: Types.ObjectId };
+type PopulatedScoreDetailsPlayoffStatisticsTeamType = Omit<
+    ScoreDetailsPlayoffType['teamOne'],
+    'userId'
+> & { userId: PopulatedScoreDetailsPlayoffStatisticsUserType | null };
+type PopulatedScoreDetailsPlayoffStatisticsType = Omit<
+    ScoreDetailsPlayoffType,
+    'teamOne' | 'teamTwo'
+> & {
+    teamOne: PopulatedScoreDetailsPlayoffStatisticsTeamType;
+    teamTwo: PopulatedScoreDetailsPlayoffStatisticsTeamType;
+};
+type PopulatedScoreDetailsPlayoffStatisticsFindType =
+    HydratedDocument<PopulatedScoreDetailsPlayoffStatisticsType>;
 
 type PopulatedScoreDetailsPlayoffPlayerType = Omit<
     NonNullable<ScoreDetailsPlayoffType['teamOne']['players']>[number],
@@ -170,6 +194,9 @@ export type SavePlayerScoreDetailsPlayoffReturnType = {
 };
 
 interface ScoreDetailsPlayoffModelType extends Model<ScoreDetailsPlayoffType> {
+    getMatchDataStatistics: (
+        params: GetMatchDataStatisticsParamsType
+    ) => Promise<MatchDataStatisticsType[]>;
     getScoreDetailsByScheduleAndRoundId: (
         scheduleId: string,
         roundNumber: number
@@ -644,6 +671,103 @@ scoreDetailsPlayoffSchema.static(
             };
         } catch (error) {
             console.error('Error fetching score details playoff:', error);
+            throw error;
+        }
+    }
+);
+
+scoreDetailsPlayoffSchema.static(
+    'getMatchDataStatistics',
+    async function getMatchDataStatistics(
+        params: GetMatchDataStatisticsParamsType
+    ): Promise<MatchDataStatisticsType[]> {
+        try {
+            const range = validateStatisticsRoundRangeAndStage(params);
+            if (params.stage !== 'playoff') {
+                throw new Error(
+                    `Invalid stage for playoff statistics: ${params.stage}`
+                );
+            }
+            const season = await SeasonOpsModel.findOne({
+                _id: params.seasonId,
+                isCurrentSeason: true
+            })
+                .select('isScoreCalculatdedPlayoff')
+                .exec();
+            if (!season) {
+                throw new Error(`Invalid seasonId: ${params.seasonId}`);
+            }
+            const rounds = Object.entries(season.isScoreCalculatdedPlayoff)
+                .filter(([round, isCalculated]) => {
+                    return (
+                        isCalculated &&
+                        Number(round) >= range.roundFrom &&
+                        Number(round) <= range.roundTo
+                    );
+                })
+                .map(([round]) => Number(round));
+            const documents: PopulatedScoreDetailsPlayoffStatisticsFindType[] =
+                await this.find({
+                    roundNumber: { $in: rounds },
+                    ...(params.userId
+                        ? {
+                              $or: [
+                                  { 'teamOne.userId': params.userId },
+                                  { 'teamTwo.userId': params.userId }
+                              ]
+                          }
+                        : {})
+                })
+                    .select(
+                        'scheduleId roundNumber teamOne.userId teamOne.calculationDetails teamTwo.userId teamTwo.calculationDetails'
+                    )
+                    .populate<PopulatedScoreDetailsPlayoffStatisticsFindType>({
+                        path: 'teamOne.userId teamTwo.userId',
+                        select: 'teamName coachName'
+                    })
+                    .exec();
+            return documents.map(document => {
+                const match =
+                    document.toObject<PopulatedScoreDetailsPlayoffStatisticsType>(
+                        { flattenObjectIds: true }
+                    );
+                if (
+                    !match.teamOne.calculationDetails ||
+                    !match.teamTwo.calculationDetails
+                ) {
+                    throw new Error(
+                        `Calculation details missing for score details: ${document._id}`
+                    );
+                }
+                const mapTeam = (
+                    team: PopulatedScoreDetailsPlayoffStatisticsTeamType
+                ): MatchTeamStatisticsType => {
+                    return {
+                        userId: objectIdSchema
+                            .unwrap()
+                            .parse(team.userId?._id.toString()),
+                        teamName: team.userId?.teamName ?? '',
+                        coachName: team.userId?.coachName ?? '',
+                        calculationDetails:
+                            teamCalculationDetailsZodSchema.parse(
+                                team.calculationDetails
+                            )
+                    };
+                };
+                return {
+                    matchId: objectIdSchema.unwrap().parse(match.scheduleId),
+                    seasonId: params.seasonId,
+                    stage: 'playoff',
+                    roundNumber: match.roundNumber,
+                    teamOne: mapTeam(match.teamOne),
+                    teamTwo: mapTeam(match.teamTwo)
+                };
+            });
+        } catch (error) {
+            console.error(
+                'Error fetching playoff statistics match data:',
+                error
+            );
             throw error;
         }
     }

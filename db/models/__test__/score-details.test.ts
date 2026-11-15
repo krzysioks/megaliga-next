@@ -88,6 +88,128 @@ afterAll(async () => {
 });
 
 describe('Test ScoreDetailsModel methods and static functions', () => {
+    describe('getMatchDataStatistics', () => {
+        test('Should reject a statistics request for the other stage', async () => {
+            await expect(
+                ScoreDetailsModel.getMatchDataStatistics({
+                    seasonId: new mongoose.Types.ObjectId().toString(),
+                    stage: 'playoff'
+                })
+            ).rejects.toThrow(
+                'Invalid stage for regularSeason statistics: playoff'
+            );
+        });
+        test('Should reject a missing current season', async () => {
+            const seasonId = new mongoose.Types.ObjectId().toString();
+            await expect(
+                ScoreDetailsModel.getMatchDataStatistics({
+                    seasonId,
+                    stage: 'regularSeason'
+                })
+            ).rejects.toThrow(`Invalid seasonId: ${seasonId}`);
+        });
+        test('Should reject a completed match without calculation details', async () => {
+            const season = await SeasonOpsModel.create({
+                name: '2026',
+                isCurrentSeason: true,
+                numberOfGroups: 1,
+                isScoreCalculatded: { 1: true }
+            });
+            const document = await ScoreDetailsModel.create({
+                roundNumber: 1,
+                teamOne: { userId: new mongoose.Types.ObjectId() },
+                teamTwo: { userId: new mongoose.Types.ObjectId() }
+            });
+            await expect(
+                ScoreDetailsModel.getMatchDataStatistics({
+                    seasonId: season._id.toString(),
+                    stage: 'regularSeason'
+                })
+            ).rejects.toThrow(
+                `Calculation details missing for score details: ${document._id}`
+            );
+        });
+        test('Should return an empty list when there are no completed matches in the range', async () => {
+            const season = await SeasonOpsModel.create({
+                name: '2026',
+                isCurrentSeason: true,
+                numberOfGroups: 1
+            });
+            expect(
+                await ScoreDetailsModel.getMatchDataStatistics({
+                    seasonId: season._id.toString(),
+                    stage: 'regularSeason'
+                })
+            ).toEqual([]);
+        });
+        test('Should return only completed regular-season matches in the requested range for either team', async () => {
+            const season = await SeasonOpsModel.create({
+                name: '2026',
+                isCurrentSeason: true,
+                numberOfGroups: 1,
+                isScoreCalculatded: { 1: true, 2: false, 3: true }
+            });
+            const [userOne, userTwo] = await UserModel.create([
+                createUserData(90),
+                createUserData(91)
+            ]);
+            const teamOneDetails = createCalculationDetails();
+            const teamTwoDetails = createCalculationDetails();
+            const document = await ScoreDetailsModel.create({
+                scheduleId: new mongoose.Types.ObjectId(),
+                roundNumber: 1,
+                teamOne: {
+                    userId: userOne._id,
+                    calculationDetails: teamOneDetails
+                },
+                teamTwo: {
+                    userId: userTwo._id,
+                    calculationDetails: teamTwoDetails
+                }
+            });
+            await ScoreDetailsModel.create([
+                {
+                    roundNumber: 2,
+                    teamOne: { userId: userOne._id },
+                    teamTwo: { userId: userTwo._id }
+                },
+                {
+                    roundNumber: 3,
+                    teamOne: { userId: userOne._id },
+                    teamTwo: { userId: userTwo._id }
+                }
+            ]);
+            expect(
+                await ScoreDetailsModel.getMatchDataStatistics({
+                    seasonId: season._id.toString(),
+                    stage: 'regularSeason',
+                    userId: userTwo._id.toString(),
+                    roundFrom: 1,
+                    roundTo: 2
+                })
+            ).toEqual([
+                {
+                    matchId: document.scheduleId!.toString(),
+                    seasonId: season._id.toString(),
+                    stage: 'regularSeason',
+                    roundNumber: 1,
+                    teamOne: {
+                        userId: userOne._id.toString(),
+                        teamName: userOne.teamName,
+                        coachName: userOne.coachName,
+                        calculationDetails: teamOneDetails
+                    },
+                    teamTwo: {
+                        userId: userTwo._id.toString(),
+                        teamName: userTwo.teamName,
+                        coachName: userTwo.coachName,
+                        calculationDetails: teamTwoDetails
+                    }
+                }
+            ]);
+        });
+    });
+
     describe('getScoreDetailsByScheduleAndRoundId', () => {
         test('Should throw error if invalid scheduleId is provided', async () => {
             const invalidScheduleId = new mongoose.Types.ObjectId().toString();

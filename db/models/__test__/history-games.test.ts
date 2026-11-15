@@ -275,6 +275,144 @@ describe('Test HistoryGamesModel methods and static functions', () => {
         ...overrides
     });
 
+    describe('getMatchDataStatistics', () => {
+        test('Should reject a missing statistics season', async () => {
+            const seasonId = new mongoose.Types.ObjectId().toString();
+            await expect(
+                HistoryGamesModel.getMatchDataStatistics({
+                    seasonId,
+                    stage: 'playoff'
+                })
+            ).rejects.toThrow(`Invalid seasonId: ${seasonId}`);
+        });
+        test.each(['missing reference', 'missing saved facts'])(
+            'Should report unavailable archived statistics for %s',
+            async kind => {
+                const season = await SeasonOpsModel.create(
+                    createSeasonData('2024')
+                );
+                const seasonId = season._id.toString();
+                const team = await HistoryTeamModel.create(
+                    createHistoryTeamData(seasonId)
+                );
+                const details =
+                    kind === 'missing saved facts'
+                        ? await HistoryGamesScoreDetailsModel.create({
+                              teamOne: { teamId: team._id, score: 0 },
+                              teamTwo: { teamId: team._id, score: 0 }
+                          })
+                        : null;
+                await HistoryGamesModel.create({
+                    season: seasonId,
+                    games: [
+                        {
+                            stage: 'regularSeason',
+                            roundNumber: 1,
+                            teamOne: { teamId: team._id, score: 0 },
+                            teamTwo: { teamId: team._id, score: 0 },
+                            scoreDetails:
+                                details?._id ?? new mongoose.Types.ObjectId()
+                        }
+                    ]
+                });
+                await expect(
+                    HistoryGamesModel.getMatchDataStatistics({
+                        seasonId,
+                        stage: 'regularSeason'
+                    })
+                ).rejects.toThrow(
+                    `Archived statistics unavailable for seasonId: ${seasonId}`
+                );
+            }
+        );
+        test('Should return an empty list when the selected season has no matching archived games', async () => {
+            const season = await SeasonOpsModel.create(
+                createSeasonData('2024')
+            );
+            expect(
+                await HistoryGamesModel.getMatchDataStatistics({
+                    seasonId: season._id.toString(),
+                    stage: 'regularSeason'
+                })
+            ).toEqual([]);
+        });
+        test('Should return archived match facts only for the requested season, stage, range and either user side', async () => {
+            const season = await SeasonOpsModel.create(
+                createSeasonData('2024')
+            );
+            const seasonId = season._id.toString();
+            const userOneId = new mongoose.Types.ObjectId().toString();
+            const userTwoId = new mongoose.Types.ObjectId().toString();
+            const [teamOne, teamTwo] = await HistoryTeamModel.create([
+                createHistoryTeamData(seasonId, {
+                    name: 'Archive One',
+                    coachName: 'Archive Coach One'
+                }),
+                createHistoryTeamData(seasonId, {
+                    name: 'Archive Two',
+                    coachName: 'Archive Coach Two'
+                })
+            ]);
+            const detailsOne = createCalculationDetails();
+            const detailsTwo = createCalculationDetails();
+            const scoreDetails = await HistoryGamesScoreDetailsModel.create({
+                teamOne: {
+                    teamId: teamOne._id,
+                    userId: userOneId,
+                    score: 10,
+                    calculationDetails: detailsOne
+                },
+                teamTwo: {
+                    teamId: teamTwo._id,
+                    userId: userTwoId,
+                    score: 20,
+                    calculationDetails: detailsTwo
+                }
+            });
+            const baseGame = {
+                teamOne: { teamId: teamOne._id, score: 10 },
+                teamTwo: { teamId: teamTwo._id, score: 20 },
+                scoreDetails: scoreDetails._id
+            };
+            await HistoryGamesModel.create({
+                season: seasonId,
+                games: [
+                    { ...baseGame, stage: 'regularSeason', roundNumber: 1 },
+                    { ...baseGame, stage: 'playoff', roundNumber: 1 },
+                    { ...baseGame, stage: 'playoff', roundNumber: 2 }
+                ]
+            });
+            expect(
+                await HistoryGamesModel.getMatchDataStatistics({
+                    seasonId,
+                    stage: 'playoff',
+                    userId: userTwoId,
+                    roundFrom: 1,
+                    roundTo: 1
+                })
+            ).toEqual([
+                {
+                    matchId: scoreDetails._id.toString(),
+                    seasonId,
+                    stage: 'playoff',
+                    roundNumber: 1,
+                    teamOne: {
+                        userId: userOneId,
+                        teamName: 'Archive One',
+                        coachName: 'Archive Coach One',
+                        calculationDetails: detailsOne
+                    },
+                    teamTwo: {
+                        userId: userTwoId,
+                        teamName: 'Archive Two',
+                        coachName: 'Archive Coach Two',
+                        calculationDetails: detailsTwo
+                    }
+                }
+            ]);
+        });
+    });
+
     describe('saveScheduleToHistory', () => {
         let seasonId: string;
         beforeEach(async () => {

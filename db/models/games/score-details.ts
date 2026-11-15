@@ -8,6 +8,11 @@ import type {
     PlayerScoresInputType,
     TeamCalculationDetailsType
 } from '@/db/models/schema.types';
+import type {
+    GetMatchDataStatisticsParamsType,
+    MatchDataStatisticsType,
+    MatchTeamStatisticsType
+} from '@/db/statistics.types';
 
 import { HydratedDocument, model, Model, Schema, Types } from 'mongoose';
 import { z } from 'zod';
@@ -49,6 +54,7 @@ import {
 import SeasonOpsModel from '@/db/models/season-ops';
 import UserModel, { UserType } from '@/db/models/user';
 import { calculateMatchScores } from '@/db/score-calculation.utils';
+import { validateStatisticsRoundRangeAndStage } from '@/db/statistics.utils';
 
 //ScoreDetails is representation of megaliga_scores of old megaliga database. Will be used for displaying detailed scores of given match.
 
@@ -62,6 +68,24 @@ export const scoreDetailsZodSchema = z.object({
 export type ScoreDetailsType = z.infer<typeof scoreDetailsZodSchema>;
 
 export type ScoreDetailsInputType = z.input<typeof scoreDetailsZodSchema>;
+
+type PopulatedScoreDetailsStatisticsUserType = Pick<
+    UserType,
+    'teamName' | 'coachName'
+> & { _id: Types.ObjectId };
+type PopulatedScoreDetailsStatisticsTeamType = Omit<
+    ScoreDetailsType['teamOne'],
+    'userId'
+> & { userId: PopulatedScoreDetailsStatisticsUserType | null };
+type PopulatedScoreDetailsStatisticsType = Omit<
+    ScoreDetailsType,
+    'teamOne' | 'teamTwo'
+> & {
+    teamOne: PopulatedScoreDetailsStatisticsTeamType;
+    teamTwo: PopulatedScoreDetailsStatisticsTeamType;
+};
+type PopulatedScoreDetailsStatisticsFindType =
+    HydratedDocument<PopulatedScoreDetailsStatisticsType>;
 
 type PopulatedScoreDetailsPlayerType = Omit<
     NonNullable<ScoreDetailsType['teamOne']['players']>[number],
@@ -163,6 +187,9 @@ export type SavePlayerScoreDetailsReturnType = {
 };
 
 interface ScoreDetailsModelType extends Model<ScoreDetailsType> {
+    getMatchDataStatistics: (
+        params: GetMatchDataStatisticsParamsType
+    ) => Promise<MatchDataStatisticsType[]>;
     getScoreDetailsByScheduleAndRoundId: (
         scheduleId: string,
         roundNumber: number
@@ -634,6 +661,103 @@ scoreDetailsSchema.static(
             };
         } catch (error) {
             console.error('Error fetching score details:', error);
+            throw error;
+        }
+    }
+);
+
+scoreDetailsSchema.static(
+    'getMatchDataStatistics',
+    async function getMatchDataStatistics(
+        params: GetMatchDataStatisticsParamsType
+    ): Promise<MatchDataStatisticsType[]> {
+        try {
+            const range = validateStatisticsRoundRangeAndStage(params);
+            if (params.stage !== 'regularSeason') {
+                throw new Error(
+                    `Invalid stage for regularSeason statistics: ${params.stage}`
+                );
+            }
+            const season = await SeasonOpsModel.findOne({
+                _id: params.seasonId,
+                isCurrentSeason: true
+            })
+                .select('isScoreCalculatded')
+                .exec();
+            if (!season) {
+                throw new Error(`Invalid seasonId: ${params.seasonId}`);
+            }
+            const rounds = Object.entries(season.isScoreCalculatded)
+                .filter(([round, isCalculated]) => {
+                    return (
+                        isCalculated &&
+                        Number(round) >= range.roundFrom &&
+                        Number(round) <= range.roundTo
+                    );
+                })
+                .map(([round]) => Number(round));
+            const documents: PopulatedScoreDetailsStatisticsFindType[] =
+                await this.find({
+                    roundNumber: { $in: rounds },
+                    ...(params.userId
+                        ? {
+                              $or: [
+                                  { 'teamOne.userId': params.userId },
+                                  { 'teamTwo.userId': params.userId }
+                              ]
+                          }
+                        : {})
+                })
+                    .select(
+                        'scheduleId roundNumber teamOne.userId teamOne.calculationDetails teamTwo.userId teamTwo.calculationDetails'
+                    )
+                    .populate<PopulatedScoreDetailsStatisticsFindType>({
+                        path: 'teamOne.userId teamTwo.userId',
+                        select: 'teamName coachName'
+                    })
+                    .exec();
+            return documents.map(document => {
+                const match =
+                    document.toObject<PopulatedScoreDetailsStatisticsType>({
+                        flattenObjectIds: true
+                    });
+                if (
+                    !match.teamOne.calculationDetails ||
+                    !match.teamTwo.calculationDetails
+                ) {
+                    throw new Error(
+                        `Calculation details missing for score details: ${document._id}`
+                    );
+                }
+                const mapTeam = (
+                    team: PopulatedScoreDetailsStatisticsTeamType
+                ): MatchTeamStatisticsType => {
+                    return {
+                        userId: objectIdSchema
+                            .unwrap()
+                            .parse(team.userId?._id.toString()),
+                        teamName: team.userId?.teamName ?? '',
+                        coachName: team.userId?.coachName ?? '',
+                        calculationDetails:
+                            teamCalculationDetailsZodSchema.parse(
+                                team.calculationDetails
+                            )
+                    };
+                };
+                return {
+                    matchId: objectIdSchema.unwrap().parse(match.scheduleId),
+                    seasonId: params.seasonId,
+                    stage: 'regularSeason',
+                    roundNumber: match.roundNumber,
+                    teamOne: mapTeam(match.teamOne),
+                    teamTwo: mapTeam(match.teamTwo)
+                };
+            });
+        } catch (error) {
+            console.error(
+                'Error fetching regularSeason statistics match data:',
+                error
+            );
             throw error;
         }
     }
