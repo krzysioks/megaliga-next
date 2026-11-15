@@ -7,11 +7,12 @@
     "dev:wow": "next dev --turbopack --experimental-https --hostname=megaliga-next.local.wow",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "lint:fix": "eslint --fix .",
     "test": "jest --runInBand",
     "ts:check": "tsc -p tsconfig.json --noEmit",
-    "dev:wow:setup": "hostile set 127.0.0.1 megaliga-next.local.wow"
+    "dev:wow:setup": "hostile set 127.0.0.1 megaliga-next.local.wow",
+    "prepare": "husky"
   },
   "dependencies": {
     "@editorjs/editorjs": "^2.30.8",
@@ -60,6 +61,7 @@
     "eslint-plugin-perfectionist": "^4.15.0",
     "eslint-plugin-react": "^7.37.5",
     "hostile": "^1.4.0",
+    "husky": "^9.1.7",
     "jest": "^29",
     "lodash": "^4.17.21",
     "puppeteer": "^25.8.0",
