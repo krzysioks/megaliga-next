@@ -31,7 +31,6 @@ const createPlayerData = (overrides: Partial<PlayersType> = {}) => ({
     draftedWithNumberGabbana: 2,
     draftedWithNumberPlayoff: 3,
     playerStatus: 'active' as const,
-    statistics: new mongoose.Types.ObjectId().toString(),
     ...overrides
 });
 

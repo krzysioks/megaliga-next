@@ -2,6 +2,8 @@ import type { PlayersType } from '@/db/models/players';
 import type {
     GetMatchDataStatisticsParamsType,
     GetTrainerStatisticsParamsType,
+    GetDraftRiderStatisticsParamsType,
+    DraftRiderStatisticsReturnType,
     LoadMatchDataStatisticsReturnType,
     RiderStatisticsReturnType,
     TrainerStatisticsReturnType,
@@ -132,5 +134,50 @@ export async function getSetPlayStatistics(
         roundFrom: matchDataStatistics.roundFrom,
         setPlays,
         userId: params.userId
+    });
+}
+
+export async function getDraftRiderStatistics(
+    params: GetDraftRiderStatisticsParamsType
+): Promise<DraftRiderStatisticsReturnType[]> {
+    const matchParams = {
+        seasonId: params.previousSeasonId,
+        stage: params.stage
+    };
+    const range = validateRoundRangeAndStageStatistics(matchParams);
+    const season = await SeasonOpsModel.findById(params.previousSeasonId)
+        .select('isCurrentSeason')
+        .exec();
+    if (!season) {
+        throw new Error(`Invalid seasonId: ${params.previousSeasonId}`);
+    }
+    if (season.isCurrentSeason) {
+        throw new Error(
+            `Draft statistics require a historical season: ${params.previousSeasonId}`
+        );
+    }
+    const matches = await HistoryGamesModel.getMatchDataStatistics(matchParams);
+    const playerIds = [...new Set(params.playerIds)];
+    const riders = playerIds.map(playerId => {
+        return { playerId, extraligaPlayerName: '' };
+    });
+    const riderStatistics = aggregateRiderStatistics({
+        matches,
+        riders,
+        roundFrom: range.roundFrom
+    });
+    return riderStatistics.map(riderStatistic => {
+        return {
+            playerId: riderStatistic.playerId,
+            statistics:
+                riderStatistic.appearanceCount > 0
+                    ? {
+                          totalPoints: riderStatistic.totalPoints,
+                          appearanceCount: riderStatistic.appearanceCount,
+                          actualStartCount: riderStatistic.actualStartCount,
+                          pointsPerHeat: riderStatistic.pointsPerHeat
+                      }
+                    : null
+        };
     });
 }

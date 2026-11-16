@@ -25,8 +25,7 @@ export const playersZodSchema = z.object({
     draftedWithNumberDolce: draftNumberSchema,
     draftedWithNumberGabbana: draftNumberSchema,
     draftedWithNumberPlayoff: draftNumberSchema,
-    playerStatus: statusEnumSchema.default('active'),
-    statistics: objectIdSchema
+    playerStatus: statusEnumSchema.default('active')
 });
 
 export type PlayersType = z.infer<typeof playersZodSchema>;
@@ -72,8 +71,7 @@ const playersSchema = new Schema<
         type: String,
         enum: PLAYER_STATUS_ENUM,
         default: 'active'
-    },
-    statistics: { type: Types.ObjectId, ref: 'Statistics' }
+    }
 });
 
 playersSchema.static(
@@ -116,8 +114,7 @@ playersSchema.static(
                         playerDocument.draftedWithNumberGabbana,
                     draftedWithNumberPlayoff:
                         playerDocument.draftedWithNumberPlayoff,
-                    playerStatus: playerDocument.playerStatus,
-                    statistics: playerDocument.statistics
+                    playerStatus: playerDocument.playerStatus
                 };
             });
         } catch (error) {
@@ -167,8 +164,7 @@ playersSchema.static(
                         playerDocument.draftedWithNumberGabbana,
                     draftedWithNumberPlayoff:
                         playerDocument.draftedWithNumberPlayoff,
-                    playerStatus: playerDocument.playerStatus,
-                    statistics: playerDocument.statistics
+                    playerStatus: playerDocument.playerStatus
                 };
             });
         } catch (error) {

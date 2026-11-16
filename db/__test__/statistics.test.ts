@@ -20,7 +20,8 @@ import * as scoreCalculationUtils from '@/db/score-calculation.utils';
 import {
     getRiderStatistics,
     getTrainerStatistics,
-    getSetPlayStatistics
+    getSetPlayStatistics,
+    getDraftRiderStatistics
 } from '@/db/statistics';
 
 let seasonId: string;
@@ -1303,6 +1304,195 @@ describe('getSetPlayStatistics', () => {
     });
     test('Should read live and archived set play statistics without recalculating or changing saved scores', async () => {
         await expectReadOnlyStatistics(getSetPlayStatistics);
+    });
+});
+
+describe('getDraftRiderStatistics', () => {
+    test('Should reject a nonexistent previous season', async () => {
+        const previousSeasonId = new mongoose.Types.ObjectId().toString();
+        await expect(
+            getDraftRiderStatistics({
+                previousSeasonId,
+                stage: 'regularSeason',
+                playerIds
+            })
+        ).rejects.toThrow(`Invalid seasonId: ${previousSeasonId}`);
+    });
+    test('Should reject an unsupported draft statistics stage', async () => {
+        await expect(
+            getDraftRiderStatistics({
+                previousSeasonId: seasonId,
+                stage: 'grandPrix' as StatisticsStageType,
+                playerIds
+            })
+        ).rejects.toThrow('Invalid stage: grandPrix');
+    });
+    test('Should reject the current season instead of using live results for draft statistics', async () => {
+        await expect(
+            getDraftRiderStatistics({
+                previousSeasonId: seasonId,
+                stage: 'regularSeason',
+                playerIds
+            })
+        ).rejects.toThrow(
+            `Draft statistics require a historical season: ${seasonId}`
+        );
+    });
+    test('Should report unavailable archived statistics rather than substitute another season or stage', async () => {
+        const previousSeasonId = await seedArchivedMatches();
+        await HistoryGamesScoreDetailsModel.updateOne(
+            { 'teamOne.score': 8 },
+            { $unset: { 'teamOne.calculationDetails': '' } }
+        );
+        await expect(
+            getDraftRiderStatistics({
+                previousSeasonId,
+                stage: 'playoff',
+                playerIds
+            })
+        ).rejects.toThrow(
+            `Archived statistics unavailable for seasonId: ${previousSeasonId}`
+        );
+    });
+    test('Should return ordered Megaliga players with stage-specific statistics', async () => {
+        const previousSeasonId = await seedArchivedMatches();
+        await HistoryGamesScoreDetailsModel.updateOne(
+            { 'teamOne.score': 12 },
+            {
+                $set: {
+                    'teamTwo.calculationDetails.players.0.basePoints': 3,
+                    'teamTwo.calculationDetails.players.0.actualStartCount': 1
+                }
+            }
+        );
+        const candidateIds = [
+            playerIds[STARTING_LINEUP_PLAYER_COUNT],
+            playerIds[0],
+            playerIds[0]
+        ];
+        expect(
+            await getDraftRiderStatistics({
+                previousSeasonId,
+                stage: 'regularSeason',
+                playerIds: candidateIds
+            })
+        ).toEqual([
+            {
+                playerId: playerIds[STARTING_LINEUP_PLAYER_COUNT],
+                statistics: null
+            },
+            {
+                playerId: playerIds[0],
+                statistics: {
+                    totalPoints: 8,
+                    appearanceCount: 2,
+                    actualStartCount: 3,
+                    pointsPerHeat: 8 / 3
+                }
+            }
+        ]);
+        expect(
+            await getDraftRiderStatistics({
+                previousSeasonId,
+                stage: 'playoff',
+                playerIds: candidateIds
+            })
+        ).toEqual([
+            {
+                playerId: playerIds[STARTING_LINEUP_PLAYER_COUNT],
+                statistics: null
+            },
+            {
+                playerId: playerIds[0],
+                statistics: {
+                    totalPoints: 8,
+                    appearanceCount: 2,
+                    actualStartCount: 2,
+                    pointsPerHeat: 4
+                }
+            }
+        ]);
+    });
+    test('Should distinguish zero points with real starts from scored appearances without real starts', async () => {
+        const previousSeasonId = await seedArchivedMatches();
+        await HistoryGamesScoreDetailsModel.updateOne(
+            { 'teamOne.score': 12 },
+            {
+                $set: {
+                    'teamOne.calculationDetails.players.1.actualStartCount': 2
+                }
+            }
+        );
+        expect(
+            await getDraftRiderStatistics({
+                previousSeasonId,
+                stage: 'regularSeason',
+                playerIds: [playerIds[1], playerIds[2]]
+            })
+        ).toEqual([
+            {
+                playerId: playerIds[1],
+                statistics: {
+                    totalPoints: 0,
+                    appearanceCount: 2,
+                    actualStartCount: 2,
+                    pointsPerHeat: 0
+                }
+            },
+            {
+                playerId: playerIds[2],
+                statistics: {
+                    totalPoints: 0,
+                    appearanceCount: 2,
+                    actualStartCount: 0,
+                    pointsPerHeat: null
+                }
+            }
+        ]);
+    });
+    test('Should return null statistics when the requested historical stage has no matches', async () => {
+        const previousSeasonId = await seedArchivedMatches();
+        await HistoryGamesModel.updateMany(
+            { season: previousSeasonId },
+            { $pull: { games: { stage: 'playoff' } } }
+        );
+        expect(
+            await getDraftRiderStatistics({
+                previousSeasonId,
+                stage: 'playoff',
+                playerIds: [playerIds[0]]
+            })
+        ).toEqual([{ playerId: playerIds[0], statistics: null }]);
+        expect(
+            await getDraftRiderStatistics({
+                previousSeasonId,
+                stage: 'regularSeason',
+                playerIds: []
+            })
+        ).toEqual([]);
+    });
+    test('Should read draft statistics after user deletion without recalculating or changing saved scores', async () => {
+        const previousSeasonId = await seedArchivedMatches();
+        await UserModel.deleteMany();
+        const before = await readStoredScores();
+        const calculateMatchScores = jest.spyOn(
+            scoreCalculationUtils,
+            'calculateMatchScores'
+        );
+        try {
+            for (const stage of ['regularSeason', 'playoff'] as const) {
+                const result = await getDraftRiderStatistics({
+                    previousSeasonId,
+                    stage,
+                    playerIds: [playerIds[0]]
+                });
+                expect(result[0].statistics?.appearanceCount).toBe(2);
+            }
+            expect(calculateMatchScores).not.toHaveBeenCalled();
+            expect(await readStoredScores()).toEqual(before);
+        } finally {
+            calculateMatchScores.mockRestore();
+        }
     });
 });
 

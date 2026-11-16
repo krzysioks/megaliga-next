@@ -43,6 +43,22 @@ export interface GetTrainerStatisticsParamsType extends GetMatchDataStatisticsPa
     userId: string;
 }
 
+export interface GetDraftRiderStatisticsParamsType {
+    previousSeasonId: string;
+    stage: StatisticsStageType;
+    playerIds: string[];
+}
+
+export type DraftRiderStatisticsSummaryType = Pick<
+    RiderStatisticsReturnType,
+    'totalPoints' | 'appearanceCount' | 'actualStartCount' | 'pointsPerHeat'
+>;
+
+export interface DraftRiderStatisticsReturnType {
+    playerId: string;
+    statistics: DraftRiderStatisticsSummaryType | null;
+}
+
 export interface StatisticsRiderType {
     playerId: string;
     extraligaPlayerName: string;
