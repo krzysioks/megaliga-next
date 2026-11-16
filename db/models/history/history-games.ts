@@ -23,7 +23,7 @@ import {
     teamCalculationDetailsZodSchema
 } from '@/db/models/schema.types';
 import SeasonOpsModel from '@/db/models/season-ops';
-import { validateStatisticsRoundRangeAndStage } from '@/db/statistics.utils';
+import { validateRoundRangeAndStageStatistics } from '@/db/statistics.utils';
 
 //HistoryGames collection represent in each document all games played in given season of megaliga
 // We will identify all games for given team in given season by finding all documents by season, teamId and stage in historyGames collection
@@ -236,7 +236,7 @@ historyGamesSchema.static(
         params: GetMatchDataStatisticsParamsType
     ): Promise<MatchDataStatisticsType[]> {
         try {
-            const range = validateStatisticsRoundRangeAndStage(params);
+            const range = validateRoundRangeAndStageStatistics(params);
             const season = await SeasonOpsModel.findById(params.seasonId)
                 .select('_id')
                 .exec();

@@ -4,7 +4,8 @@ import type {
     GetTrainerStatisticsParamsType,
     LoadMatchDataStatisticsReturnType,
     RiderStatisticsReturnType,
-    TrainerStatisticsReturnType
+    TrainerStatisticsReturnType,
+    SetPlayStatisticsReturnType
 } from '@/db/statistics.types';
 import type { FilterQuery } from 'mongoose';
 
@@ -14,33 +15,49 @@ import HistoryGamesModel from '@/db/models/history/history-games';
 import PlayersModel from '@/db/models/players';
 import { objectIdSchema } from '@/db/models/schema.types';
 import SeasonOpsModel from '@/db/models/season-ops';
+import SetPlaysModel from '@/db/models/set-plays';
+import UserModel from '@/db/models/user';
 import {
     aggregateRiderStatistics,
     aggregateTrainerStatistics,
-    validateStatisticsRoundRangeAndStage
+    aggregateSetPlayStatistics,
+    validateRoundRangeAndStageStatistics
 } from '@/db/statistics.utils';
 
 async function loadMatchDataStatistics(
     params: GetMatchDataStatisticsParamsType
 ): Promise<LoadMatchDataStatisticsReturnType> {
-    validateStatisticsRoundRangeAndStage(params);
+    const range = validateRoundRangeAndStageStatistics(params);
     const season = await SeasonOpsModel.findById(params.seasonId)
         .select('isCurrentSeason')
         .exec();
     if (!season) {
         throw new Error(`Invalid seasonId: ${params.seasonId}`);
     }
+    if (season.isCurrentSeason && params.userId !== undefined) {
+        const userExists = await UserModel.exists({ _id: params.userId });
+        if (!userExists) {
+            throw new Error(`Invalid userId: ${params.userId}`);
+        }
+    }
+
+    // Use the league's latest calculated round even when this user has no match in it.
+    const leagueParams = { ...params, userId: undefined };
     if (!season.isCurrentSeason) {
         return {
-            matches: await HistoryGamesModel.getMatchDataStatistics(params),
+            matches:
+                await HistoryGamesModel.getMatchDataStatistics(leagueParams),
+            roundFrom: range.roundFrom,
             isCurrentSeason: false
         };
     }
     const matches =
         params.stage === 'regularSeason'
-            ? await ScoreDetailsModel.getMatchDataStatistics(params)
-            : await ScoreDetailsPlayoffModel.getMatchDataStatistics(params);
-    return { matches, isCurrentSeason: true };
+            ? await ScoreDetailsModel.getMatchDataStatistics(leagueParams)
+            : await ScoreDetailsPlayoffModel.getMatchDataStatistics(
+                  leagueParams
+              );
+    return { matches, roundFrom: range.roundFrom, isCurrentSeason: true };
 }
 
 export async function getRiderStatistics(
@@ -84,6 +101,7 @@ export async function getRiderStatistics(
     });
     return aggregateRiderStatistics({
         matches: matchDataStatistics.matches,
+        roundFrom: matchDataStatistics.roundFrom,
         riders,
         userId: params.userId
     });
@@ -96,6 +114,23 @@ export async function getTrainerStatistics(
     const matchDataStatistics = await loadMatchDataStatistics(params);
     return aggregateTrainerStatistics({
         matches: matchDataStatistics.matches,
+        roundFrom: matchDataStatistics.roundFrom,
+        userId: params.userId
+    });
+}
+
+export async function getSetPlayStatistics(
+    params: GetMatchDataStatisticsParamsType
+): Promise<SetPlayStatisticsReturnType[]> {
+    const matchDataStatistics = await loadMatchDataStatistics(params);
+    const documents = await SetPlaysModel.find().select('name type').exec();
+    const setPlays = documents.map(document => {
+        return { name: document.name, type: document.type };
+    });
+    return aggregateSetPlayStatistics({
+        matches: matchDataStatistics.matches,
+        roundFrom: matchDataStatistics.roundFrom,
+        setPlays,
         userId: params.userId
     });
 }

@@ -73,3 +73,6 @@ export const BRUDNA_PALA_POINTS = [0, 0, 1, 2, 6] as const;
 export const KFN_FIRST_INTERVAL = { minimum: 0, maximum: 12 };
 export const KFN_INTERVAL_WIDTH = 10;
 export const KFN_POINTS = 5;
+
+export const STATISTICS_POINTS_AVERAGE_DECIMALS = 2;
+export const STATISTICS_POINTS_PER_HEAT_DECIMALS = 3;

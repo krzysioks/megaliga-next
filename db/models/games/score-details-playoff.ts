@@ -55,7 +55,7 @@ import SeasonOpsModel from '@/db/models/season-ops';
 import { setPlayPayloadZodSchema } from '@/db/models/set-play-payload.schema';
 import UserModel, { UserType } from '@/db/models/user';
 import { calculateMatchScores } from '@/db/score-calculation.utils';
-import { validateStatisticsRoundRangeAndStage } from '@/db/statistics.utils';
+import { validateRoundRangeAndStageStatistics } from '@/db/statistics.utils';
 
 //ScoreDetailsPLayoff is representation of megaliga_scores_playoff of old megaliga database. Will be used for displaying detailed scores of given match in plaoffs.
 
@@ -682,7 +682,7 @@ scoreDetailsPlayoffSchema.static(
         params: GetMatchDataStatisticsParamsType
     ): Promise<MatchDataStatisticsType[]> {
         try {
-            const range = validateStatisticsRoundRangeAndStage(params);
+            const range = validateRoundRangeAndStageStatistics(params);
             if (params.stage !== 'playoff') {
                 throw new Error(
                     `Invalid stage for playoff statistics: ${params.stage}`

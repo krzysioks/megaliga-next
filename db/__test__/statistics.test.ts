@@ -12,10 +12,16 @@ import HistoryGamesModel from '@/db/models/history/history-games';
 import HistoryGamesScoreDetailsModel from '@/db/models/history/history-games-score-details';
 import HistoryTeamModel from '@/db/models/history/history-team';
 import PlayersModel from '@/db/models/players';
+import { SetPlayEnumType } from '@/db/models/schema.types';
 import SeasonOpsModel from '@/db/models/season-ops';
+import SetPlaysModel from '@/db/models/set-plays';
 import UserModel from '@/db/models/user';
 import * as scoreCalculationUtils from '@/db/score-calculation.utils';
-import { getRiderStatistics, getTrainerStatistics } from '@/db/statistics';
+import {
+    getRiderStatistics,
+    getTrainerStatistics,
+    getSetPlayStatistics
+} from '@/db/statistics';
 
 let seasonId: string;
 let userOneId: string;
@@ -31,6 +37,7 @@ async function clearFixtures() {
     await PlayersModel.deleteMany();
     await UserModel.deleteMany();
     await SeasonOpsModel.deleteMany();
+    await SetPlaysModel.deleteMany();
 }
 
 beforeAll(async () => {
@@ -137,14 +144,14 @@ async function seedScoredMatches() {
     };
     await ScoreDetailsModel.create(
         [
-            first,
-            { ...first },
             {
                 scheduleId: new mongoose.Types.ObjectId(),
                 roundNumber: 2,
                 teamOne: { userId: userOneId, calculationDetails: secondOne },
                 teamTwo: { userId: userTwoId, calculationDetails: secondTwo }
-            }
+            },
+            first,
+            { ...first }
         ],
         { ordered: true }
     );
@@ -153,6 +160,22 @@ async function seedScoredMatches() {
         teamOne: { userId: userOneId },
         teamTwo: { userId: userTwoId }
     });
+}
+
+async function seedMatchesWithoutUserInLatestRound() {
+    await seedScoredMatches();
+    const thirdUser = await UserModel.create({
+        username: 'latest-round-user',
+        email: 'latest-round@example.com',
+        password: 'Password1!',
+        coachName: 'Latest coach',
+        teamName: 'Latest team',
+        logoUrl: 'https://example.com/latest.png'
+    });
+    await ScoreDetailsModel.updateOne(
+        { roundNumber: 2 },
+        { $set: { 'teamOne.userId': thirdUser._id } }
+    );
 }
 
 describe('getRiderStatistics', () => {
@@ -206,7 +229,7 @@ describe('getRiderStatistics', () => {
         });
         expect(
             statistics.find(player => player.playerId === playerIds[0])
-        ).toEqual({
+        ).toMatchObject({
             playerId: playerIds[0],
             extraligaPlayerName: 'Rider 0',
             basePoints: 21,
@@ -221,7 +244,33 @@ describe('getRiderStatistics', () => {
             functionAssignmentCounts: { Lider: 2, Joker: 1, Kapitan: 1 },
             roleAssignmentCounts: { PN: 1, KB: 1, P: 1 },
             userCount: 2,
-            roundCount: 2
+            roundCount: 2,
+            trend: {
+                pointsPerMatch: {
+                    current: {
+                        totalPoints: 27,
+                        exposureCount: 4,
+                        average: 6.75
+                    },
+                    previous: { totalPoints: 18, exposureCount: 2, average: 9 },
+                    delta: -2.25,
+                    direction: 'down'
+                },
+                pointsPerHeat: {
+                    current: {
+                        totalPoints: 27,
+                        exposureCount: 7,
+                        average: 27 / 7
+                    },
+                    previous: {
+                        totalPoints: 18,
+                        exposureCount: 5,
+                        average: 3.6
+                    },
+                    delta: expect.closeTo(0.257142857142857, 10),
+                    direction: 'up'
+                }
+            }
         });
         expect(
             statistics.find(
@@ -268,6 +317,233 @@ describe('getRiderStatistics', () => {
             pointsPerMatch: null,
             pointsPerHeat: null
         });
+    });
+    test('Should compare cumulative rider averages with the previous round and return sorted personal chart values', async () => {
+        await seedScoredMatches();
+        const result = await getRiderStatistics({
+            seasonId,
+            stage: 'regularSeason',
+            userId: userOneId
+        });
+        expect(
+            result.find(player => player.playerId === playerIds[0])
+        ).toMatchObject({
+            trend: {
+                pointsPerMatch: {
+                    current: {
+                        roundFrom: 1,
+                        roundTo: 2,
+                        totalPoints: 24,
+                        exposureCount: 2,
+                        average: 12
+                    },
+                    previous: {
+                        roundFrom: 1,
+                        roundTo: 1,
+                        totalPoints: 15,
+                        exposureCount: 1,
+                        average: 15
+                    },
+                    delta: -3,
+                    direction: 'down'
+                },
+                pointsPerHeat: {
+                    current: { average: 4 },
+                    previous: { average: 3.75 },
+                    delta: 0.25,
+                    direction: 'up'
+                }
+            },
+            roundSeries: [
+                {
+                    roundNumber: 1,
+                    totalPoints: 15,
+                    appearanceCount: 1,
+                    actualStartCount: 4,
+                    pointsPerMatch: 15,
+                    pointsPerHeat: 3.75,
+                    cumulativePointsPerMatch: 15,
+                    cumulativePointsPerHeat: 3.75
+                },
+                {
+                    roundNumber: 2,
+                    totalPoints: 9,
+                    appearanceCount: 1,
+                    actualStartCount: 2,
+                    pointsPerMatch: 9,
+                    pointsPerHeat: 4.5,
+                    cumulativePointsPerMatch: 12,
+                    cumulativePointsPerHeat: 4
+                }
+            ]
+        });
+    });
+    test('Should carry averages across a missing rider appearance and leave first samples unavailable for trend', async () => {
+        await seedScoredMatches();
+        await ScoreDetailsModel.updateMany(
+            { roundNumber: 2 },
+            {
+                $set: {
+                    'teamOne.calculationDetails.players.0.playerId':
+                        playerIds[STARTING_LINEUP_PLAYER_COUNT]
+                }
+            }
+        );
+        const result = await getRiderStatistics({
+            seasonId,
+            stage: 'regularSeason',
+            userId: userOneId
+        });
+        expect(
+            result.find(player => player.playerId === playerIds[0])
+        ).toMatchObject({
+            trend: {
+                pointsPerMatch: {
+                    current: { average: 15 },
+                    previous: { average: 15 },
+                    delta: 0,
+                    direction: 'stable'
+                }
+            },
+            roundSeries: [
+                { roundNumber: 1, totalPoints: 15 },
+                {
+                    roundNumber: 2,
+                    totalPoints: null,
+                    pointsPerMatch: null,
+                    cumulativePointsPerMatch: 15
+                }
+            ]
+        });
+        expect(
+            result.find(
+                player =>
+                    player.playerId === playerIds[STARTING_LINEUP_PLAYER_COUNT]
+            )
+        ).toMatchObject({
+            trend: {
+                pointsPerMatch: {
+                    current: { average: 9 },
+                    previous: { exposureCount: 0, average: null },
+                    delta: null,
+                    direction: null
+                }
+            }
+        });
+        const roundTwo = await getRiderStatistics({
+            seasonId,
+            stage: 'regularSeason',
+            userId: userOneId,
+            roundFrom: 2,
+            roundTo: 2
+        });
+        expect(
+            roundTwo.find(
+                player =>
+                    player.playerId === playerIds[STARTING_LINEUP_PLAYER_COUNT]
+            )
+        ).toMatchObject({
+            trend: {
+                pointsPerMatch: {
+                    current: { roundFrom: 2, roundTo: 2, average: 9 },
+                    previous: { roundFrom: 2, roundTo: null, average: null },
+                    delta: null
+                }
+            }
+        });
+        const central = await getRiderStatistics({
+            seasonId,
+            stage: 'regularSeason'
+        });
+        expect(central[0]).not.toHaveProperty('roundSeries');
+    });
+    test('Should keep rider averages unchanged and show a gap when the user has no match in the latest calculated round', async () => {
+        await seedMatchesWithoutUserInLatestRound();
+        const result = await getRiderStatistics({
+            seasonId,
+            stage: 'regularSeason',
+            userId: userOneId
+        });
+        expect(
+            result.find(player => player.playerId === playerIds[0])
+        ).toMatchObject({
+            totalPoints: 15,
+            appearanceCount: 1,
+            actualStartCount: 4,
+            pointsPerMatch: 15,
+            pointsPerHeat: 3.75,
+            trend: {
+                pointsPerMatch: {
+                    current: {
+                        roundTo: 2,
+                        totalPoints: 15,
+                        exposureCount: 1,
+                        average: 15
+                    },
+                    previous: {
+                        roundTo: 1,
+                        totalPoints: 15,
+                        exposureCount: 1,
+                        average: 15
+                    },
+                    delta: 0,
+                    direction: 'stable'
+                },
+                pointsPerHeat: {
+                    current: { average: 3.75 },
+                    previous: { average: 3.75 },
+                    delta: 0,
+                    direction: 'stable'
+                }
+            },
+            roundSeries: [
+                { roundNumber: 1, totalPoints: 15 },
+                {
+                    roundNumber: 2,
+                    totalPoints: null,
+                    appearanceCount: 0,
+                    actualStartCount: 0,
+                    pointsPerMatch: null,
+                    pointsPerHeat: null,
+                    cumulativePointsPerMatch: 15,
+                    cumulativePointsPerHeat: 3.75
+                }
+            ]
+        });
+    });
+    test('Should return the exact trend delta and classify direction using the displayed rounded value', async () => {
+        await seedScoredMatches();
+        await ScoreDetailsModel.updateMany(
+            { roundNumber: 1 },
+            {
+                $set: {
+                    'teamOne.calculationDetails.players.0.basePoints': 1,
+                    'teamOne.calculationDetails.players.0.functionPoints': 0,
+                    'teamOne.calculationDetails.players.0.rolePoints': 0,
+                    'teamOne.calculationDetails.players.0.setPlayPoints': 0,
+                    'teamOne.calculationDetails.players.0.actualStartCount': 1
+                }
+            }
+        );
+        await ScoreDetailsModel.updateMany(
+            { roundNumber: 2 },
+            {
+                $set: {
+                    'teamOne.calculationDetails.players.0.basePoints': 1.009,
+                    'teamOne.calculationDetails.players.0.setPlayPoints': 0,
+                    'teamOne.calculationDetails.players.0.actualStartCount': 1
+                }
+            }
+        );
+        const result = await getRiderStatistics({
+            seasonId,
+            stage: 'regularSeason',
+            userId: userOneId
+        });
+        const rider = result.find(player => player.playerId === playerIds[0]);
+        expect(rider?.trend.pointsPerMatch.delta).toBeCloseTo(0.0045);
+        expect(rider?.trend.pointsPerMatch.direction).toBe('stable');
+        expect(rider?.trend.pointsPerHeat.direction).toBe('up');
     });
     test('Should retain signed points and a scored appearance when the rider has no real starts', async () => {
         const details = createDetails();
@@ -386,28 +662,7 @@ describe('getRiderStatistics', () => {
         );
     });
     test('Should read live and archived rider statistics without recalculating or changing saved scores', async () => {
-        await seedScoredMatches();
-        const archivedSeasonId = await seedArchivedMatches();
-        const before = await readStoredScores();
-        const calculateMatchScores = jest.spyOn(
-            scoreCalculationUtils,
-            'calculateMatchScores'
-        );
-        try {
-            for (const requestedSeasonId of [seasonId, archivedSeasonId]) {
-                for (const stage of ['regularSeason', 'playoff'] as const) {
-                    await getRiderStatistics({
-                        seasonId: requestedSeasonId,
-                        stage,
-                        userId: userOneId
-                    });
-                }
-            }
-            expect(calculateMatchScores).not.toHaveBeenCalled();
-            expect(await readStoredScores()).toEqual(before);
-        } finally {
-            calculateMatchScores.mockRestore();
-        }
+        await expectReadOnlyStatistics(getRiderStatistics);
     });
 });
 
@@ -430,7 +685,7 @@ describe('getTrainerStatistics', () => {
                 stage: 'regularSeason',
                 userId: userOneId
             })
-        ).toEqual({
+        ).toMatchObject({
             userId: userOneId,
             teamName: 'Team 0',
             coachName: 'Coach 0',
@@ -473,6 +728,108 @@ describe('getTrainerStatistics', () => {
             pointsPerHeat: -0.2
         });
     });
+    test('Should compare cumulative trainer totals with the previous round and keep five slots per match', async () => {
+        await seedScoredMatches();
+        const result = await getTrainerStatistics({
+            seasonId,
+            stage: 'regularSeason',
+            userId: userOneId
+        });
+        expect(result).toMatchObject({
+            trend: {
+                pointsPerMatch: {
+                    current: {
+                        roundFrom: 1,
+                        roundTo: 2,
+                        totalPoints: 8,
+                        exposureCount: 2,
+                        average: 4
+                    },
+                    previous: { totalPoints: 9, exposureCount: 1, average: 9 },
+                    delta: -5,
+                    direction: 'down'
+                },
+                pointsPerHeat: {
+                    current: { exposureCount: 10, average: 0.8 },
+                    previous: { exposureCount: 5, average: 1.8 },
+                    delta: -1,
+                    direction: 'down'
+                }
+            },
+            roundSeries: [
+                {
+                    roundNumber: 1,
+                    totalPoints: 9,
+                    matchCount: 1,
+                    heatSlotCount: 5,
+                    pointsPerMatch: 9,
+                    pointsPerHeat: 1.8,
+                    cumulativePointsPerMatch: 9
+                },
+                {
+                    roundNumber: 2,
+                    totalPoints: -1,
+                    matchCount: 1,
+                    heatSlotCount: 5,
+                    pointsPerMatch: -1,
+                    pointsPerHeat: -0.2,
+                    cumulativePointsPerMatch: 4
+                }
+            ]
+        });
+    });
+    test('Should keep trainer averages unchanged and show a gap when the user has no match in the latest calculated round', async () => {
+        await seedMatchesWithoutUserInLatestRound();
+        const result = await getTrainerStatistics({
+            seasonId,
+            stage: 'regularSeason',
+            userId: userOneId
+        });
+        expect(result).toMatchObject({
+            totalPoints: 9,
+            matchCount: 1,
+            heatSlotCount: 5,
+            pointsPerMatch: 9,
+            pointsPerHeat: 1.8,
+            trend: {
+                pointsPerMatch: {
+                    current: {
+                        roundTo: 2,
+                        totalPoints: 9,
+                        exposureCount: 1,
+                        average: 9
+                    },
+                    previous: {
+                        roundTo: 1,
+                        totalPoints: 9,
+                        exposureCount: 1,
+                        average: 9
+                    },
+                    delta: 0,
+                    direction: 'stable'
+                },
+                pointsPerHeat: {
+                    current: { average: 1.8 },
+                    previous: { average: 1.8 },
+                    delta: 0,
+                    direction: 'stable'
+                }
+            },
+            roundSeries: [
+                { roundNumber: 1, totalPoints: 9 },
+                {
+                    roundNumber: 2,
+                    totalPoints: null,
+                    matchCount: 0,
+                    heatSlotCount: 0,
+                    pointsPerMatch: null,
+                    pointsPerHeat: null,
+                    cumulativePointsPerMatch: 9,
+                    cumulativePointsPerHeat: 1.8
+                }
+            ]
+        });
+    });
     test('Should return unavailable trainer averages when no calculated matches exist', async () => {
         expect(
             await getTrainerStatistics({
@@ -511,30 +868,473 @@ describe('getTrainerStatistics', () => {
         });
     });
     test('Should read live and archived trainer statistics without recalculating or changing saved scores', async () => {
-        await seedScoredMatches();
-        const archivedSeasonId = await seedArchivedMatches();
-        const before = await readStoredScores();
-        const calculateMatchScores = jest.spyOn(
-            scoreCalculationUtils,
-            'calculateMatchScores'
-        );
-        try {
-            for (const requestedSeasonId of [seasonId, archivedSeasonId]) {
-                for (const stage of ['regularSeason', 'playoff'] as const) {
-                    await getTrainerStatistics({
-                        seasonId: requestedSeasonId,
-                        stage,
-                        userId: userOneId
-                    });
-                }
-            }
-            expect(calculateMatchScores).not.toHaveBeenCalled();
-            expect(await readStoredScores()).toEqual(before);
-        } finally {
-            calculateMatchScores.mockRestore();
-        }
+        await expectReadOnlyStatistics(getTrainerStatistics);
     });
 });
+
+describe('getSetPlayStatistics', () => {
+    test('Should reject an unsupported statistics stage', async () => {
+        await expect(
+            getSetPlayStatistics({
+                seasonId,
+                stage: 'grandPrix' as StatisticsStageType
+            })
+        ).rejects.toThrow('Invalid stage: grandPrix');
+    });
+    test('Should reject a round range outside the selected stage', async () => {
+        await expect(
+            getSetPlayStatistics({
+                seasonId,
+                stage: 'playoff',
+                roundFrom: 1,
+                roundTo: 5
+            })
+        ).rejects.toThrow(
+            'Invalid round range: 1 - 5. Must be between 1 and 4'
+        );
+    });
+    test('Should reject a nonexistent user before loading whole-league statistics', async () => {
+        const nonexistentUserId = new mongoose.Types.ObjectId().toString();
+        await expect(
+            getSetPlayStatistics({
+                seasonId,
+                stage: 'regularSeason',
+                userId: nonexistentUserId
+            })
+        ).rejects.toThrow(`Invalid userId: ${nonexistentUserId}`);
+    });
+    test('Should reject a nonexistent statistics season', async () => {
+        const invalidId = new mongoose.Types.ObjectId().toString();
+        await expect(
+            getSetPlayStatistics({
+                seasonId: invalidId,
+                stage: 'regularSeason'
+            })
+        ).rejects.toThrow(`Invalid seasonId: ${invalidId}`);
+    });
+    test('Should count each selected set-play entry separately in personal and league statistics within the same round range', async () => {
+        await seedScoredMatches();
+        await SetPlaysModel.create(
+            Object.values(SetPlayEnumType).map(type => {
+                return { type, name: `Current ${type}` };
+            })
+        );
+        const remis = {
+            selectedSetPlayId: new mongoose.Types.ObjectId().toString(),
+            setPlayId: new mongoose.Types.ObjectId().toString(),
+            name: 'Saved Remis',
+            type: SetPlayEnumType.Remis,
+            recipients: [playerIds[0], playerIds[1]].map(playerId => {
+                return {
+                    recipientType: 'player',
+                    playerId,
+                    nominalPlayerId: playerId,
+                    calculatedPoints: 6,
+                    creditedPoints: 6,
+                    setPlayContributionType: 'award'
+                };
+            })
+        };
+        const empty = {
+            ...remis,
+            selectedSetPlayId: new mongoose.Types.ObjectId().toString(),
+            recipients: []
+        };
+        const penalty = {
+            ...remis,
+            selectedSetPlayId: new mongoose.Types.ObjectId().toString(),
+            type: SetPlayEnumType.Ncd6,
+            name: 'NCD6',
+            recipients: [
+                {
+                    ...remis.recipients[0],
+                    calculatedPoints: -2,
+                    creditedPoints: -2
+                }
+            ]
+        };
+        await ScoreDetailsModel.updateMany(
+            { roundNumber: 1 },
+            {
+                $set: {
+                    'teamOne.calculationDetails.setPlayResults': [
+                        remis,
+                        empty,
+                        penalty
+                    ],
+                    'teamTwo.calculationDetails.setPlayResults': [
+                        { ...remis, recipients: [remis.recipients[0]] }
+                    ]
+                }
+            }
+        );
+        await ScoreDetailsModel.updateMany(
+            { roundNumber: 2 },
+            {
+                $set: {
+                    'teamOne.calculationDetails.setPlayResults': [
+                        {
+                            ...empty,
+                            recipients: [
+                                { ...remis.recipients[0], creditedPoints: 0 }
+                            ]
+                        }
+                    ]
+                }
+            }
+        );
+        const thirdUser = await UserModel.create({
+            username: 'third-statistics-user',
+            email: 'third-statistics@example.com',
+            password: 'Password1!',
+            coachName: 'Third coach',
+            teamName: 'Third team',
+            logoUrl: 'https://example.com/third.png'
+        });
+        const unrelatedDetails = createDetails();
+        unrelatedDetails.setPlayResults = [
+            {
+                ...remis,
+                recipients: [
+                    {
+                        ...remis.recipients[0],
+                        recipientType: 'player',
+                        setPlayContributionType: 'award'
+                    }
+                ]
+            }
+        ];
+        await ScoreDetailsModel.create({
+            scheduleId: new mongoose.Types.ObjectId(),
+            roundNumber: 2,
+            teamOne: {
+                userId: userTwoId,
+                calculationDetails: unrelatedDetails
+            },
+            teamTwo: {
+                userId: thirdUser._id,
+                calculationDetails: createDetails()
+            }
+        });
+        const result = await getSetPlayStatistics({
+            seasonId,
+            stage: 'regularSeason',
+            userId: userOneId
+        });
+        expect(result).toHaveLength(Object.values(SetPlayEnumType).length);
+        expect(
+            result.find(setPlay => setPlay.type === SetPlayEnumType.Remis)
+        ).toMatchObject({
+            name: `Current ${SetPlayEnumType.Remis}`,
+            personal: {
+                totalPoints: 12,
+                useCount: 3,
+                usedMatchCount: 2,
+                pointsPerUse: 4,
+                pointsPerUsedMatch: 6,
+                positiveReturnCount: 1,
+                zeroReturnCount: 2,
+                negativeReturnCount: 0,
+                userCount: 1,
+                roundCount: 2,
+                trend: {
+                    current: { average: 4 },
+                    previous: { average: 6 },
+                    delta: -2,
+                    direction: 'down'
+                }
+            },
+            league: {
+                totalPoints: 24,
+                useCount: 5,
+                usedMatchCount: 4,
+                pointsPerUse: 4.8,
+                pointsPerUsedMatch: 6,
+                positiveReturnCount: 3,
+                zeroReturnCount: 2,
+                negativeReturnCount: 0,
+                userCount: 2,
+                roundCount: 2,
+                trend: {
+                    current: {
+                        roundFrom: 1,
+                        roundTo: 2,
+                        totalPoints: 24,
+                        exposureCount: 5,
+                        average: 4.8
+                    },
+                    previous: {
+                        roundFrom: 1,
+                        roundTo: 1,
+                        totalPoints: 18,
+                        exposureCount: 3,
+                        average: 6
+                    },
+                    delta: expect.closeTo(-1.2, 10),
+                    direction: 'down'
+                },
+                roundSeries: [
+                    {
+                        roundNumber: 1,
+                        totalPoints: 18,
+                        useCount: 3,
+                        pointsPerUse: 6,
+                        cumulativePointsPerUse: 6
+                    },
+                    {
+                        roundNumber: 2,
+                        totalPoints: 6,
+                        useCount: 2,
+                        pointsPerUse: 3,
+                        cumulativePointsPerUse: 4.8
+                    }
+                ]
+            }
+        });
+        expect(
+            result.find(setPlay => setPlay.type === SetPlayEnumType.Ncd6)
+        ).toMatchObject({
+            personal: {
+                totalPoints: -2,
+                useCount: 1,
+                negativeReturnCount: 1,
+                pointsPerUse: -2,
+                trend: { delta: 0, direction: 'stable' },
+                roundSeries: [
+                    { roundNumber: 1, totalPoints: -2, pointsPerUse: -2 },
+                    {
+                        roundNumber: 2,
+                        totalPoints: null,
+                        pointsPerUse: null,
+                        cumulativePointsPerUse: -2
+                    }
+                ]
+            }
+        });
+        expect(
+            result.find(setPlay => setPlay.type === SetPlayEnumType.Awatar)
+        ).toMatchObject({
+            personal: {
+                totalPoints: 0,
+                useCount: 0,
+                usedMatchCount: 0,
+                pointsPerUse: null,
+                pointsPerUsedMatch: null,
+                trend: { delta: null }
+            }
+        });
+        const central = await getSetPlayStatistics({
+            seasonId,
+            stage: 'regularSeason'
+        });
+        expect(
+            central.find(setPlay => setPlay.type === SetPlayEnumType.Remis)
+        ).toMatchObject({
+            personal: null,
+            league: { totalPoints: 24, useCount: 5 }
+        });
+        const roundTwo = await getSetPlayStatistics({
+            seasonId,
+            stage: 'regularSeason',
+            userId: userOneId,
+            roundFrom: 2,
+            roundTo: 2
+        });
+        expect(
+            roundTwo.find(setPlay => setPlay.type === SetPlayEnumType.Remis)
+        ).toMatchObject({
+            personal: {
+                totalPoints: 0,
+                useCount: 1,
+                usedMatchCount: 1,
+                pointsPerUse: 0,
+                trend: {
+                    current: { roundFrom: 2, roundTo: 2, average: 0 },
+                    previous: { average: null },
+                    delta: null
+                },
+                roundSeries: [
+                    {
+                        roundNumber: 2,
+                        totalPoints: 0,
+                        useCount: 1,
+                        pointsPerUse: 0
+                    }
+                ]
+            },
+            league: {
+                totalPoints: 6,
+                useCount: 2,
+                usedMatchCount: 2,
+                pointsPerUse: 3,
+                trend: {
+                    current: { roundFrom: 2, roundTo: 2, average: 3 },
+                    previous: { average: null },
+                    delta: null
+                },
+                roundSeries: [
+                    {
+                        roundNumber: 2,
+                        totalPoints: 6,
+                        useCount: 2,
+                        pointsPerUse: 3
+                    }
+                ]
+            }
+        });
+        expect(
+            roundTwo.find(setPlay => setPlay.type === SetPlayEnumType.Ncd6)
+        ).toMatchObject({
+            personal: { totalPoints: 0, useCount: 0, pointsPerUse: null },
+            league: { totalPoints: 0, useCount: 0, pointsPerUse: null }
+        });
+    });
+    test('Should use current set play names and signed outcomes only from the requested stage', async () => {
+        const archivedSeasonId = await seedArchivedMatches();
+        const saved = {
+            selectedSetPlayId: new mongoose.Types.ObjectId().toString(),
+            setPlayId: new mongoose.Types.ObjectId().toString(),
+            type: SetPlayEnumType.Rezerwa,
+            name: 'Archived reserve',
+            recipients: [
+                {
+                    recipientType: 'player',
+                    playerId: playerIds[0],
+                    nominalPlayerId: playerIds[1],
+                    calculatedPoints: 3,
+                    creditedPoints: 3,
+                    setPlayContributionType: 'replacementDifference'
+                },
+                {
+                    recipientType: 'trainer',
+                    calculatedPoints: 2,
+                    creditedPoints: 2,
+                    setPlayContributionType: 'trainerHeatDifference'
+                }
+            ]
+        };
+        await HistoryGamesScoreDetailsModel.updateOne(
+            { 'teamOne.score': 12 },
+            { $set: { 'teamOne.calculationDetails.setPlayResults': [saved] } }
+        );
+        await HistoryGamesScoreDetailsModel.updateOne(
+            { 'teamOne.score': 8 },
+            {
+                $set: {
+                    'teamOne.calculationDetails.setPlayResults': [
+                        {
+                            ...saved,
+                            name: 'Playoff reserve',
+                            recipients: [
+                                {
+                                    ...saved.recipients[0],
+                                    calculatedPoints: -2,
+                                    creditedPoints: -2
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        );
+        await SetPlaysModel.create({
+            type: SetPlayEnumType.Rezerwa,
+            name: 'Current reserve'
+        });
+        const regular = await getSetPlayStatistics({
+            seasonId: archivedSeasonId,
+            stage: 'regularSeason',
+            userId: userOneId
+        });
+        expect(regular).toMatchObject([
+            {
+                name: 'Current reserve',
+                personal: {
+                    totalPoints: 5,
+                    useCount: 1,
+                    pointsPerUse: 5,
+                    trend: { delta: null }
+                },
+                league: { totalPoints: 5, useCount: 1 }
+            }
+        ]);
+        const playoff = await getSetPlayStatistics({
+            seasonId: archivedSeasonId,
+            stage: 'playoff',
+            userId: userOneId
+        });
+        expect(playoff).toMatchObject([
+            {
+                name: 'Current reserve',
+                personal: {
+                    totalPoints: -2,
+                    useCount: 1,
+                    negativeReturnCount: 1
+                },
+                league: { totalPoints: -2, useCount: 1 }
+            }
+        ]);
+    });
+    test('Should return zero uses and unavailable averages for a set play with no recorded results', async () => {
+        await SetPlaysModel.create({
+            type: SetPlayEnumType.Remis,
+            name: 'Remis'
+        });
+        expect(
+            await getSetPlayStatistics({ seasonId, stage: 'regularSeason' })
+        ).toMatchObject([
+            {
+                type: SetPlayEnumType.Remis,
+                personal: null,
+                league: {
+                    useCount: 0,
+                    totalPoints: 0,
+                    pointsPerUse: null,
+                    pointsPerUsedMatch: null,
+                    trend: {
+                        current: { roundTo: null, average: null },
+                        previous: { roundTo: null, average: null },
+                        delta: null
+                    },
+                    roundSeries: []
+                }
+            }
+        ]);
+    });
+    test('Should read live and archived set play statistics without recalculating or changing saved scores', async () => {
+        await expectReadOnlyStatistics(getSetPlayStatistics);
+    });
+});
+
+async function expectReadOnlyStatistics(
+    readStatistics:
+        | typeof getRiderStatistics
+        | typeof getTrainerStatistics
+        | typeof getSetPlayStatistics
+) {
+    await seedScoredMatches();
+    const archivedSeasonId = await seedArchivedMatches();
+    const before = await readStoredScores();
+    const calculateMatchScores = jest.spyOn(
+        scoreCalculationUtils,
+        'calculateMatchScores'
+    );
+    try {
+        for (const requestedSeasonId of [seasonId, archivedSeasonId]) {
+            for (const stage of ['regularSeason', 'playoff'] as const) {
+                await readStatistics({
+                    seasonId: requestedSeasonId,
+                    stage,
+                    userId: userOneId
+                });
+            }
+        }
+        expect(calculateMatchScores).not.toHaveBeenCalled();
+        expect(await readStoredScores()).toEqual(before);
+    } finally {
+        calculateMatchScores.mockRestore();
+    }
+}
 
 async function readStoredScores() {
     return Promise.all([
