@@ -63,7 +63,6 @@
     "husky": "^9.1.7",
     "jest": "^30.5.2",
     "lodash": "^4.17.21",
-    "puppeteer": "^25.8.0",
     "supertest": "^7.1.1",
     "tailwindcss": "^4.1.8",
     "ts-jest": "^29.4.15",
