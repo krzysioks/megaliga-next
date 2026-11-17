@@ -279,7 +279,7 @@ describe('Test StartingLineupPlayoffModel methods and static functions', () => {
             const data = createPositions();
             await StartingLineupPlayoffModel.create({
                 ...data,
-                userId: user._id,
+                userId: user._id.toString(),
                 roundNumber: 1
             });
             const lineup =
@@ -477,7 +477,7 @@ describe('Test StartingLineupPlayoffModel methods and static functions', () => {
                 const data = createPositions();
                 await StartingLineupPlayoffModel.create({
                     ...data,
-                    userId: user._id,
+                    userId: user._id.toString(),
                     roundNumber,
                     roles: {
                         ...data.roles,
@@ -514,7 +514,7 @@ describe('Test StartingLineupPlayoffModel methods and static functions', () => {
             const positions = createPositions();
             await StartingLineupPlayoffModel.create({
                 ...positions,
-                userId: user._id,
+                userId: user._id.toString(),
                 roundNumber: 1
             });
             await SeasonOpsModel.deleteMany();
@@ -707,7 +707,7 @@ describe('Test StartingLineupPlayoffModel methods and static functions', () => {
             const user = await UserModel.create(createUserData());
             await StartingLineupPlayoffModel.create({
                 ...createPositions(),
-                userId: user._id,
+                userId: user._id.toString(),
                 roundNumber: 2
             });
             await StartingLineupPlayoffModel.savePrimusNominatusForAdmin(

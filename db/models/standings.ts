@@ -70,7 +70,7 @@ StandingsSchema.static('getStandings', async function getStandings() {
     try {
         const documents: PopulatedFindType[] = await this.find()
             .sort({ place: 1 })
-            .populate<{ userId: PopulatedUserIdType }>({
+            .populate<PopulatedFindType>({
                 path: 'userId',
                 select: 'teamName logoUrl'
             })
@@ -107,15 +107,11 @@ StandingsSchema.static(
         try {
             const documents: PopulatedFindForHistoryType[] = await this.find()
                 .sort({ place: 1 })
-                .populate<{
-                    userId: PopulatedUserIdForHistoryType;
-                }>({
+                .populate<PopulatedFindForHistoryType>({
                     path: 'userId',
                     select: 'teamName coachName'
                 })
-                .populate<{
-                    ligueGroupsId: Pick<LigueGroupsType, 'groupName'>;
-                }>({
+                .populate<PopulatedFindForHistoryType>({
                     path: 'ligueGroupsId',
                     select: 'groupName'
                 })

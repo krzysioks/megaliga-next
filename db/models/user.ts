@@ -116,7 +116,7 @@ type UserWithPopulatedGroupNameType = Omit<UserType, 'groupName'> & {
 export type PopulatedFindByIdType = HydratedDocument<
     UserWithPopulatedGroupNameType,
     UserMethodsType
-> | null;
+>;
 
 const userSchema = new Schema<UserType, UserModelType, UserMethodsType>({
     username: { type: String, required: true, unique: true },
@@ -167,11 +167,11 @@ userSchema.static(
 
 userSchema.static('getUserById', async function getUserById(userId: string) {
     try {
-        const userDocument: PopulatedFindByIdType = await this.findById(userId)
+        const userDocument: PopulatedFindByIdType | null = await this.findById(userId)
             .select(
                 'username coachName teamName logoUrl reachedPlayoff isFirstRoundDraftOrderDraw groupName bio cabinetTrophy'
             )
-            .populate<{ groupName: PopulatedGroupNameType }>({
+            .populate<PopulatedFindByIdType>({
                 path: 'groupName',
                 select: 'groupName'
             })
@@ -336,7 +336,7 @@ userSchema.static('getAllUsers', async function getAllUsers() {
             .select(
                 'username coachName teamName logoUrl reachedPlayoff isFirstRoundDraftOrderDraw groupName bio cabinetTrophy'
             )
-            .populate<{ groupName: PopulatedGroupNameType }>({
+            .populate<PopulatedFindByIdType>({
                 path: 'groupName',
                 select: 'groupName'
             })
@@ -377,7 +377,7 @@ userSchema.static(
                 .select(
                     'username coachName teamName logoUrl reachedPlayoff isFirstRoundDraftOrderDraw groupName bio cabinetTrophy'
                 )
-                .populate<{ groupName: PopulatedGroupNameType }>({
+                .populate<PopulatedFindByIdType>({
                     path: 'groupName',
                     select: 'groupName'
                 })

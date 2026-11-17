@@ -53,13 +53,11 @@ historyGrandPrixChampionSchema.static(
     async function getChampionsHistory() {
         try {
             const documents: PopulatedFindType[] = await this.find()
-                .populate<{ season: Pick<SeasonOpsType, 'name'> }>({
+                .populate<PopulatedFindType>({
                     path: 'season',
                     select: 'name'
                 })
-                .populate<{
-                    teamId: Pick<HistoryTeamType, 'coachName'>;
-                }>({
+                .populate<PopulatedFindType>({
                     path: 'teamId',
                     select: 'coachName'
                 })

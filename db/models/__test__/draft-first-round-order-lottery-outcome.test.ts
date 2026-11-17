@@ -331,14 +331,14 @@ describe('Test DraftFirstRoundOrderLotteryOutcomeModel methods and static functi
                 await DraftFirstRoundOrderLotteryOutcomeModel.create([
                     {
                         ligueGroupsId: dolceGroupId,
-                        one: dolceUsers[0]._id,
-                        two: dolceUsers[1]._id,
-                        six: dolceUsers[2]._id
+                        one: dolceUsers[0]._id.toString(),
+                        two: dolceUsers[1]._id.toString(),
+                        six: dolceUsers[2]._id.toString()
                     },
                     {
                         ligueGroupsId: gabbanaGroupId,
-                        four: gabbanaUsers[0]._id,
-                        five: gabbanaUsers[1]._id
+                        four: gabbanaUsers[0]._id.toString(),
+                        five: gabbanaUsers[1]._id.toString()
                     }
                 ]);
 

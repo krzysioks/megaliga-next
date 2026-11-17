@@ -138,7 +138,7 @@ async function seedScoredMatches() {
     const secondTwo = createDetails();
     Object.assign(secondTwo.players[0], { function: 'Kapitan', role: 'P' });
     const first = {
-        scheduleId: new mongoose.Types.ObjectId(),
+        scheduleId: new mongoose.Types.ObjectId().toString(),
         roundNumber: 1,
         teamOne: { userId: userOneId, calculationDetails: firstOne },
         teamTwo: { userId: userTwoId, calculationDetails: firstTwo }
@@ -146,7 +146,7 @@ async function seedScoredMatches() {
     await ScoreDetailsModel.create(
         [
             {
-                scheduleId: new mongoose.Types.ObjectId(),
+                scheduleId: new mongoose.Types.ObjectId().toString(),
                 roundNumber: 2,
                 teamOne: { userId: userOneId, calculationDetails: secondOne },
                 teamTwo: { userId: userTwoId, calculationDetails: secondTwo }
@@ -551,7 +551,7 @@ describe('getRiderStatistics', () => {
         details.players[0].setPlayPoints = -2;
         details.floorAdjustment = 2;
         await ScoreDetailsModel.create({
-            scheduleId: new mongoose.Types.ObjectId(),
+            scheduleId: new mongoose.Types.ObjectId().toString(),
             roundNumber: 1,
             teamOne: { userId: userOneId, calculationDetails: details },
             teamTwo: { userId: userTwoId, calculationDetails: createDetails() }
@@ -597,7 +597,7 @@ describe('getRiderStatistics', () => {
             actualStartCount: 2
         });
         await ScoreDetailsPlayoffModel.create({
-            scheduleId: new mongoose.Types.ObjectId(),
+            scheduleId: new mongoose.Types.ObjectId().toString(),
             roundNumber: 1,
             teamOne: { userId: userOneId, calculationDetails: details },
             teamTwo: { userId: userTwoId, calculationDetails: createDetails() }
@@ -1006,14 +1006,14 @@ describe('getSetPlayStatistics', () => {
             }
         ];
         await ScoreDetailsModel.create({
-            scheduleId: new mongoose.Types.ObjectId(),
+            scheduleId: new mongoose.Types.ObjectId().toString(),
             roundNumber: 2,
             teamOne: {
                 userId: userTwoId,
                 calculationDetails: unrelatedDetails
             },
             teamTwo: {
-                userId: thirdUser._id,
+                userId: thirdUser._id.toString(),
                 calculationDetails: createDetails()
             }
         });
@@ -1544,13 +1544,13 @@ async function seedArchivedMatches() {
     const archiveId = season._id.toString();
     const [teamOne, teamTwo] = await HistoryTeamModel.create([
         {
-            historyId: season._id,
+            historyId: season._id.toString(),
             name: 'Archive Team',
             coachName: 'Archive Coach',
             logoUrl: 'https://example.com/archive.png'
         },
         {
-            historyId: season._id,
+            historyId: season._id.toString(),
             name: 'Archive Opponent',
             coachName: 'Archive Opponent Coach',
             logoUrl: 'https://example.com/archive-opponent.png'
@@ -1570,13 +1570,13 @@ async function seedArchivedMatches() {
     const [regular, playoff] = await HistoryGamesScoreDetailsModel.create([
         {
             teamOne: {
-                teamId: teamOne._id,
+                teamId: teamOne._id.toString(),
                 userId: userOneId,
                 score: 12,
                 calculationDetails: regularDetails
             },
             teamTwo: {
-                teamId: teamTwo._id,
+                teamId: teamTwo._id.toString(),
                 userId: userTwoId,
                 score: 0,
                 calculationDetails: createDetails()
@@ -1584,13 +1584,13 @@ async function seedArchivedMatches() {
         },
         {
             teamOne: {
-                teamId: teamOne._id,
+                teamId: teamOne._id.toString(),
                 userId: userOneId,
                 score: 8,
                 calculationDetails: playoffDetails
             },
             teamTwo: {
-                teamId: teamTwo._id,
+                teamId: teamTwo._id.toString(),
                 userId: userTwoId,
                 score: 0,
                 calculationDetails: createDetails()
@@ -1599,23 +1599,23 @@ async function seedArchivedMatches() {
     ]);
     const baseGame = {
         roundNumber: 1,
-        teamOne: { teamId: teamOne._id, score: 12 },
-        teamTwo: { teamId: teamTwo._id, score: 0 }
+        teamOne: { teamId: teamOne._id.toString(), score: 12 },
+        teamTwo: { teamId: teamTwo._id.toString(), score: 0 }
     };
     const regularGame = {
         ...baseGame,
-        stage: 'regularSeason',
-        scoreDetails: regular._id
+        stage: 'regularSeason' as const,
+        scoreDetails: regular._id.toString()
     };
     await HistoryGamesModel.create([
         {
-            season: season._id,
+            season: season._id.toString(),
             games: [
                 regularGame,
-                { ...baseGame, stage: 'playoff', scoreDetails: playoff._id }
+                { ...baseGame, stage: 'playoff', scoreDetails: playoff._id.toString() }
             ]
         },
-        { season: season._id, games: [regularGame] }
+        { season: season._id.toString(), games: [regularGame] }
     ]);
     const otherSeason = await SeasonOpsModel.create({
         name: '2023',
@@ -1629,26 +1629,26 @@ async function seedArchivedMatches() {
     });
     const other = await HistoryGamesScoreDetailsModel.create({
         teamOne: {
-            teamId: teamOne._id,
+            teamId: teamOne._id.toString(),
             userId: userOneId,
             score: 88,
             calculationDetails: otherDetails
         },
         teamTwo: {
-            teamId: teamTwo._id,
+            teamId: teamTwo._id.toString(),
             userId: userTwoId,
             score: 0,
             calculationDetails: createDetails()
         }
     });
     await HistoryGamesModel.create({
-        season: otherSeason._id,
-        games: [{ ...regularGame, scoreDetails: other._id }]
+        season: otherSeason._id.toString(),
+        games: [{ ...regularGame, scoreDetails: other._id.toString() }]
     });
     const live = createDetails();
     Object.assign(live.players[0], { basePoints: 40, actualStartCount: 5 });
     await ScoreDetailsModel.create({
-        scheduleId: new mongoose.Types.ObjectId(),
+        scheduleId: new mongoose.Types.ObjectId().toString(),
         roundNumber: 1,
         teamOne: { userId: userOneId, calculationDetails: live },
         teamTwo: { userId: userTwoId, calculationDetails: createDetails() }

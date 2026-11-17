@@ -9,7 +9,7 @@ import type {
     TrainerStatisticsReturnType,
     SetPlayStatisticsReturnType
 } from '@/db/statistics.types';
-import type { FilterQuery } from 'mongoose';
+import type { QueryFilter } from 'mongoose';
 
 import ScoreDetailsModel from '@/db/models/games/score-details';
 import ScoreDetailsPlayoffModel from '@/db/models/games/score-details-playoff';
@@ -76,7 +76,7 @@ export async function getRiderStatistics(
             }
         }
     }
-    const queries: FilterQuery<PlayersType>[] = [
+    const queries: QueryFilter<PlayersType>[] = [
         { _id: { $in: [...playerIds] } }
     ];
     if (!params.userId) {

@@ -117,8 +117,8 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             });
             const document = await ScoreDetailsModel.create({
                 roundNumber: 1,
-                teamOne: { userId: new mongoose.Types.ObjectId() },
-                teamTwo: { userId: new mongoose.Types.ObjectId() }
+                teamOne: { userId: new mongoose.Types.ObjectId().toString() },
+                teamTwo: { userId: new mongoose.Types.ObjectId().toString() }
             });
             await expect(
                 ScoreDetailsModel.getMatchDataStatistics({
@@ -156,27 +156,27 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             const teamOneDetails = createCalculationDetails();
             const teamTwoDetails = createCalculationDetails();
             const document = await ScoreDetailsModel.create({
-                scheduleId: new mongoose.Types.ObjectId(),
+                scheduleId: new mongoose.Types.ObjectId().toString(),
                 roundNumber: 1,
                 teamOne: {
-                    userId: userOne._id,
+                    userId: userOne._id.toString(),
                     calculationDetails: teamOneDetails
                 },
                 teamTwo: {
-                    userId: userTwo._id,
+                    userId: userTwo._id.toString(),
                     calculationDetails: teamTwoDetails
                 }
             });
             await ScoreDetailsModel.create([
                 {
                     roundNumber: 2,
-                    teamOne: { userId: userOne._id },
-                    teamTwo: { userId: userTwo._id }
+                    teamOne: { userId: userOne._id.toString() },
+                    teamTwo: { userId: userTwo._id.toString() }
                 },
                 {
                     roundNumber: 3,
-                    teamOne: { userId: userOne._id },
-                    teamTwo: { userId: userTwo._id }
+                    teamOne: { userId: userOne._id.toString() },
+                    teamTwo: { userId: userTwo._id.toString() }
                 }
             ]);
             expect(
@@ -574,7 +574,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 return player._id.toString();
             });
             const startingLineup = await StartingLineupModel.create({
-                userId: userTwo._id,
+                userId: userTwo._id.toString(),
                 roundNumber: 1,
                 playerOne: playerIds[0],
                 playerTwo: playerIds[1],
@@ -588,18 +588,18 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 }
             });
             const schedule = await ScheduleModel.create({
-                userOneId: userOne._id,
-                userTwoId: userTwo._id,
+                userOneId: userOne._id.toString(),
+                userTwoId: userTwo._id.toString(),
                 roundNumber: 1,
-                ligueGroupsId: new mongoose.Types.ObjectId()
+                ligueGroupsId: new mongoose.Types.ObjectId().toString()
             });
             await ScoreDetailsModel.create({
-                scheduleId: schedule._id,
+                scheduleId: schedule._id.toString(),
                 roundNumber: 1,
-                teamOne: { userId: userOne._id },
+                teamOne: { userId: userOne._id.toString() },
                 teamTwo: {
-                    userId: userTwo._id,
-                    startingLineupId: startingLineup._id
+                    userId: userTwo._id.toString(),
+                    startingLineupId: startingLineup._id.toString()
                 }
             });
 
@@ -665,11 +665,11 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 const document = await ScoreDetailsModel.create({
                     roundNumber: 1,
                     teamOne: {
-                        userId: new mongoose.Types.ObjectId(),
+                        userId: new mongoose.Types.ObjectId().toString(),
                         calculationDetails: createCalculationDetails()
                     },
                     teamTwo: {
-                        userId: new mongoose.Types.ObjectId(),
+                        userId: new mongoose.Types.ObjectId().toString(),
                         calculationDetails: createCalculationDetails()
                     }
                 });
@@ -923,7 +923,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 return player._id.toString();
             });
             const startingLineup = await StartingLineupModel.create({
-                userId: userTwo._id,
+                userId: userTwo._id.toString(),
                 roundNumber: 1,
                 playerOne: playerIds[0],
                 playerTwo: playerIds[1],
@@ -937,22 +937,22 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 }
             });
             const schedule = await ScheduleModel.create({
-                userOneId: userOne._id,
-                userTwoId: userTwo._id,
+                userOneId: userOne._id.toString(),
+                userTwoId: userTwo._id.toString(),
                 roundNumber: 1,
-                ligueGroupsId: new mongoose.Types.ObjectId()
+                ligueGroupsId: new mongoose.Types.ObjectId().toString()
             });
             await ScoreDetailsModel.create({
-                scheduleId: schedule._id,
+                scheduleId: schedule._id.toString(),
                 roundNumber: 1,
                 teamOne: {
                     calculationDetails: createCalculationDetails(),
-                    userId: userOne._id
+                    userId: userOne._id.toString()
                 },
                 teamTwo: {
                     calculationDetails: createCalculationDetails(),
-                    userId: userTwo._id,
-                    startingLineupId: startingLineup._id
+                    userId: userTwo._id.toString(),
+                    startingLineupId: startingLineup._id.toString()
                 }
             });
 
@@ -971,7 +971,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             const teamTwoDetails = createCalculationDetails();
             teamTwoDetails.trainer.setPlayPoints = 0;
             const document = await ScoreDetailsModel.create({
-                scheduleId: new mongoose.Types.ObjectId(),
+                scheduleId: new mongoose.Types.ObjectId().toString(),
                 roundNumber: 1,
                 teamOne: {
                     userId: userOneId,
@@ -983,7 +983,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 }
             });
             await ScoreDetailsModel.create({
-                scheduleId: new mongoose.Types.ObjectId(),
+                scheduleId: new mongoose.Types.ObjectId().toString(),
                 roundNumber: 2,
                 teamOne: {
                     calculationDetails: createCalculationDetails(),
@@ -1196,25 +1196,25 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 extraligaPlayerName: 'Unchanged rider'
             });
             const schedule = await ScheduleModel.create({
-                userOneId: userOne._id,
-                userTwoId: userTwo._id,
+                userOneId: userOne._id.toString(),
+                userTwoId: userTwo._id.toString(),
                 roundNumber: 1
             });
             const document = await ScoreDetailsModel.create({
-                scheduleId: schedule._id,
+                scheduleId: schedule._id.toString(),
                 roundNumber: 1,
                 teamOne: {
-                    userId: userOne._id,
+                    userId: userOne._id.toString(),
                     players: [
                         {
-                            playerId: player._id,
+                            playerId: player._id.toString(),
                             ...playerScoresZodSchema.parse({
                                 heatOne: { value: 1 }
                             })
                         }
                     ]
                 },
-                teamTwo: { userId: userTwo._id }
+                teamTwo: { userId: userTwo._id.toString() }
             });
             const before = await ScoreDetailsModel.findById(
                 document._id
@@ -1268,10 +1268,10 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 extraligaPlayerName: 'Result rider'
             });
             const schedule = await ScheduleModel.create({
-                userOneId: userOne._id,
-                userTwoId: userTwo._id,
+                userOneId: userOne._id.toString(),
+                userTwoId: userTwo._id.toString(),
                 roundNumber: 1,
-                ligueGroupsId: new mongoose.Types.ObjectId()
+                ligueGroupsId: new mongoose.Types.ObjectId().toString()
             });
             const playerId = player._id.toString();
             const nominalPlayerId = new mongoose.Types.ObjectId().toString();
@@ -1349,7 +1349,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             );
 
             const savedDocument = await ScoreDetailsModel.findOne({
-                scheduleId: schedule._id
+                scheduleId: schedule._id.toString()
             }).exec();
             const savedTeams = savedDocument?.toJSON({
                 flattenObjectIds: true
@@ -1656,7 +1656,7 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                         .slice((index % 2) * 5, (index % 2) * 5 + 5)
                         .map(player => player._id.toString());
                     return {
-                        userId: user._id,
+                        userId: user._id.toString(),
                         roundNumber,
                         playerOne: ids[0],
                         playerTwo: ids[1],
@@ -1674,10 +1674,10 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             const schedules = await ScheduleModel.create(
                 Array.from({ length: 6 }, (_, index) => {
                     return {
-                        userOneId: users[index * 2]._id,
-                        userTwoId: users[index * 2 + 1]._id,
+                        userOneId: users[index * 2]._id.toString(),
+                        userTwoId: users[index * 2 + 1]._id.toString(),
                         roundNumber,
-                        ligueGroupsId: new mongoose.Types.ObjectId(),
+                        ligueGroupsId: new mongoose.Types.ObjectId().toString(),
                         userOneScore: 99,
                         userTwoScore: 98
                     };
@@ -1686,14 +1686,14 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
             const documents = await ScoreDetailsModel.create(
                 schedules.map((schedule, index) => {
                     return {
-                        scheduleId: schedule._id,
+                        scheduleId: schedule._id.toString(),
                         roundNumber,
                         teamOne: {
-                            userId: users[index * 2]._id,
-                            startingLineupId: lineups[index * 2]._id,
+                            userId: users[index * 2]._id.toString(),
+                            startingLineupId: lineups[index * 2]._id.toString(),
                             players: players.slice(0, 5).map(player => {
                                 return {
-                                    playerId: player._id,
+                                    playerId: player._id.toString(),
                                     ...playerScoresZodSchema.parse({
                                         heatOne: playerHeat(0)
                                     })
@@ -1701,11 +1701,11 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                             })
                         },
                         teamTwo: {
-                            userId: users[index * 2 + 1]._id,
-                            startingLineupId: lineups[index * 2 + 1]._id,
+                            userId: users[index * 2 + 1]._id.toString(),
+                            startingLineupId: lineups[index * 2 + 1]._id.toString(),
                             players: players.slice(5).map(player => {
                                 return {
-                                    playerId: player._id,
+                                    playerId: player._id.toString(),
                                     ...playerScoresZodSchema.parse({
                                         heatOne: playerHeat(0)
                                     })
@@ -1885,8 +1885,8 @@ describe('Test ScoreDetailsModel methods and static functions', () => {
                 } else if (kind === 'coverage') {
                     await ScheduleModel.create({
                         roundNumber: 2,
-                        userOneId: fixture.users[0]._id,
-                        userTwoId: fixture.users[1]._id
+                        userOneId: fixture.users[0]._id.toString(),
+                        userTwoId: fixture.users[1]._id.toString()
                     });
                     expected = 'Schedule coverage is incomplete for round: 2';
                 } else {

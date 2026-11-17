@@ -137,17 +137,17 @@ describe('Test StartingLineupModel methods and static functions', () => {
                 { extraligaPlayerName: 'Player Five' }
             ]);
             await StartingLineupModel.create({
-                userId: user._id,
+                userId: user._id.toString(),
                 roundNumber: 1,
-                playerOne: players[0]._id,
-                playerTwo: players[1]._id,
-                playerThree: players[2]._id,
-                playerFour: players[3]._id,
-                playerFive: players[4]._id,
+                playerOne: players[0]._id.toString(),
+                playerTwo: players[1]._id.toString(),
+                playerThree: players[2]._id.toString(),
+                playerFour: players[3]._id.toString(),
+                playerFive: players[4]._id.toString(),
                 roles: {
-                    pn: { playerId: players[0]._id, isDisabled: false },
-                    kb: players[1]._id,
-                    p: players[2]._id
+                    pn: { playerId: players[0]._id.toString(), isDisabled: false },
+                    kb: players[1]._id.toString(),
+                    p: players[2]._id.toString()
                 }
             });
 

@@ -68,7 +68,7 @@ championGrandPrixSchema.static(
             await this.findOneAndUpdate(
                 {}, // No filter - always operates on single document
                 { userId: new Types.ObjectId(userId) },
-                { upsert: true, new: true }
+                { upsert: true, returnDocument: 'after' }
             ).exec();
         } catch (error) {
             console.error('Error setting grand prix champion:', error);

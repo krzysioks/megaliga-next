@@ -314,11 +314,11 @@ scheduleSchema.static(
             }
 
             const dolceUsers = await UserModel.find(
-                { groupName: dolceGroup._id },
+                { groupName: dolceGroup._id.toString() },
                 '_id'
             ).exec();
             const gabbanaUsers = await UserModel.find(
-                { groupName: gabbanaGroup._id },
+                { groupName: gabbanaGroup._id.toString() },
                 '_id'
             ).exec();
 

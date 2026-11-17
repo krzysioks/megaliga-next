@@ -21,12 +21,11 @@ const LigueGroupsSchema = new Schema<LigueGroupsType, LigueGroupsModelType>({
 
 LigueGroupsSchema.static('getLigueGrouspId', async function getLigueGrouspId() {
     try {
-        const groups = await this.find(
-            {
-                groupName: { $in: ['dolce', 'gabbana'] }
-            },
-            { _id: 1 }
-        ).exec();
+        const groups = await this.find({
+            groupName: { $in: ['dolce', 'gabbana'] }
+        })
+            .select('_id')
+            .exec();
         return groups.map(group => group._id.toString());
     } catch (error) {
         console.error('Error fetching ligue group ids:', error);

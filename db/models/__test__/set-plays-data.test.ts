@@ -1220,7 +1220,7 @@ describe('saveAdminSetPlay', () => {
         heatSeven: { value: 7, bonus: false, isNominated: false }
     };
 
-    function adminSetPlayData(type: SetPlayEnumType): SetPlayDataType {
+    function adminSetPlayData(type: SetPlayEnumType) {
         const setPlayId = getSetPlayId(type);
         if (type === SetPlayEnumType.Remis) {
             return {
@@ -1744,10 +1744,9 @@ describe('saveAdminSetPlay', () => {
         async type => {
             const setPlayData = adminSetPlayData(type);
             if (type === SetPlayEnumType.Awatar) {
-                setPlayData.adminData = {
-                    ...setPlayData.adminData,
+                Object.assign(setPlayData.adminData, {
                     average: 1.2345
-                };
+                });
             }
             await SetPlaysDataModel.create({
                 startingLineupId,

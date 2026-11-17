@@ -237,7 +237,7 @@ playersSchema.static(
                         return {
                             extraligaPlayerName: player.extraligaPlayerName,
                             isJunior: player.isJunior,
-                            playerStatus: 'active'
+                            playerStatus: 'active' as const
                         };
                     })
                 );

@@ -87,7 +87,7 @@ afterAll(async () => {
     jest.restoreAllMocks();
 });
 
-function selectedData(type = SetPlayEnumType.Ncd): SetPlayDataType {
+function selectedData(type = SetPlayEnumType.Ncd) {
     return {
         setPlayId: setPlayIds.get(type)!,
         ...([
@@ -831,7 +831,7 @@ describe('saveAdminSetPlay', () => {
             const otherUserLineup = await StartingLineupPlayoffModel.create({
                 ...fields,
                 _id: new mongoose.Types.ObjectId(),
-                userId: otherUser._id,
+                userId: otherUser._id.toString(),
                 roundNumber: round
             });
             const otherRoundLineup = await StartingLineupPlayoffModel.create({
