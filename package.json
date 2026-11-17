@@ -20,7 +20,7 @@
     "@editorjs/image": "^2.10.3",
     "@editorjs/list": "^2.0.8",
     "@editorjs/raw": "^2.5.1",
-    "@hookform/resolvers": "^5.1.1",
+    "@hookform/resolvers": "^7.0.7",
     "@radix-ui/react-label": "^2.1.7",
     "@radix-ui/react-slot": "^1.2.3",
     "@types/nodemailer": "^8.0.1",
