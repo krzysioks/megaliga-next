@@ -14,7 +14,7 @@ import UserModel from '@/db/models/user';
 const PLAYER_ASSIGNMENT_TYPES = ['dolce', 'gabbana', 'playoff'] as const;
 type PlayerAssignmentType = (typeof PLAYER_ASSIGNMENT_TYPES)[number];
 
-const PLAYER_STATUS_ENUM = statusEnumSchema._def.values;
+const PLAYER_STATUS_ENUM = statusEnumSchema.options;
 
 export const playersZodSchema = z.object({
     extraligaPlayerName: standardStringSchema,

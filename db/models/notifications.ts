@@ -8,7 +8,7 @@ import {
 } from '@/db/models/schema.types';
 
 // Notification model is used to store notifications, that will be displayed in sidewide banner
-const STATUS_ENUM = statusEnumSchema._def.values;
+const STATUS_ENUM = statusEnumSchema.options;
 
 export const notificationsZodSchema = z.object({
     message: standardStringSchema,

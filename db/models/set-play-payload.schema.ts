@@ -35,12 +35,12 @@ export const setPlayPayloadZodSchema = z.discriminatedUnion('type', [
     z.object({
         type: z.literal(SetPlayEnumType.Rezerwa),
         userData: z.object({ playerId: objectIdSchema }).required(),
-        adminData: playerScoresZodSchema.default({})
+        adminData: playerScoresZodSchema.prefault({})
     }),
     z.object({
         type: z.literal(SetPlayEnumType.RezerwaGielda),
         userData: z.object({ playerId: objectIdSchema }).required(),
-        adminData: playerScoresZodSchema.default({})
+        adminData: playerScoresZodSchema.prefault({})
     }),
     z.object({
         type: z.literal(SetPlayEnumType.MortalKombatCombo)
@@ -146,7 +146,7 @@ export const setPlayPayloadZodSchema = z.discriminatedUnion('type', [
                 average: numberSchema.optional(),
                 isDisabled: booleanDefaultFalseSchema
             })
-            .default({})
+            .prefault({})
     }),
     z.object({
         type: z.literal(SetPlayEnumType.KoloFortunyNorbiego),

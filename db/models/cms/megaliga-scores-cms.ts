@@ -9,7 +9,7 @@ import {
 
 //MegaligaScoresCms is collection that stores cms content of cms block in "wyniki" view
 
-const STAGE_ENUM = stageEnumSchema._def.values;
+const STAGE_ENUM = stageEnumSchema.options;
 
 export const megaligaScoresCmsZodSchema = z.object({
     roundNumber: roundNumberSchema,

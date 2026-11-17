@@ -19,7 +19,7 @@ import {
 export const userZodSchema = z.object({
     username: nameSchema,
     coachName: nameSchema,
-    email: z.string().email('Nieprawidłowy format adresu e-mail'),
+    email: z.email({ error: 'Nieprawidłowy format adresu e-mail' }),
     password: z
         .string()
         .nonempty('Hasło jest wymagane')

@@ -20,7 +20,7 @@ import { validateSetPlayConstraints } from '@/db/models/validation.utils';
 
 export const setPlaysZodSchema = z.object({
     name: standardStringSchema,
-    type: z.nativeEnum(SetPlayEnumType)
+    type: z.enum(SetPlayEnumType)
 });
 
 export type SetPlaysType = z.infer<typeof setPlaysZodSchema>;

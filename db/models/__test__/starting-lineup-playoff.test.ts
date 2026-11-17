@@ -597,7 +597,7 @@ describe('Test StartingLineupPlayoffModel methods and static functions', () => {
                     userId,
                     'disabled' as unknown as boolean
                 )
-            ).rejects.toThrow('Expected boolean, received string');
+            ).rejects.toThrow('Invalid input: expected boolean, received string');
 
             expect(
                 await StartingLineupPlayoffModel.getPrimusNominatusForAdmin(

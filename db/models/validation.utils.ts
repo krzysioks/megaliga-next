@@ -52,7 +52,7 @@ export function validateSetPlays(
         const maximum = getSetPlaySelectionLimit(play.type);
         if (count > maximum) {
             context.addIssue({
-                code: z.ZodIssueCode.custom,
+                code: 'custom',
                 path: [index, 'type'],
                 message: `${play.type} may be selected at most ${maximum} time(s) per round`
             });

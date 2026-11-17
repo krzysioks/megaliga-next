@@ -46,12 +46,9 @@ export const objectIdSchema = z
     .optional();
 
 export const uniquePlayerIdList = z
-    .array(objectIdSchema)
-    .refine((ids): ids is string[] => {
-        return (
-            ids.every(id => id !== undefined) &&
-            new Set(ids.map(id => id?.toLowerCase())).size === ids.length
-        );
+    .array(objectIdSchema.unwrap())
+    .refine(ids => {
+        return new Set(ids.map(id => id.toLowerCase())).size === ids.length;
     }, 'Player IDs must be present and distinct');
 
 export const booleanDefaultFalseSchema = z.boolean().default(false);
@@ -93,7 +90,7 @@ export const playerHeatZodSchema = z
         bonus: booleanDefaultFalseSchema,
         isNominated: booleanDefaultFalseSchema
     })
-    .default({});
+    .prefault({});
 
 export const playerScoresZodSchema = z.object({
     heatOne: playerHeatZodSchema,
@@ -183,7 +180,7 @@ export const selectedSetPlayCalculationResultZodSchema = z.object({
     selectedSetPlayId: objectIdSchema.unwrap(),
     setPlayId: objectIdSchema.unwrap(),
     name: standardStringSchema,
-    type: z.nativeEnum(SetPlayEnumType),
+    type: z.enum(SetPlayEnumType),
     recipients: z.array(calculationSetPlayRecipientZodSchema)
 });
 
@@ -227,7 +224,7 @@ export const teamSchema = z.object({
 // Shared schemas for common patterns
 export const nameSchema = z.string().min(2).max(60);
 export const teamNameSchema = z.string().min(2).max(50);
-export const logoUrlSchema = z.string().url().min(2).max(2048);
+export const logoUrlSchema = z.url().min(2).max(2048);
 export const teamReferenceSchema = z.object({
     name: teamNameSchema,
     coachName: nameSchema.optional(),

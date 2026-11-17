@@ -9,8 +9,8 @@ import {
 } from '@/db/models/schema.types';
 
 // ActionCenterNotification model is used to store user specific notifications, that will inform user of action required from him. They will be used in Dashboard -> Centrum Akcji
-export const TYPE_ENUM = actionCentreNotificationTypeSchema._def.values;
-const STATUS_ENUM = actionCentreNotificationStatusSchema._def.values;
+export const TYPE_ENUM = actionCentreNotificationTypeSchema.options;
+const STATUS_ENUM = actionCentreNotificationStatusSchema.options;
 
 export const actionCentreNotificationsZodSchema = z.object({
     message: standardStringSchema,

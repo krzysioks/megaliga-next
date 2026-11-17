@@ -28,7 +28,7 @@ import { validateRoundRangeAndStageStatistics } from '@/db/statistics.utils';
 //HistoryGames collection represent in each document all games played in given season of megaliga
 // We will identify all games for given team in given season by finding all documents by season, teamId and stage in historyGames collection
 
-const STAGE_ENUM = stageEnumSchema._def.values;
+const STAGE_ENUM = stageEnumSchema.options;
 
 export const historyGamesZodSchema = z.object({
     season: objectIdSchema, // Reference to SeasonOps collection

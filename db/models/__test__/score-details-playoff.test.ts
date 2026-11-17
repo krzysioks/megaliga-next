@@ -837,7 +837,7 @@ describe('Test ScoreDetailsPlayoffModel methods and static functions', () => {
                 ).rejects.toThrow(
                     kind === 'missing'
                         ? `Calculation details missing for score details: ${document._id}`
-                        : 'Required'
+                        : 'Invalid input: expected number, received undefined'
                 );
             }
         );

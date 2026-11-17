@@ -9,7 +9,7 @@ import {
 
 //StartingLineupStatus is representation of megaliga_starting_lineup_status of old megaliga database. Will be used for admins to lock/unlock starting lineup selection. For users will be used to define if starting lineup can be edited or not.
 
-const STAGE_ENUM = stageEnumSchema._def.values;
+const STAGE_ENUM = stageEnumSchema.options;
 
 export const startingLineupStatusZodSchema = z.object({
     roundNumber: roundNumberSchema,
