@@ -1,18 +1,8 @@
-import { dirname } from 'path';
-import { fileURLToPath } from 'url';
-import { FlatCompat } from '@eslint/eslintrc';
-import react from 'eslint-plugin-react';
+import nextVitals from 'eslint-config-next/core-web-vitals';
+import nextTypescript from 'eslint-config-next/typescript';
 import jest from 'eslint-plugin-jest';
 import perfectionist from 'eslint-plugin-perfectionist';
-import tseslint from '@typescript-eslint/eslint-plugin';
 import tsParser from '@typescript-eslint/parser';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const compat = new FlatCompat({
-    baseDirectory: __dirname
-});
 
 const config = {
     languageOptions: {
@@ -42,10 +32,8 @@ const config = {
         reportUnusedDisableDirectives: true
     },
     plugins: {
-        react,
         jest,
-        perfectionist,
-        '@typescript-eslint': tseslint
+        perfectionist
     },
     settings: {
         react: {
@@ -88,31 +76,33 @@ const config = {
                     'server',
                     [
                         'type',
-                        'internal-type',
-                        'parent-type',
-                        'sibling-type',
-                        'index-type'
+                        'type-internal',
+                        'type-parent',
+                        'type-sibling',
+                        'type-index'
                     ],
                     'builtin',
                     'external',
                     'internal',
                     ['parent', 'sibling', 'index', 'side-effect'],
                     ['style', 'side-effect-style'],
-                    ['object', 'unknown']
+                    ['ts-equals-import', 'unknown']
                 ],
-                customGroups: {
-                    value: {
-                        server: ['server-only']
+                customGroups: [
+                    {
+                        groupName: 'server',
+                        elementNamePattern: '^server-only$'
                     }
-                },
-                newlinesBetween: 'always'
+                ],
+                newlinesBetween: 1
             }
         ]
     }
 };
 
 const eslintConfig = [
-    ...compat.extends('next/core-web-vitals', 'next/typescript'),
+    ...nextVitals,
+    ...nextTypescript,
     {
         ignores: ['.next/**', 'next-env.d.ts', 'docs/**', 'coverage/**']
     },
