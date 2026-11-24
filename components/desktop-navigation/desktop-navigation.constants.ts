@@ -1,0 +1,1 @@
+export const DESKTOP_LINKS_PER_COLUMN = 9;

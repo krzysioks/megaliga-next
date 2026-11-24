@@ -104,7 +104,14 @@ const eslintConfig = [
     ...nextVitals,
     ...nextTypescript,
     {
-        ignores: ['.next/**', 'next-env.d.ts', 'docs/**', 'coverage/**']
+        ignores: [
+            '.next/**',
+            'next-env.d.ts',
+            'docs/**',
+            'coverage/**',
+            'playwright-report/**',
+            'test-results/**'
+        ]
     },
     {
         files: ['**/*.{js,jsx,ts,tsx}'],

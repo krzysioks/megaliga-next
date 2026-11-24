@@ -1,22 +1,25 @@
+import 'server-only';
+
 import type { Metadata } from 'next';
 
-import { Geist, Geist_Mono } from 'next/font/google';
+import { Footer } from '@/components/footer';
+import { Header } from '@/components/header';
+import {
+    SITE_DESCRIPTION,
+    SITE_ICONS,
+    SITE_NAME
+} from '@/constants/site-navigation.constants';
+import { lexend } from '@/styles/fonts';
 
-import '@/app/globals.css';
-
-const geistSans = Geist({
-    variable: '--font-geist-sans',
-    subsets: ['latin']
-});
-
-const geistMono = Geist_Mono({
-    variable: '--font-geist-mono',
-    subsets: ['latin']
-});
+import '@/styles/globals.css';
 
 export const metadata: Metadata = {
-    title: 'Megaliga Next',
-    description: 'Fantasy Speedway ligue application'
+    title: {
+        default: SITE_NAME,
+        template: `%s | ${SITE_NAME}`
+    },
+    description: SITE_DESCRIPTION,
+    icons: { icon: SITE_ICONS.logo }
 };
 
 export default function RootLayout({
@@ -25,11 +28,22 @@ export default function RootLayout({
     children: React.ReactNode;
 }>) {
     return (
-        <html lang="en">
-            <body
-                className={`dark ${geistSans.variable} ${geistMono.variable} antialiased`}
-            >
-                {children}
+        <html lang="pl" className={lexend.variable}>
+            <body className="antialiased">
+                <div className="relative isolate flex min-h-dvh flex-col">
+                    <div
+                        aria-hidden="true"
+                        className="pointer-events-none fixed inset-0 -z-10 bg-(--site-photo-base)"
+                    >
+                        <div className="site-background-photo absolute inset-0 bg-cover bg-center bg-no-repeat" />
+                        <div className="absolute inset-0 bg-(--site-photo-overlay)" />
+                    </div>
+                    <Header />
+                    <main className="mx-auto w-full max-w-6xl flex-1 px-2 py-8 lg:px-6">
+                        {children}
+                    </main>
+                    <Footer />
+                </div>
             </body>
         </html>
     );

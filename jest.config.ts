@@ -16,6 +16,7 @@ const config: Config.InitialOptions = {
         ]
     },
     testEnvironment: 'node',
+    testPathIgnorePatterns: ['/node_modules/', '<rootDir>/tests-e2e/'],
     preset: 'ts-jest',
     verbose: true
 };

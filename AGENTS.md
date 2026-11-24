@@ -17,6 +17,22 @@ If there is no `.codegraph/` directory, skip CodeGraph entirely — indexing is 
 
 Automatic commits are not allowed. Leave changes uncommitted unless the user explicitly requests a commit. Invoking a skill or workflow that includes a commit step does not count as permission to commit.
 
+## UI layout
+
+Follow the [UX system](docs/ux-system.md) when choosing UI controls or changing layout, widths, or spacing on public pages and the Dashboard.
+
+## Component composition
+
+- Keep custom components under `components/`, with each component in its own kebab-case folder. Keep Next.js route files in `app/`.
+- Name the main component file after its folder, for example `components/header/header.tsx`.
+- Define component props and related types in `<component>.types.ts`. Accept props as `props: HeaderProps` and destructure them inside the component body.
+- Extract component behavior and client-side business logic into a custom hook called a baton. Store it in `batons/use-<component>.ts` and name the hook `use<Component>`, for example `batons/use-header.ts` and `useHeader`. Create a baton when the component has behavior to extract.
+- Define hooks and functions in baton files using arrow function notation.
+- When a component fetches its own data on the server, put that work in `<component>-data-fetcher.tsx`. Pass the fetched data to the component through props.
+- When a loading fallback is needed, place it in `<component>-skeleton.tsx`. Wrap the data fetcher in `<component>-suspense.tsx` using React `Suspense` and that skeleton.
+- Add an `index.ts` that exports the component's intended public entry point. Consumers should import from the component folder.
+- Add supporting files only when the component needs them. Keep server and client boundaries explicit with `server-only` and `use client` where applicable.
+
 ## Code quality principles
 
 Apply these before any of the pattern rules below. They decide _whether_ and _how much_ code to write; the sections after decide its shape.
